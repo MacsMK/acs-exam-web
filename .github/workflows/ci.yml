@@ -46,7 +46,15 @@ jobs:
         run: cp .env.example .env
 
       - name: Install Composer dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress
+        run: |
+          set +e
+          composer install --no-interaction --prefer-dist --no-progress 2>&1 | tee /tmp/composer-install.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo "::error::composer install failed (exit $status). Tail of output:%0A$(tail -c 3000 /tmp/composer-install.log | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit "$status"
+          fi
+        shell: bash
 
       - name: Generate app key
         run: php artisan key:generate
