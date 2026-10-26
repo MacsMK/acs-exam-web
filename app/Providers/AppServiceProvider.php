@@ -40,6 +40,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Ya tenemos nuestra propia migración (BD01-2026-024) para
+        // acs_personal_access_tokens con el prefijo institucional; sin
+        // esto, Sanctum además intentaría crear su tabla default
+        // "personal_access_tokens" (duplicado que no se usaría).
+        Sanctum::ignoreMigrations();
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
     }
 }
