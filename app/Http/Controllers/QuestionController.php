@@ -59,10 +59,13 @@ class QuestionController extends Controller
             'options.*' => ['string'],
             'correct_option_index' => ['required_if:question_type,multiple_choice', 'integer'],
 
-            // matching
-            'left_items' => ['required_if:question_type,matching', 'array', 'min:2'],
-            'right_items' => ['required_if:question_type,matching', 'array', 'min:2'],
-            'pairs' => ['required_if:question_type,matching', 'array', 'min:1'],
+            // matching: el docente captura pares concepto/definición en filas
+            // paralelas; left_items, right_items y pairs (con ids e
+            // right_items barajado) se arman en el servidor (ver abajo).
+            'concepts' => ['required_if:question_type,matching', 'array', 'min:2'],
+            'concepts.*' => ['string'],
+            'definitions' => ['required_if:question_type,matching', 'array', 'min:2'],
+            'definitions.*' => ['string'],
 
             // open
             'reference_answer' => ['required_if:question_type,open', 'string'],
@@ -84,11 +87,7 @@ class QuestionController extends Controller
                     ->all(),
                 'correct_option_index' => $data['correct_option_index'],
             ]),
-            'matching' => MatchingItem::create([
-                'left_column_payload' => $data['left_items'],
-                'right_column_payload' => $data['right_items'],
-                'pairs_payload' => $data['pairs'],
-            ]),
+            'matching' => $this->buildMatchingItem($data['concepts'] ?? [], $data['definitions'] ?? []),
             'open' => OpenItem::create([
                 'reference_answer' => $data['reference_answer'],
                 'evaluation_rubric' => $data['evaluation_rubric'] ?? null,
@@ -116,6 +115,39 @@ class QuestionController extends Controller
         ]);
 
         return redirect()->route('questions.index')->with('status', 'Reactivo creado.');
+    }
+
+    /**
+     * Arma un MatchingItem a partir de filas paralelas concepto/definición
+     * capturadas en el formulario: genera ids (L1.., R1..), baraja la
+     * columna derecha para que no coincida visualmente con el orden de
+     * captura, y construye los pares left_id/right_id.
+     *
+     * @param array<int, string> $concepts
+     * @param array<int, string> $definitions
+     */
+    private function buildMatchingItem(array $concepts, array $definitions): MatchingItem
+    {
+        $leftItems = [];
+        $rightItemsOrdered = [];
+        $pairs = [];
+
+        foreach (array_values($concepts) as $index => $concept) {
+            $leftId = 'L'.($index + 1);
+            $rightId = 'R'.($index + 1);
+
+            $leftItems[] = ['id' => $leftId, 'text' => $concept];
+            $rightItemsOrdered[] = ['id' => $rightId, 'text' => $definitions[$index] ?? ''];
+            $pairs[] = ['left_id' => $leftId, 'right_id' => $rightId];
+        }
+
+        $rightItemsShuffled = collect($rightItemsOrdered)->shuffle()->values()->all();
+
+        return MatchingItem::create([
+            'left_column_payload' => $leftItems,
+            'right_column_payload' => $rightItemsShuffled,
+            'pairs_payload' => $pairs,
+        ]);
     }
 
     /**

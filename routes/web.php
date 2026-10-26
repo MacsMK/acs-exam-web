@@ -13,12 +13,14 @@ declare(strict_types=1);
  * ============================================================================
  */
 
+use App\Http\Controllers\AttemptController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExamController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\QuestionController;
+use App\Http\Controllers\StudentExamController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/login');
@@ -54,4 +56,17 @@ Route::middleware('auth')->group(function (): void {
         Route::post('exams/{exam}/reactivos/{examQuestion}/nuevo-sorteo', [ExamController::class, 'reshuffleQuestion'])->name('exams.questions.reshuffle');
         Route::post('exams/{exam}/publicar', [ExamController::class, 'publish'])->name('exams.publish');
     });
+
+    Route::middleware('role:student')->group(function (): void {
+        Route::get('grupos/unirse', [StudentExamController::class, 'joinForm'])->name('student.groups.join.form');
+        Route::post('grupos/unirse', [StudentExamController::class, 'join'])->name('student.groups.join');
+        Route::get('mis-examenes', [StudentExamController::class, 'index'])->name('student.exams.index');
+
+        Route::post('examenes/{exam}/iniciar', [AttemptController::class, 'start'])->name('attempts.start');
+    });
+
+    Route::get('intentos/{attempt}', [AttemptController::class, 'show'])->name('attempts.show');
+    Route::post('intentos/{attempt}/responder', [AttemptController::class, 'answer'])->name('attempts.answer');
+    Route::post('intentos/{attempt}/terminar', [AttemptController::class, 'finish'])->name('attempts.finish');
+    Route::get('intentos/{attempt}/resultado', [AttemptController::class, 'result'])->name('attempts.result');
 });
