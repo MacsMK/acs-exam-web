@@ -16,28 +16,56 @@ en `app/Services/` y la comparten el panel web y la API — ver
 `AttemptService` y `AuthService` — para no duplicar reglas entre los dos
 lados.
 
-## Requisitos
+## Entorno oficial: Docker + Laravel Sail
+
+Conforme al Manual de Programación Web con Laravel (MPW-V2 §1.3.4) y al
+Manual de Base de Datos (MBD-V4 §9.2), el entorno autoritativo del proyecto
+es el que levanta **Laravel Sail**, con 3 contenedores (`compose.yaml` en la
+raíz): `laravel.test` (la app, PHP 8.3), `pgsql` (PostgreSQL 15) y `reverb`
+(WebSockets). Sin Redis: cola y caché van sobre drivers nativos.
+
+```bash
+composer install
+cp .env.example .env
+```
+
+En tu `.env`, para correr con Sail cambia `DB_HOST=127.0.0.1` por
+`DB_HOST=pgsql` (es el nombre del servicio en la red de Docker). Luego:
+
+```bash
+./vendor/bin/sail up -d
+./vendor/bin/sail artisan key:generate
+./vendor/bin/sail artisan migrate --seed
+```
+
+Abre `http://localhost` — redirige a `/login`. `./vendor/bin/sail artisan …`
+reemplaza a `php artisan …` para todo (son el mismo contenedor `laravel.test`).
+
+**Requiere Docker Desktop corriendo** (en Windows, con WSL2 habilitado).
+
+## Alternativa sin Docker (PHP/Composer instalados directo en tu máquina)
+
+Si no tienes Docker a la mano todavía, el proyecto corre igual de bien con
+PHP y PostgreSQL instalados directo en tu máquina — es el camino que se usó
+para validar todo lo de abajo antes de tener Sail armado, y sigue siendo
+válido para probar rápido:
 
 - PHP 8.3+ con extensiones habituales de Laravel (`pdo_pgsql`, `mbstring`,
-  `bcmath`, etc.)
-- Composer 2
-- PostgreSQL 14+ (el proyecto usa `pgsql` según el Manual de Base de Datos)
+  `bcmath`, etc.) y Composer 2 — por ejemplo con [Laravel Herd](https://herd.laravel.com) en Windows/Mac.
+  PostgreSQL 15 instalado localmente.
 - No se requiere Node/npm: la interfaz web usa Tailwind CSS y Alpine.js por
   CDN (sin build de Vite), para no depender de un paso extra de compilación
   durante la demo.
 
-## Puesta en marcha
-
 ```bash
 composer install
-
 cp .env.example .env
 php artisan key:generate
 ```
 
-Edita `.env` con los datos de tu PostgreSQL local (por defecto apunta a
-`acs_exam_web` en `127.0.0.1:5432`, usuario/clave `postgres`/`postgres`).
-Crea la base de datos vacía (`createdb acs_exam_web` o equivalente) y luego:
+Deja `DB_HOST=127.0.0.1` tal cual (el valor por defecto en `.env.example`
+está pensado para este camino). Crea la base de datos vacía
+(`createdb acs_exam_web` o equivalente) y luego:
 
 ```bash
 php artisan migrate --seed
@@ -105,6 +133,30 @@ routes/
   web.php          Panel docente + flujo alumno de prueba
   api.php          API v1 para Flutter
 ```
+
+## Desviaciones conocidas respecto al stack congelado (MPW-V2 Tabla 2)
+
+Documentado explícitamente para que no parezca un descuido — recomendable
+pasarlo por un Formato DE-06 (Registro de cambios) con su justificación:
+
+- **Autenticación: `AuthService`/`LoginController` a mano, no Laravel
+  Fortify.** El resultado funcional es el mismo (login + 2FA de 6 dígitos
+  por correo, igual que especifica MPM-V2 §6.6.1), pero no está construido
+  sobre el paquete Fortify que manda el manual. Se decidió no migrarlo
+  bajo presión de la fecha de entrega: es la pieza con más riesgo de
+  romper algo que ya funciona, para un beneficio principalmente de
+  conformidad con el manual, no funcional. Pendiente de decidir con el
+  equipo si se migra después.
+- **Laravel Reverb está instalado y su contenedor corre** (`compose.yaml`,
+  config/reverb.php, config/broadcasting.php, routes/channels.php), pero
+  ninguna funcionalidad del demo emite eventos en tiempo real todavía
+  (monitoreo en vivo de alumnos conectados, etc.) — eso seguiría pendiente
+  de construirse sobre esta base.
+- **Cola/sesión/caché:** se dejaron en `sync`/`file`/`file` en vez de
+  `database` (el manual pide todo sobre PostgreSQL, sin Redis, pero sin
+  usar Redis tampoco con los drivers nativos de archivo). Para la demo no
+  hay diferencia funcional; migrarlo implica 2-3 migraciones adicionales
+  para las tablas de sesión/cola/caché con prefijo `acs_`.
 
 ## Qué falta / siguientes pasos
 
