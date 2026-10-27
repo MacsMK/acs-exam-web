@@ -80,7 +80,21 @@ jobs:
           php artisan test 2>&1 | tee /tmp/artisan-test.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
-            echo "::error::php artisan test failed (exit $status). Tail of output:%0A$(tail -c 3000 /tmp/artisan-test.log | sed ':a;N;$!ba;s/\n/%0A/g')"
+            # Este sandbox no puede leer los logs de Actions directamente
+            # (gh run view --log / gh api .../logs están bloqueados), así
+            # que la única forma de diagnosticar una falla es a través de
+            # esta anotación ::error::. Para una excepción no capturada
+            # (p. ej. "Undefined array key"), lo que importa es el PRIMER
+            # frame del stack trace (dónde ocurrió realmente), no el final
+            # de la salida — por eso se busca el bloque completo de cada
+            # falla en vez de solo el tail.
+            {
+              echo "=== Primer bloque de falla (con stack trace completo) ==="
+              grep -n -m1 -A 60 -E '^\s*[0-9]+\) Tests' /tmp/artisan-test.log
+              echo "=== Resumen final ==="
+              tail -n 15 /tmp/artisan-test.log
+            } > /tmp/artisan-test-summary.log
+            echo "::error::php artisan test failed (exit $status).%0A$(cat /tmp/artisan-test-summary.log | tail -c 6000 | sed ':a;N;$!ba;s/\n/%0A/g')"
             exit "$status"
           fi
         shell: bash
