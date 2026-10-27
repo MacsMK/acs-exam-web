@@ -65,13 +65,25 @@ advisory concreta, está en `04_DECISIONES_ADR.md` y en el README
 - Rutas: `routes/api.php`, todas bajo el prefijo `v1` (`Route::prefix('v1')`,
   nombre de ruta `api.v1.*`).
 - Controladores: `app/Http/Controllers/Api/V1/*`
-  (`AuthController`, `GroupController`, `ExamController`, `AttemptController`).
-- Autenticación: `auth:sanctum` en todas las rutas salvo registro/login/2FA.
-  El cliente (Flutter) manda `Authorization: Bearer <token>`.
-- Formato de respuesta: JSON siempre — `bootstrap/app.php` fuerza
-  `shouldRenderJsonWhen` para cualquier request bajo `api/*` o que pida
-  JSON explícitamente, así que un error ahí nunca regresa una página HTML
-  de error por accidente.
+  (`AuthController`, `PrivacyController`, `GroupController`, `ExamController`,
+  `AttemptController`, `GradeController`, `DeviceController`) — el contrato
+  exacto de cada endpoint (payload de entrada, forma del JSON de salida)
+  está alineado 1:1 contra lo que la app Flutter ya consume
+  (`acs-exam-mobile`, `lib/core/network/api_endpoints.dart`), ver detalle en
+  `03_BACKEND_Y_FRONTEND.md` sección 2 y las decisiones en
+  `04_DECISIONES_ADR.md` (ADR-009 a ADR-014).
+- Autenticación: `auth:sanctum` en todas las rutas salvo
+  registro/login/`auth/two-factor`. El cliente (Flutter) manda
+  `Authorization: Bearer <token>`.
+- Formato de respuesta: **siempre** el mismo sobre (`App\Support\ApiResponse`):
+  `{"status": "success"|"error", "code": <int>, "message": <string>,
+  "data": <mixed|null>, "errors": <mixed|null>}`. Se aplica tanto en las
+  respuestas normales (`ApiResponse::success()`/`error()`) como en
+  cualquier excepción no capturada bajo `api/*`, vía el renderer global
+  registrado en `bootstrap/app.php` (`$exceptions->render(...)` →
+  `ApiResponse::fromException()`) — así un 404/419/500 también le llega a
+  Flutter en la forma que su `ApiResponseModel` espera, no como HTML de
+  error. Ver ADR-009.
 
 ## 4. Cómo comparten lógica de negocio (lo importante)
 
@@ -168,6 +180,7 @@ del lado de Flutter, solo consumirse.
   de diseño `acode-*` en detalle.
 - `04_DECISIONES_ADR.md` — por qué se tomó cada decisión que se desvía del
   manual (Laravel 13 vs 11, Fortify diferido, Sail, Reverb sin uso
-  funcional, etc.), con su justificación.
+  funcional, etc.), con su justificación, incluyendo las decisiones del
+  contrato de API v1 frente a la app móvil (ADR-009 a ADR-014).
 - `README.md` (raíz del repo) — cómo levantar el proyecto (con o sin
   Docker), credenciales de demo, flujo sugerido para una demostración.

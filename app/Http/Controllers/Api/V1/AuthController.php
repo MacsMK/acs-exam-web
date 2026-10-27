@@ -8,8 +8,10 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     AuthController.php
  * Ubicación:   app/Http/Controllers/Api/V1/AuthController.php
- * Descripción: Auth de la app móvil (acs-exam-mobile, MPM-V2 §6.6.1):
- *              registro/login en dos pasos, token Sanctum al final.
+ * Descripción: Auth de la app móvil (acs-exam-mobile, MPM-V4 §6.6.1):
+ *              login en dos pasos, token Sanctum al final. Respuestas
+ *              alineadas 1:1 contra ApiEndpoints/AuthRepository del
+ *              cliente móvil (ver docs/04_DECISIONES_ADR.md).
  * ============================================================================
  */
 
@@ -22,7 +24,9 @@ use App\Http\Requests\RegisterTeacherRequest;
 use App\Http\Requests\VerifyTwoFactorRequest;
 use App\Models\User;
 use App\Services\AuthService;
+use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -34,63 +38,68 @@ class AuthController extends Controller
     {
         $user = $this->authService->register($request->validated(), 'teacher');
 
-        return response()->json([
-            'message' => 'Registro exitoso. Verifica tu código de un solo uso.',
-            'user_id' => $user->id,
-        ], 201);
+        return ApiResponse::success(['user_id' => $user->id], 'Registro exitoso. Verifica tu código de un solo uso.', 201);
     }
 
     public function registerStudent(RegisterStudentRequest $request): JsonResponse
     {
         $user = $this->authService->register($request->validated(), 'student');
 
-        return response()->json([
-            'message' => 'Registro exitoso. Verifica tu código de un solo uso.',
-            'user_id' => $user->id,
-        ], 201);
+        return ApiResponse::success(['user_id' => $user->id], 'Registro exitoso. Verifica tu código de un solo uso.', 201);
     }
 
     public function login(LoginRequest $request): JsonResponse
     {
-        $user = $this->authService->attemptCredentials(
+        $this->authService->attemptCredentials(
             $request->string('email')->toString(),
             $request->string('password')->toString(),
         );
 
-        return response()->json([
-            'message' => 'Credenciales válidas. Verifica tu código de un solo uso.',
-            'user_id' => $user->id,
-        ]);
+        return ApiResponse::success(null, 'Credenciales válidas. Verifica tu código de un solo uso.');
     }
 
-    public function verifyTwoFactor(VerifyTwoFactorRequest $request): JsonResponse
+    /**
+     * api.v1.auth.two-factor (MPM-V4 Tabla 12). A diferencia del panel web
+     * (sesión con `user_id` disponible desde el paso 1,
+     * Auth\LoginController), la API móvil es sin estado entre `login()` y
+     * este paso: `AuthRepository.verifyTwoFactor` del cliente Flutter
+     * solo manda `{"code": "..."}`, sin ningún identificador de usuario
+     * (acs-exam-mobile, auth_repository.dart). Se localiza al usuario por
+     * el código vigente y no vencido — es la única información disponible
+     * para hacerlo; el riesgo de colisión entre dos códigos idénticos
+     * vigentes al mismo tiempo se acepta y queda documentado como
+     * decisión de diseño (docs/04_DECISIONES_ADR.md).
+     */
+    public function twoFactor(VerifyTwoFactorRequest $request): JsonResponse
     {
-        $user = User::findOrFail($request->integer('user_id'));
+        $code = $request->string('code')->toString();
 
-        $this->authService->verifyTwoFactorCode($user, $request->string('code')->toString());
+        $user = User::where('two_factor_code', $code)
+            ->where('two_factor_expires_at', '>', now())
+            ->whereIn('role', ['teacher', 'student'])
+            ->latest('two_factor_expires_at')
+            ->first();
+
+        if ($user === null) {
+            throw ValidationException::withMessages(['code' => ['El código es inválido o expiró. Solicita uno nuevo.']]);
+        }
+
+        $this->authService->verifyTwoFactorCode($user, $code);
 
         $token = $user->createToken('acs-exam-mobile')->plainTextToken;
 
-        return response()->json([
-            'token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'role' => $user->role,
-                'full_name' => $user->full_name,
-                'email' => $user->email,
-            ],
-        ]);
+        return ApiResponse::success(['token' => $token, 'role' => $user->role]);
     }
 
     public function me(): JsonResponse
     {
-        return response()->json(['user' => request()->user()]);
+        return ApiResponse::success(['user' => request()->user()]);
     }
 
     public function logout(): JsonResponse
     {
         request()->user()->currentAccessToken()->delete();
 
-        return response()->json(['message' => 'Sesión cerrada.']);
+        return ApiResponse::success(null, 'Sesión cerrada.');
     }
 }

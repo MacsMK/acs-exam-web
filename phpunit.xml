@@ -23,8 +23,22 @@
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
+        <!--
+            El stack oficial del proyecto es PostgreSQL (MBD-V4), sin
+            SQLite de respaldo: varias migraciones usan tipos propios de
+            Postgres (jsonb). Las pruebas corren contra el mismo Postgres
+            que ya configura .env.example / compose.yaml (Sail) en vez del
+            sqlite ":memory:" por defecto del esqueleto de Laravel, para
+            no validar el código contra un motor que el proyecto nunca usa
+            de verdad. RefreshDatabase se encarga de dejar la base limpia
+            entre pruebas.
+        -->
+        <env name="DB_CONNECTION" value="pgsql"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="5432"/>
+        <env name="DB_DATABASE" value="acs_exam_web"/>
+        <env name="DB_USERNAME" value="postgres"/>
+        <env name="DB_PASSWORD" value="postgres"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
