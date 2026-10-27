@@ -88,13 +88,14 @@ jobs:
             # frame del stack trace (dónde ocurrió realmente), no el final
             # de la salida — por eso se busca el bloque completo de cada
             # falla en vez de solo el tail.
+            sed 's/\x1b\[[0-9;]*m//g' /tmp/artisan-test.log > /tmp/artisan-test-clean.log
             {
               echo "=== Primer bloque de falla (con stack trace completo) ==="
-              grep -n -m1 -A 60 -E '^\s*[0-9]+\) Tests' /tmp/artisan-test.log
+              grep -n -A 80 -m1 'FAILED' /tmp/artisan-test-clean.log
               echo "=== Resumen final ==="
-              tail -n 15 /tmp/artisan-test.log
+              tail -n 15 /tmp/artisan-test-clean.log
             } > /tmp/artisan-test-summary.log
-            echo "::error::php artisan test failed (exit $status).%0A$(cat /tmp/artisan-test-summary.log | tail -c 6000 | sed ':a;N;$!ba;s/\n/%0A/g')"
+            echo "::error::php artisan test failed (exit $status).%0A$(cat /tmp/artisan-test-summary.log | tail -c 9000 | sed ':a;N;$!ba;s/\n/%0A/g')"
             exit "$status"
           fi
         shell: bash
