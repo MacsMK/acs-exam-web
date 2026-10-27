@@ -115,6 +115,12 @@ aislado detrás de `App\Contracts\AiEvaluatorContract`
 evaluador real (p. ej. Gemini) más adelante es agregar un nuevo driver y
 cambiar la variable de entorno, sin tocar `AttemptService`.
 
+## Documentación técnica completa
+
+Para arquitectura a detalle, el esquema de base de datos completo, rutas/
+controladores/vistas, y el porqué de cada decisión que se desvía de los
+manuales oficiales, ver la carpeta [`docs/`](docs/README.md).
+
 ## Estructura relevante
 
 ```
