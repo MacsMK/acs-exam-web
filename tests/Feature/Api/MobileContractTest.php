@@ -61,7 +61,7 @@ class MobileContractTest extends TestCase
         $token = $twoFactor->json('data.token');
         $this->assertNotEmpty($token);
 
-        $logout = $this->withToken($token)->postJson('/api/v1/auth/logout');
+        $logout = $this->withFreshToken($token)->postJson('/api/v1/auth/logout');
         $logout->assertOk();
         $logout->assertJsonPath('status', 'success');
     }
@@ -84,14 +84,14 @@ class MobileContractTest extends TestCase
 
         $token = $this->tokenFor($this->createUser('student'));
 
-        $show = $this->withToken($token)->getJson('/api/v1/privacy-notice');
+        $show = $this->withFreshToken($token)->getJson('/api/v1/privacy-notice');
         $show->assertOk();
         $show->assertJsonPath('data.version', 'v1.0');
         $show->assertJsonPath('data.accepted', false);
 
-        $this->withToken($token)->postJson('/api/v1/privacy-notice/accept')->assertOk();
+        $this->withFreshToken($token)->postJson('/api/v1/privacy-notice/accept')->assertOk();
 
-        $this->withToken($token)->getJson('/api/v1/privacy-notice')
+        $this->withFreshToken($token)->getJson('/api/v1/privacy-notice')
             ->assertJsonPath('data.accepted', true);
     }
 
@@ -108,17 +108,17 @@ class MobileContractTest extends TestCase
         $student = $this->createUser('student');
         $studentToken = $this->tokenFor($student);
 
-        $join = $this->withToken($studentToken)->postJson('/api/v1/groups/join', ['folio' => 'testf01']);
+        $join = $this->withFreshToken($studentToken)->postJson('/api/v1/groups/join', ['folio' => 'testf01']);
         $join->assertOk();
         $join->assertJsonPath('data.folio', 'TESTF01');
         $join->assertJsonPath('data.students_count', 1);
 
-        $index = $this->withToken($studentToken)->getJson('/api/v1/groups');
+        $index = $this->withFreshToken($studentToken)->getJson('/api/v1/groups');
         $index->assertOk();
         $this->assertContains('TESTF01', collect($index->json('data'))->pluck('folio')->all());
 
         $teacherToken = $this->tokenFor($teacher);
-        $students = $this->withToken($teacherToken)->getJson("/api/v1/groups/{$group->id}/students");
+        $students = $this->withFreshToken($teacherToken)->getJson("/api/v1/groups/{$group->id}/students");
         $students->assertOk();
         $students->assertJsonFragment(['name' => $student->full_name]);
     }
@@ -127,7 +127,7 @@ class MobileContractTest extends TestCase
     {
         $token = $this->tokenFor($this->createUser('student'));
 
-        $response = $this->withToken($token)->postJson('/api/v1/groups/join', ['folio' => 'NOEXISTE']);
+        $response = $this->withFreshToken($token)->postJson('/api/v1/groups/join', ['folio' => 'NOEXISTE']);
 
         $response->assertStatus(422);
         $response->assertJsonPath('status', 'error');
@@ -152,7 +152,7 @@ class MobileContractTest extends TestCase
             'title' => 'Examen de prueba',
             'grading_scale' => '0-10',
             'randomize_question_order' => false,
-            'result_visibility_mode' => 'immediate_score',
+            'result_visibility_mode' => 'final_score',
             'require_webcam' => false,
             'max_allowed_incidents' => 1,
             'starts_at' => now()->subHour(),
@@ -175,19 +175,19 @@ class MobileContractTest extends TestCase
         [$openQuestion] = $this->attachOpenQuestion($exam, $section, $teacher, 2);
         [$codeQuestion] = $this->attachCodeQuestion($exam, $section, $teacher, 3);
 
-        $index = $this->withToken($studentToken)->getJson('/api/v1/exams');
+        $index = $this->withFreshToken($studentToken)->getJson('/api/v1/exams');
         $index->assertOk();
         $this->assertContains((string) $exam->id, collect($index->json('data'))->pluck('id')->all());
 
         // --- take: primera pregunta (opción múltiple) ---
-        $take = $this->withToken($studentToken)->postJson('/api/v1/exams/take', ['exam_id' => $exam->id]);
+        $take = $this->withFreshToken($studentToken)->postJson('/api/v1/exams/take', ['exam_id' => $exam->id]);
         $take->assertOk();
         $take->assertJsonPath('data.question.question_type', 'multiple_choice');
         $take->assertJsonPath('data.question.id', (string) $mcQuestion->id);
         $this->assertSame(['0', '1'], collect($take->json('data.question.options'))->pluck('id')->all());
 
         // --- responde opción múltiple (correcta, índice 1) -> avanza a relación de columnas ---
-        $answer1 = $this->withToken($studentToken)->postJson("/api/v1/exams/{$exam->id}/answers", [
+        $answer1 = $this->withFreshToken($studentToken)->postJson("/api/v1/exams/{$exam->id}/answers", [
             'question_id' => (string) $mcQuestion->id,
             'selected_option_ids' => ['1'],
         ]);
@@ -197,7 +197,7 @@ class MobileContractTest extends TestCase
         $this->assertSame(['R1'], collect($answer1->json('data.question.right_column'))->pluck('id')->all());
 
         // --- responde relación de columnas (correcta) -> avanza a abierta ---
-        $answer2 = $this->withToken($studentToken)->postJson("/api/v1/exams/{$exam->id}/answers", [
+        $answer2 = $this->withFreshToken($studentToken)->postJson("/api/v1/exams/{$exam->id}/answers", [
             'question_id' => (string) $matchingQuestion->id,
             'pairs' => ['L1' => 'R1'],
         ]);
@@ -205,19 +205,19 @@ class MobileContractTest extends TestCase
         $answer2->assertJsonPath('data.question.question_type', 'open');
 
         // --- la pregunta activa ya cambió: reenviar la respuesta anterior debe rechazarse (409) ---
-        $stale = $this->withToken($studentToken)->postJson("/api/v1/exams/{$exam->id}/answers", [
+        $stale = $this->withFreshToken($studentToken)->postJson("/api/v1/exams/{$exam->id}/answers", [
             'question_id' => (string) $matchingQuestion->id,
             'pairs' => ['L1' => 'R1'],
         ]);
         $stale->assertStatus(409);
 
         // --- reporta un incidente (no debe cancelar: max_allowed_incidents = 1) ---
-        $this->withToken($studentToken)->postJson("/api/v1/exams/{$exam->id}/incidents", [
+        $this->withFreshToken($studentToken)->postJson("/api/v1/exams/{$exam->id}/incidents", [
             'incident_type' => 'focus_lost',
         ])->assertOk();
 
         // --- responde abierta (coincide con la referencia) -> avanza a código ---
-        $answer3 = $this->withToken($studentToken)->postJson("/api/v1/exams/{$exam->id}/answers", [
+        $answer3 = $this->withFreshToken($studentToken)->postJson("/api/v1/exams/{$exam->id}/answers", [
             'question_id' => (string) $openQuestion->id,
             'text' => 'la fotosintesis convierte luz en energia',
         ]);
@@ -227,7 +227,7 @@ class MobileContractTest extends TestCase
         $answer3->assertJsonPath('data.question.initial_code', '<?php');
 
         // --- responde código (coincide con la referencia) -> examen termina ---
-        $answer4 = $this->withToken($studentToken)->postJson("/api/v1/exams/{$exam->id}/answers", [
+        $answer4 = $this->withFreshToken($studentToken)->postJson("/api/v1/exams/{$exam->id}/answers", [
             'question_id' => (string) $codeQuestion->id,
             'code' => 'echo 1;',
         ]);
@@ -236,13 +236,13 @@ class MobileContractTest extends TestCase
 
         // --- avance del examen, del lado docente ---
         $teacherToken = $this->tokenFor($teacher);
-        $progress = $this->withToken($teacherToken)->getJson("/api/v1/exams/{$exam->id}/progress");
+        $progress = $this->withFreshToken($teacherToken)->getJson("/api/v1/exams/{$exam->id}/progress");
         $progress->assertOk();
         $progress->assertJsonPath('data.answered_count', 1);
         $progress->assertJsonPath('data.total_count', 1);
 
         // --- la calificación ya terminada alimenta /grades y /grades/statistics ---
-        $grades = $this->withToken($studentToken)->getJson('/api/v1/grades');
+        $grades = $this->withFreshToken($studentToken)->getJson('/api/v1/grades');
         $grades->assertOk();
         $rows = $grades->json('data.data');
         $this->assertNotEmpty($rows);
@@ -250,7 +250,7 @@ class MobileContractTest extends TestCase
         $this->assertSame(40.0, $rows[0]['score']);
         $this->assertTrue($rows[0]['is_passing']);
 
-        $stats = $this->withToken($studentToken)->getJson('/api/v1/grades/statistics');
+        $stats = $this->withFreshToken($studentToken)->getJson('/api/v1/grades/statistics');
         $stats->assertOk();
         $this->assertNotEmpty($stats->json('data.grades'));
     }
@@ -259,7 +259,7 @@ class MobileContractTest extends TestCase
     {
         $token = $this->tokenFor($this->createUser('student'));
 
-        $response = $this->withToken($token)->postJson('/api/v1/devices', ['token' => 'fcm-token-abc']);
+        $response = $this->withFreshToken($token)->postJson('/api/v1/devices', ['token' => 'fcm-token-abc']);
 
         $response->assertOk();
         $response->assertJsonPath('status', 'success');
@@ -280,6 +280,21 @@ class MobileContractTest extends TestCase
     private function tokenFor(User $user): string
     {
         return $user->createToken('test')->plainTextToken;
+    }
+
+    /**
+     * El guard de Sanctum memoriza internamente el usuario resuelto en la
+     * primera petición autenticada de la prueba (`RequestGuard::$user`) y
+     * no se reinicia solo entre llamadas simuladas dentro del mismo método
+     * de prueba — así que si una prueba autentica como dos usuarios
+     * distintos (docente y alumno), la segunda llamada seguiría viendo al
+     * primero sin este `forgetGuards()` explícito antes de cada petición.
+     */
+    private function withFreshToken(string $token): self
+    {
+        $this->app['auth']->forgetGuards();
+
+        return $this->withToken($token);
     }
 
     /**
