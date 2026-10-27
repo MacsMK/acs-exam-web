@@ -247,7 +247,13 @@ class MobileContractTest extends TestCase
         $rows = $grades->json('data.data');
         $this->assertNotEmpty($rows);
         $this->assertSame('Examen de prueba', $rows[0]['exam_name']);
-        $this->assertSame(40.0, $rows[0]['score']);
+        // assertEquals, no assertSame: un 40.0 sin parte decimal se
+        // codifica como `40` en JSON (PHP no distingue int/float en JSON
+        // salvo JSON_PRESERVE_ZERO_FRACTION) y json_decode() lo regresa
+        // como int — el valor numérico es correcto, el tipo PHP exacto
+        // tras el viaje por JSON no es lo que esta prueba necesita
+        // verificar.
+        $this->assertEquals(40.0, $rows[0]['score']);
         $this->assertTrue($rows[0]['is_passing']);
 
         $stats = $this->withFreshToken($studentToken)->getJson('/api/v1/grades/statistics');
