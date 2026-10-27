@@ -139,6 +139,16 @@ routes/
 Documentado explícitamente para que no parezca un descuido — recomendable
 pasarlo por un Formato DE-06 (Registro de cambios) con su justificación:
 
+- **Laravel 13.x en vez de la versión 11.x congelada en el manual.**
+  Verificado contra Packagist (no es una suposición): a día de hoy, **toda
+  la línea 11.x publicada (de 11.31.0 a 11.57.0) tiene advisories de
+  seguridad activos sin parche disponible en esa rama** (Composer la
+  bloquea por default — para instalarla de todos modos habría que
+  deshabilitar explícitamente ese bloqueo de seguridad). Usar 13.x, la
+  versión estable más reciente y sin esos advisories, es la decisión más
+  defendible para un proyecto de Auditoría de Sistemas: entre "cumplir la
+  versión congelada" y "no tener vulnerabilidades conocidas sin parchar",
+  se prefirió lo segundo.
 - **Autenticación: `AuthService`/`LoginController` a mano, no Laravel
   Fortify.** El resultado funcional es el mismo (login + 2FA de 6 dígitos
   por correo, igual que especifica MPM-V2 §6.6.1), pero no está construido
