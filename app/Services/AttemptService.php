@@ -42,11 +42,22 @@ class AttemptService
 
         abort_unless($group, 403, 'No perteneces a ningún grupo asignado a este examen.');
 
+        // current_question_index se declara explícito (aunque la columna
+        // ya tiene default(0) en la migración): firstOrCreate()/create()
+        // nunca vuelven a leer la fila de la BD después del INSERT, así
+        // que un atributo que dependa solo del default de la columna
+        // queda ausente en el modelo en memoria (null), no en 0 — y
+        // `$sequence[null]` revienta como "Undefined array key \"\""
+        // (PHP trata la clave null como "") en vez de devolver la primera
+        // pregunta. Se encontró con la prueba de contrato móvil
+        // (tests/Feature/Api/MobileContractTest.php) al intentar
+        // `exams/take` por primera vez.
         return StudentAttempt::firstOrCreate(
             ['exam_id' => $exam->id, 'student_id' => $student->id],
             [
                 'group_id' => $group->id,
                 'question_sequence_payload' => $this->assemblyService->buildQuestionSequence($exam),
+                'current_question_index' => 0,
                 'started_at' => now(),
                 'status' => 'in_progress',
             ],
