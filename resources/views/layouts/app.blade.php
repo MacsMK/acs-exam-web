@@ -97,7 +97,7 @@
     </main>
 
     <footer class="max-w-6xl mx-auto px-4 py-6 text-xs text-slate-500">
-        A-Code Solutions — Plataforma Evaluadora / Aplicadora de Exámenes (demo).
+        A-Code Solutions — Plataforma Evaluadora / Aplicadora de Exámenes.
     </footer>
 </body>
 </html>
