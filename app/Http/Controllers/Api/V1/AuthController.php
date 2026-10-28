@@ -38,24 +38,43 @@ class AuthController extends Controller
     {
         $user = $this->authService->register($request->validated(), 'teacher');
 
-        return ApiResponse::success(['user_id' => $user->id], 'Registro exitoso. Verifica tu código de un solo uso.', 201);
+        return ApiResponse::success(
+            ['user_id' => $user->id, 'demo_code' => $user->two_factor_code],
+            'Registro exitoso. Verifica tu código de un solo uso.',
+            201,
+        );
     }
 
     public function registerStudent(RegisterStudentRequest $request): JsonResponse
     {
         $user = $this->authService->register($request->validated(), 'student');
 
-        return ApiResponse::success(['user_id' => $user->id], 'Registro exitoso. Verifica tu código de un solo uso.', 201);
+        return ApiResponse::success(
+            ['user_id' => $user->id, 'demo_code' => $user->two_factor_code],
+            'Registro exitoso. Verifica tu código de un solo uso.',
+            201,
+        );
     }
 
     public function login(LoginRequest $request): JsonResponse
     {
-        $this->authService->attemptCredentials(
+        $user = $this->authService->attemptCredentials(
             $request->string('email')->toString(),
             $request->string('password')->toString(),
         );
 
-        return ApiResponse::success(null, 'Credenciales válidas. Verifica tu código de un solo uso.');
+        // `demo_code` expone el mismo código 2FA que ya se ve "gratis" en el
+        // panel web (resources/views/auth/verify-2fa.blade.php) y en
+        // storage/logs/laravel.log — no hay envío de correo real en este
+        // proyecto (MAIL_MAILER=log), así que sin esto la app móvil no tiene
+        // ninguna forma de conseguir el código salvo pedirle a alguien que
+        // revise el log del backend. No es una fuga de seguridad nueva: es
+        // la misma información que el panel web ya muestra en pantalla sin
+        // ninguna restricción.
+        return ApiResponse::success(
+            ['demo_code' => $user->two_factor_code],
+            'Credenciales válidas. Verifica tu código de un solo uso.',
+        );
     }
 
     /**
