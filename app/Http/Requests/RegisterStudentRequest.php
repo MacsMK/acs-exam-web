@@ -45,6 +45,8 @@ class RegisterStudentRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'email.unique' => 'Este correo electrónico ya está registrado.',
+            'password.confirmed' => 'Las contraseñas no coinciden.',
             'phone.regex' => 'El teléfono debe tener exactamente 10 dígitos.',
             'accepts_privacy_notice.accepted' => 'Debes aceptar el aviso de privacidad para continuar.',
         ];

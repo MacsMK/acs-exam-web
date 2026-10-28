@@ -21,11 +21,66 @@ namespace App\Services;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
+use App\Models\PrivacyNotice;
+use App\Models\PrivacyAcceptance;
+use Illuminate\Support\Facades\DB;
 
 class AuthService
 {
+    /**
+     * Obtiene el aviso de privacidad publicado más reciente.
+     */
+    public function currentPrivacyNotice(): ?PrivacyNotice
+    {
+        return PrivacyNotice::query()
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->orderByDesc('published_at')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Registra una cuenta web y la aceptación del aviso mostrado.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function registerWeb(
+        array $data,
+        string $role,
+        mixed $noticeId,
+        ?string $ipAddress
+    ): User {
+        $notice = $this->currentPrivacyNotice();
+
+        if (
+            ! $notice ||
+            ! is_string($noticeId) ||
+            $noticeId !== (string) $notice->id
+        ) {
+            throw ValidationException::withMessages([
+                'accepts_privacy_notice' => [
+                    'El aviso de privacidad cambió o no está disponible. Recarga la página y revísalo nuevamente.',
+                ],
+            ]);
+        }
+
+        return DB::transaction(function () use ($data, $role, $notice, $ipAddress): User {
+            $user = $this->register($data, $role);
+
+            PrivacyAcceptance::create([
+                'user_id' => $user->id,
+                'privacy_notice_id' => $notice->id,
+                'accepted_at' => now(),
+                'ip_address' => $ipAddress,
+            ]);
+
+            return $user;
+        });
+    }
+
     /**
      * Crea un usuario con el rol indicado y le genera ya el primer código
      * 2FA, para que el flujo de registro → verificación sea uno solo.
@@ -77,8 +132,7 @@ class AuthService
     }
 
     /**
-     * Genera y "envía" (log, en demo) un código de 6 dígitos válido 10
-     * minutos.
+     * Genera un código de seis dígitos y lo envía por correo.
      */
     public function issueTwoFactorCode(User $user): void
     {
@@ -89,7 +143,15 @@ class AuthService
             'two_factor_expires_at' => now()->addMinutes(10),
         ])->save();
 
-        Log::info("[2FA DEMO] Código para {$user->email}: {$code} (válido 10 min)");
+        Mail::raw(
+            "Tu código de verificación es: {$code}\n\n"
+            ."Es válido durante 10 minutos.\n"
+            ."Si no solicitaste este código, ignora este mensaje.",
+            function ($message) use ($user): void {
+                $message->to($user->email)
+                    ->subject('Código de verificación - A-Code Solutions');
+            }
+        );
     }
 
     /**

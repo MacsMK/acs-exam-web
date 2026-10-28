@@ -8,13 +8,7 @@
         Enviamos un código de 6 dígitos a <strong>{{ $user->email }}</strong>, válido por 10 minutos.
     </p>
 
-    @if ($user->two_factor_code)
-        <div class="mb-5 rounded-lg border border-acode-warning/40 bg-acode-warning/10 px-4 py-3 text-sm text-acode-primary">
-            <span class="font-semibold">Modo demo:</span> tu código es
-            <span class="font-mono text-base tracking-widest">{{ $user->two_factor_code }}</span>
-            (también queda registrado en <code>storage/logs/laravel.log</code>, por si aquí no se ve).
-        </div>
-    @endif
+    
 
     <form method="POST" action="{{ route('auth.verify-2fa.store') }}" class="space-y-4">
         @csrf
