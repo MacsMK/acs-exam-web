@@ -10,111 +10,118 @@ declare(strict_types=1);
  * Ubicación:   app/Http/Controllers/Api/V1/AttemptController.php
  * Descripción: Aplicación contrarreloj del examen desde la app móvil
  *              (Módulo 7): api.v1.exams.take, api.v1.exams.answers y
- *              api.v1.exams.incidents (MPM-V4 Tabla 12). Envoltura JSON
- *              sobre AttemptService (lógica compartida con el panel web,
- *              app/Services) — este controlador solo traduce entre la
- *              forma interna compartida y la forma exacta que espera
- *              ExamQuestionResponseModel/QuestionModel del cliente móvil
- *              (ver docs/04_DECISIONES_ADR.md para el detalle de cada
- *              punto que estaba "pendiente de confirmación", DE-03).
+ *              api.v1.exams.incidents (MPM-V4 Tabla 12, MPW-V2 §6.1, §6.3).
  * ============================================================================
  */
 
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AttemptAnswerApiRequest;
+use App\Http\Requests\AttemptIncidentStoreRequest;
+use App\Http\Requests\AttemptTakeRequest;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
 use App\Models\StudentAttempt;
 use App\Models\User;
 use App\Services\AttemptService;
 use App\Support\ApiResponse;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AttemptController extends Controller
 {
-    private const INCIDENT_TYPES = ['app_left', 'multi_window', 'focus_lost'];
-
     public function __construct(private readonly AttemptService $attemptService)
     {
     }
 
     /**
      * api.v1.exams.take. `exam_id` va en el cuerpo de la petición, no en
-     * la URL (acs-exam-mobile, exam_repository.dart v1.2.0: "Tabla 12 no
-     * define un endpoint con {id} para esta ruta"). Inicia el intento si
-     * no existe o continúa el ya existente (AttemptService::start usa
-     * firstOrCreate, es idempotente).
+     * la URL. Inicia el intento si no existe o continúa el ya existente.
      */
-    public function take(Request $request): JsonResponse
+    public function take(AttemptTakeRequest $request): JsonResponse
     {
-        $data = $request->validate(['exam_id' => ['required', 'integer', 'exists:acs_exams,id']]);
-
+        $data = $request->validated();
         $exam = Exam::findOrFail($data['exam_id']);
-        $attempt = $this->attemptService->start($exam, $request->user());
 
-        return ApiResponse::success($this->questionResponse($attempt));
-    }
-
-    /**
-     * api.v1.exams.answers. El cuerpo trae `question_id` (el id de
-     * acs_questions que el cliente recibió en `question.id`, nunca el id
-     * interno de acs_exam_question) más el campo propio del tipo de
-     * reactivo activo: `selected_option_ids` (opción múltiple), `pairs`
-     * (relación de columnas), `text` (abierta) o `code` (programación) —
-     * forma de AnswerPayload.toJson() del cliente móvil, answer_payload.dart.
-     */
-    public function answers(Request $request, Exam $exam): JsonResponse
-    {
-        $attempt = $this->attemptForUser($exam, $request->user());
-
-        $data = $request->validate([
-            'question_id' => ['required'],
-            'selected_option_ids' => ['sometimes', 'array'],
-            'selected_option_ids.*' => ['string'],
-            'pairs' => ['sometimes', 'array'],
-            'text' => ['sometimes', 'string'],
-            'code' => ['sometimes', 'string'],
-        ]);
-
-        $examQuestion = $this->currentExamQuestionOrFail($attempt);
-
-        // RW-20: no se puede regresar ni adelantar de pregunta. Se valida
-        // contra la pregunta activa real del servidor, nunca se confía en
-        // que el cliente mande el reactivo correcto.
-        abort_unless(
-            (string) $examQuestion->question_id === (string) $data['question_id'],
-            409,
-            'La pregunta activa cambió; vuelve a consultar el examen.',
-        );
-
-        $this->attemptService->submitAnswer($attempt, $examQuestion->id, $this->normalizeAnswerPayload($data));
-
-        $attempt = $attempt->fresh();
-
-        if ($attempt->current_question_index >= count($attempt->question_sequence_payload)) {
-            $this->attemptService->submitFinal($attempt);
-            $attempt = $attempt->fresh();
+        try {
+            $attempt = $this->attemptService->start($exam, $request->user());
+        } catch (DomainException $e) {
+            return ApiResponse::error($e->getMessage(), 409);
         }
 
         return ApiResponse::success($this->questionResponse($attempt));
     }
 
     /**
-     * api.v1.exams.incidents (§7.7). Incrementa el contador de incidentes
-     * del intento en curso y, si se excede `max_allowed_incidents` del
-     * examen, lo cancela (`cancelled_by_incident`) — el valor de
-     * `incident_type` no cambia la gravedad, cualquiera de los tres
-     * cuenta igual (decisión propia, ver docs/04_DECISIONES_ADR.md).
+     * api.v1.exams.answers. Valida la pregunta activa en servidor y califica
+     * la respuesta mediante AttemptService.
      */
-    public function incidents(Request $request, Exam $exam): JsonResponse
+    public function answers(AttemptAnswerApiRequest $request, Exam $exam): JsonResponse
+    {
+        $attempt = $this->attemptForUser($exam, $request->user());
+        $data = $request->validated();
+
+        $examQuestion = $this->currentExamQuestionOrFail($attempt);
+
+        // RW-20: no se puede regresar ni adelantar de pregunta. Se valida
+        // contra la pregunta activa real del servidor.
+        if (isset($data['question_id'])) {
+            abort_unless(
+                (string) $examQuestion->question_id === (string) $data['question_id'],
+                409,
+                'La pregunta activa cambió; vuelve a consultar el examen.',
+            );
+        } elseif (isset($data['exam_question_id'])) {
+            abort_unless(
+                (int) $examQuestion->id === (int) $data['exam_question_id'],
+                409,
+                'La pregunta activa cambió; vuelve a consultar el examen.',
+            );
+        }
+
+        try {
+            $this->attemptService->submitAnswer($attempt, $examQuestion->id, $this->normalizeAnswerPayload($data));
+
+            $attempt = $attempt->fresh();
+
+            if ($attempt->current_question_index >= count($attempt->question_sequence_payload)) {
+                $this->attemptService->submitFinal($attempt);
+                $attempt = $attempt->fresh();
+            }
+        } catch (DomainException $e) {
+            return ApiResponse::error($e->getMessage(), 409);
+        }
+
+        return ApiResponse::success($this->questionResponse($attempt));
+    }
+
+    /**
+     * Finaliza explícitamente un intento en curso si el cliente lo invoca.
+     */
+    public function finish(Request $request, Exam $exam): JsonResponse
     {
         $attempt = $this->attemptForUser($exam, $request->user());
 
-        $request->validate([
-            'incident_type' => ['required', 'string', 'in:'.implode(',', self::INCIDENT_TYPES)],
-        ]);
+        try {
+            $attempt = $this->attemptService->submitFinal($attempt);
+        } catch (DomainException $e) {
+            return ApiResponse::error($e->getMessage(), 409);
+        }
+
+        return ApiResponse::success($this->questionResponse($attempt), 'Examen finalizado.');
+    }
+
+    /**
+     * api.v1.exams.incidents (§7.7). Incrementa el contador de incidentes
+     * del intento en curso y, si se excede `max_allowed_incidents` del
+     * examen, lo cancela (`cancelled_by_incident`).
+     */
+    public function incidents(AttemptIncidentStoreRequest $request, Exam $exam): JsonResponse
+    {
+        $attempt = $this->attemptForUser($exam, $request->user());
+        $request->validated();
 
         if ($attempt->status === 'in_progress') {
             $attempt->increment('incidents_count');
@@ -139,29 +146,31 @@ class AttemptController extends Controller
 
     private function currentExamQuestionOrFail(StudentAttempt $attempt): ExamQuestion
     {
-        $sequence = $attempt->question_sequence_payload;
+        abort_if($attempt->status !== 'in_progress', 409, 'Este intento ya no está en curso.');
+
+        $sequence = $attempt->question_sequence_payload ?? [];
 
         abort_if($attempt->current_question_index >= count($sequence), 409, 'El examen ya terminó.');
 
-        return ExamQuestion::with('question.questionable')->findOrFail($sequence[$attempt->current_question_index]);
+        return ExamQuestion::with(['question.questionable', 'question.paraphrases'])
+            ->findOrFail($sequence[$attempt->current_question_index]);
     }
 
     /**
-     * Traduce el cuerpo de api.v1.exams.answers a la forma que ya espera
-     * AttemptService::submitAnswer (compartida con el panel web): un
-     * índice entero para opción múltiple, un arreglo left_id/right_id
-     * para relación de columnas, o el texto/código crudo para
-     * abierta/programación.
+     * Traduce el cuerpo de api.v1.exams.answers a la forma que espera
+     * AttemptService::submitAnswer (compartida con el panel web).
+     *
+     * @param array<string, mixed> $data
      */
     private function normalizeAnswerPayload(array $data): mixed
     {
-        if (array_key_exists('selected_option_ids', $data)) {
+        if (array_key_exists('selected_option_ids', $data) && is_array($data['selected_option_ids'])) {
             $firstSelected = reset($data['selected_option_ids']);
 
             return ['selected_option_index' => $firstSelected === false ? -1 : (int) $firstSelected];
         }
 
-        if (array_key_exists('pairs', $data)) {
+        if (array_key_exists('pairs', $data) && is_array($data['pairs'])) {
             return collect($data['pairs'])
                 ->map(fn ($rightId, $leftId) => ['left_id' => (string) $leftId, 'right_id' => (string) $rightId])
                 ->values()
@@ -169,10 +178,14 @@ class AttemptController extends Controller
         }
 
         if (array_key_exists('code', $data)) {
-            return $data['code'];
+            return (string) ($data['code'] ?? '');
         }
 
-        return $data['text'] ?? '';
+        if (array_key_exists('given_answer', $data) && $data['given_answer'] !== null) {
+            return $data['given_answer'];
+        }
+
+        return (string) ($data['text'] ?? '');
     }
 
     /**
@@ -194,13 +207,7 @@ class AttemptController extends Controller
 
     /**
      * Traduce el payload interno de AttemptService::currentQuestion
-     * (compartido con el panel web) a la forma exacta de QuestionModel
-     * del cliente móvil (question_model.dart): `id`, `statement`,
-     * `question_type` y el campo propio de cada subclase. Las opciones de
-     * opción múltiple se identifican por su índice (como texto) porque
-     * MultipleChoiceItem no tiene un id propio por opción
-     * (QuestionController::store: options_payload = [{index, text}]).
-     * Nunca se incluye cuál es la opción/par correcto.
+     * a la forma exacta de QuestionModel del cliente móvil (question_model.dart).
      *
      * @param array<string, mixed> $question
      * @return array<string, mixed>
@@ -212,6 +219,11 @@ class AttemptController extends Controller
             'statement' => $question['stem'],
             'question_type' => $question['question_type'],
         ];
+
+        if (! empty($question['paraphrase_id'])) {
+            $base['paraphrase_id'] = $question['paraphrase_id'];
+            $base['paraphrased_text'] = $question['paraphrased_text'] ?? $question['stem'];
+        }
 
         return match ($question['question_type']) {
             'multiple_choice' => $base + [

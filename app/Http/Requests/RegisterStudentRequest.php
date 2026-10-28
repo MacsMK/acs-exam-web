@@ -45,7 +45,17 @@ class RegisterStudentRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'first_name.required' => 'El campo nombre es obligatorio',
+            'first_name.max' => 'El nombre no debe exceder los 100 caracteres',
+            'last_name.required' => 'El campo apellidos es obligatorio',
+            'last_name.max' => 'Los apellidos no deben exceder los 100 caracteres',
+            'email.required' => 'El campo correo electrónico es obligatorio',
+            'email.email' => 'El correo electrónico no tiene un formato válido',
+            'email.unique' => 'El correo electrónico ya se encuentra registrado',
             'phone.regex' => 'El teléfono debe tener exactamente 10 dígitos.',
+            'password.required' => 'El campo contraseña es obligatorio',
+            'password.min' => 'La contraseña debe tener al menos 8 caracteres',
+            'password.confirmed' => 'Los campos contraseña y confirmación de contraseña deben coincidir',
             'accepts_privacy_notice.accepted' => 'Debes aceptar el aviso de privacidad para continuar.',
         ];
     }

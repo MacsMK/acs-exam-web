@@ -26,4 +26,16 @@ class GroupStoreRequest extends FormRequest
             'subject' => ['nullable', 'string', 'max:120'],
         ];
     }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'name.required' => 'El campo nombre del grupo es obligatorio',
+            'name.max' => 'El nombre del grupo no debe exceder los 120 caracteres',
+            'subject.max' => 'La materia no debe exceder los 120 caracteres',
+        ];
+    }
 }

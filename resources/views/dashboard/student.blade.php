@@ -1,3 +1,4 @@
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: dashboard/student.blade.php (MPW-V2 §7.8) --}}
 @extends('layouts.app')
 
 @section('title', 'Panel del alumno')
@@ -7,17 +8,21 @@
     <p class="text-sm text-slate-500 mb-6">Resumen de tu actividad como alumno.</p>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 max-w-xl">
-        <a href="{{ route('student.groups.join.form') }}" class="bg-white rounded-lg border border-slate-200 p-5 hover:shadow-sm transition">
-            <p class="text-xs text-slate-500 uppercase tracking-wide">Grupos inscritos</p>
-            <p class="text-3xl font-bold text-acode-primary mt-1">{{ $groupsCount }}</p>
+        <a href="{{ route('student.groups.join.form') }}" class="block">
+            <x-card class="hover:shadow-md transition">
+                <p class="text-xs text-slate-500 uppercase tracking-wide">Grupos inscritos</p>
+                <p class="text-3xl font-bold text-acode-primary mt-1">{{ $groupsCount }}</p>
+            </x-card>
         </a>
-        <a href="{{ route('student.exams.index') }}" class="bg-white rounded-lg border border-slate-200 p-5 hover:shadow-sm transition">
-            <p class="text-xs text-slate-500 uppercase tracking-wide">Ver mis exámenes</p>
-            <p class="text-sm text-acode-tech font-semibold mt-3">Ir a la lista →</p>
+        <a href="{{ route('student.exams.index') }}" class="block">
+            <x-card class="hover:shadow-md transition">
+                <p class="text-xs text-slate-500 uppercase tracking-wide">Ver mis exámenes</p>
+                <p class="text-sm text-acode-tech font-semibold mt-3">Ver detalle</p>
+            </x-card>
         </a>
     </div>
 
-    <a href="{{ route('student.groups.join.form') }}" class="h-10 px-4 inline-flex items-center rounded-md bg-acode-primary text-white text-sm font-semibold hover:bg-[#0e1f36]">
-        Unirme a un grupo con folio
-    </a>
+    <x-button :href="route('student.groups.join.form')" variant="primary">
+        Enviar solicitud a un grupo
+    </x-button>
 @endsection

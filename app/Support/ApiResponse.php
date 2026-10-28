@@ -21,6 +21,7 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -79,6 +80,10 @@ final class ApiResponse
 
         if ($e instanceof ModelNotFoundException) {
             return self::error('Recurso no encontrado.', 404);
+        }
+
+        if ($e instanceof DomainException) {
+            return self::error($e->getMessage() !== '' ? $e->getMessage() : 'Conflicto con las reglas de negocio del recurso.', 409);
         }
 
         if ($e instanceof HttpExceptionInterface) {

@@ -12,7 +12,7 @@ declare(strict_types=1);
  * Requerimiento:  RF-AUT (confirmar código específico en DE-01 con Eli;
  *                 ver Formato BD-01 folio BD01-2026-001)
  * Autor:          Equipo de Base de Datos (A-Code Solutions)
- * Versión:        2.0.0
+ * Versión:        2.1.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_users (MBD-V4 Tabla 20). Sirve
  *                 indistintamente a super_admin, teacher y student
@@ -100,17 +100,6 @@ class User extends Authenticatable
             'two_factor_expires_at' => 'datetime',
             'two_factor_verified_at' => 'datetime',
         ];
-    }
-
-    /**
-     * Nombre completo (first_name + last_name), uso en vistas y recibos
-     * (DE-07) donde MBD-V4/MPM-V2 piden un único nombre para mostrar.
-     *
-     * @return string
-     */
-    public function getFullNameAttribute(): string
-    {
-        return trim("{$this->first_name} {$this->last_name}");
     }
 
     /**
@@ -205,5 +194,17 @@ class User extends Authenticatable
     public function devices(): HasMany
     {
         return $this->hasMany(UserDevice::class);
+    }
+
+    /**
+     * Nombre completo (first_name + last_name), uso en vistas y recibos
+     * (DE-07) donde MBD-V4/MPM-V2 piden un único nombre para mostrar.
+     * Ubicado en el bloque 16 (Accesores / Mutadores) conforme a MPW-V2 §3.8.1.
+     *
+     * @return string
+     */
+    public function getFullNameAttribute(): string
+    {
+        return trim("{$this->first_name} {$this->last_name}");
     }
 }

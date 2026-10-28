@@ -1,3 +1,4 @@
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: auth/login.blade.php (MPW-V2 §7.8) --}}
 @extends('layouts.guest')
 
 @section('title', 'Iniciar sesión')
@@ -10,26 +11,26 @@
         @csrf
 
         <div>
-            <label class="block text-[0.8125rem] font-medium text-slate-800 mb-1">Correo electrónico</label>
+            <label class="block text-xs font-medium text-slate-800 mb-1">Correo electrónico</label>
             <input type="email" name="email" value="{{ old('email') }}" required autofocus
-                   class="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech">
+                   class="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech">
         </div>
 
         <div>
-            <label class="block text-[0.8125rem] font-medium text-slate-800 mb-1">Contraseña</label>
+            <label class="block text-xs font-medium text-slate-800 mb-1">Contraseña</label>
             <input type="password" name="password" required
-                   class="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech">
+                   class="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech">
         </div>
 
-        <button type="submit" class="w-full h-10 rounded-md bg-acode-primary text-white text-sm font-semibold hover:bg-[#0e1f36]">
+        <x-button type="submit" variant="primary" class="w-full">
             Continuar
-        </button>
+        </x-button>
     </form>
 
     <p class="text-sm text-slate-500 mt-4 text-center">
         ¿Aún no tienes cuenta?
-        <a href="{{ route('auth.register.teacher.show') }}" class="text-acode-tech font-medium">Docente</a>
+        <a href="{{ route('auth.register.teacher.show') }}" class="text-acode-tech font-medium hover:underline">Docente</a>
         ·
-        <a href="{{ route('auth.register.student.show') }}" class="text-acode-tech font-medium">Alumno</a>
+        <a href="{{ route('auth.register.student.show') }}" class="text-acode-tech font-medium hover:underline">Alumno</a>
     </p>
 @endsection

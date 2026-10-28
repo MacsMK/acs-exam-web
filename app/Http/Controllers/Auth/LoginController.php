@@ -9,7 +9,8 @@ declare(strict_types=1);
  * Archivo:     LoginController.php
  * Ubicación:   app/Http/Controllers/Auth/LoginController.php
  * Descripción: Login web en dos pasos: credenciales -> código 2FA ->
- *              sesión (guard "web", Fortify-style manual).
+ *              sesión (guard "web"), con invalidación segura de sesión y
+ *              regeneración de token CSRF en logout.
  * ============================================================================
  */
 
@@ -22,6 +23,7 @@ use App\Models\User;
 use App\Services\AuthService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class LoginController extends Controller
@@ -64,9 +66,12 @@ class LoginController extends Controller
         return redirect()->route('dashboard');
     }
 
-    public function logout(): RedirectResponse
+    public function logout(Request $request): RedirectResponse
     {
-        Auth::logout();
+        $this->authService->logout($request->user());
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         return redirect()->route('auth.login.show');
     }

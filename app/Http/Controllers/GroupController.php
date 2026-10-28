@@ -8,7 +8,8 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     GroupController.php
  * Ubicación:   app/Http/Controllers/GroupController.php
- * Descripción: CRUD de grupos del docente + folio/QR (RW-32 a RW-36).
+ * Descripción: CRUD de grupos del docente + folio/QR y cierre semestral seguro
+ *              (RW-32 a RW-36, RF-GRU-018, MPW-V2 §5.2.1, §6.1).
  * ============================================================================
  */
 
@@ -16,12 +17,17 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\GroupStoreRequest;
 use App\Models\Group;
+use App\Services\GroupEnrollmentService;
+use DomainException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Str;
 
 class GroupController extends Controller
 {
+    public function __construct(private readonly GroupEnrollmentService $groupEnrollmentService)
+    {
+    }
+
     public function index(): View
     {
         $groups = request()->user()->groupsAsTeacher()->withCount('students')->latest()->get();
@@ -36,12 +42,7 @@ class GroupController extends Controller
 
     public function store(GroupStoreRequest $request): RedirectResponse
     {
-        $group = Group::create([
-            'teacher_id' => $request->user()->id,
-            'name' => $request->string('name')->toString(),
-            'subject' => $request->string('subject')->toString() ?: null,
-            'access_folio' => $this->generateUniqueFolio(),
-        ]);
+        $group = $this->groupEnrollmentService->createGroup($request->user(), $request->validated());
 
         return redirect()->route('groups.show', $group)->with('status', 'Grupo creado.');
     }
@@ -59,7 +60,11 @@ class GroupController extends Controller
     {
         $this->authorizeOwnership($group);
 
-        $group->update(['is_closed' => true, 'closed_at' => now()]);
+        try {
+            $this->groupEnrollmentService->closeGroup($group);
+        } catch (DomainException $e) {
+            return redirect()->route('groups.show', $group)->withErrors(['group' => $e->getMessage()]);
+        }
 
         return redirect()->route('groups.show', $group)->with('status', 'Grupo cerrado (cierre semestral, RW-35).');
     }
@@ -67,14 +72,5 @@ class GroupController extends Controller
     private function authorizeOwnership(Group $group): void
     {
         abort_unless($group->teacher_id === request()->user()->id, 403);
-    }
-
-    private function generateUniqueFolio(): string
-    {
-        do {
-            $folio = strtoupper(Str::random(8));
-        } while (Group::where('access_folio', $folio)->exists());
-
-        return $folio;
     }
 }

@@ -8,33 +8,32 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     GroupController.php
  * Ubicación:   app/Http/Controllers/Api/V1/GroupController.php
- * Descripción: api.v1.groups.* (MPM-V4 Tabla 12) para la app móvil: listar
- *              grupos (según rol), unirse por folio o QR, verificar
- *              pertenencia por QR y listar alumnos de un grupo. El
- *              servidor decide el alcance según el rol del token Sanctum,
- *              igual criterio que ExamController (el cliente no filtra
- *              por rol).
+ * Descripción: api.v1.groups.* (MPM-V4 Tabla 12, MPW-V2 §6.1, §6.3) para la
+ *              app móvil: listar grupos (según rol), unirse por folio o QR,
+ *              verificar pertenencia por QR/folio y listar alumnos de un grupo.
  * ============================================================================
  */
 
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\GroupJoinRequest;
+use App\Http\Requests\GroupVerifyFolioRequest;
 use App\Models\Group;
+use App\Services\GroupEnrollmentService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 
 class GroupController extends Controller
 {
+    public function __construct(private readonly GroupEnrollmentService $groupEnrollmentService)
+    {
+    }
+
     /**
      * api.v1.groups.index. Para el alumno, oculta grupos ya cerrados
-     * (RF-GRU-019, "Ocultamiento de grupos cerrados al estudiante") — es
-     * el servidor quien filtra, el cliente móvil no trae ningún campo de
-     * estado de grupo ni aplica ningún filtro propio (ver
-     * docs/04_DECISIONES_ADR.md). El docente sigue viendo sus grupos
-     * cerrados, para poder administrarlos.
+     * (RF-GRU-019, "Ocultamiento de grupos cerrados al estudiante").
      */
     public function index(Request $request): JsonResponse
     {
@@ -48,64 +47,34 @@ class GroupController extends Controller
     }
 
     /**
-     * api.v1.groups.join. Acepta `folio` O `qr_payload` (el cliente móvil
-     * manda exactamente uno de los dos, nunca ambos); el QR del docente
-     * solo codifica el folio (MPM-V4 §6.9), así que ambos campos se tratan
-     * igual del lado del servidor.
+     * api.v1.groups.join. Acepta `folio` O `qr_payload` mediante
+     * GroupJoinRequest y delega la inscripción a GroupEnrollmentService.
      */
-    public function join(Request $request): JsonResponse
+    public function join(GroupJoinRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'folio' => ['nullable', 'string'],
-            'qr_payload' => ['nullable', 'string'],
-        ]);
-
-        $folio = $data['folio'] ?? $data['qr_payload'] ?? null;
-
-        if ($folio === null || $folio === '') {
-            throw ValidationException::withMessages(['folio' => ['Falta el folio o el código QR.']]);
-        }
-
-        $group = Group::where('access_folio', strtoupper($folio))->first();
-
-        if (! $group) {
-            throw ValidationException::withMessages(['folio' => ['Folio no encontrado.']]);
-        }
-
-        if ($group->is_closed) {
-            throw ValidationException::withMessages(['folio' => ['Este grupo ya cerró el ciclo (RW-35).']]);
-        }
-
-        $group->students()->syncWithoutDetaching([
-            $request->user()->id => ['joined_at' => now()],
-        ]);
+        $group = $this->groupEnrollmentService->joinByFolio(
+            $request->user(),
+            $request->resolvedFolio(),
+            'folio',
+        );
 
         return ApiResponse::success(
-            $this->payload($group->fresh()->loadCount('students')),
+            $this->payload($group),
             'Te uniste al grupo.',
         );
     }
 
     /**
      * api.v1.groups.verify (Tabla 5: verificación de pertenencia por
-     * escaneo, distinto de unirse). Sin pantalla conectada todavía del
-     * lado móvil, pero implementado contra el contrato completo.
+     * escaneo o folio, distinto de unirse).
      */
-    public function verify(Request $request): JsonResponse
+    public function verify(GroupVerifyFolioRequest $request): JsonResponse
     {
-        $data = $request->validate(['qr_payload' => ['required', 'string']]);
-
-        $group = Group::where('access_folio', strtoupper($data['qr_payload']))->first();
-
-        if (! $group || $group->is_closed) {
-            throw ValidationException::withMessages(['qr_payload' => ['El grupo no existe o ya cerró.']]);
-        }
-
-        $belongs = $group->students()->where('acs_users.id', $request->user()->id)->exists();
-
-        if (! $belongs) {
-            throw ValidationException::withMessages(['qr_payload' => ['No perteneces a este grupo.']]);
-        }
+        $this->groupEnrollmentService->verifyMembership(
+            $request->user(),
+            $request->resolvedFolio(),
+            'qr_payload',
+        );
 
         return ApiResponse::success(null, 'Pertenencia verificada.');
     }
