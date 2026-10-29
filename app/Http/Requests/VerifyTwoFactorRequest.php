@@ -40,4 +40,15 @@ class VerifyTwoFactorRequest extends FormRequest
             'code' => ['required', 'digits:6'],
         ];
     }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'code.required' => 'El campo código de verificación es obligatorio',
+            'code.digits' => 'El código de verificación debe contener 6 dígitos',
+        ];
+    }
 }
