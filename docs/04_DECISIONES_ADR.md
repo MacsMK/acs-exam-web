@@ -207,6 +207,180 @@ diseño, solo quedó fuera del alcance de la entrega inicial por prioridad.
 
 ---
 
+## ADR-009 — Sobre de respuesta uniforme (`App\Support\ApiResponse`)
+
+**Contexto:** la app móvil (`acs-exam-mobile`, `lib/core/network/
+api_response.dart`) ya está construida esperando que **toda** respuesta
+de la API — éxito o error, incluyendo errores que Laravel generaría por
+su cuenta (404 de ruta, 419 de token expirado, 500 no capturado) — venga
+en la forma `{status, code, message, data, errors}` con
+`isSuccess => status == 'success'`. El backend, antes de este ajuste,
+devolvía arrays sueltos en éxito y las páginas/JSON default de Laravel en
+error (forma distinta en cada caso).
+
+**Decisión:** se agregó `App\Support\ApiResponse` con `success()`,
+`error()` y `fromException()`, y un renderer global en `bootstrap/app.php`
+(`$exceptions->render()`) que intercepta **cualquier** excepción bajo
+`api/*` y la pasa por `ApiResponse::fromException()` antes de que Laravel
+la convierta en su respuesta default. Todos los controladores de
+`Api/V1/*` se reescribieron para devolver siempre a través de este helper.
+
+**Consecuencias:** Flutter puede confiar en una sola forma de respuesta
+sin tener que distinguir "¿esto es un error de validación mío o un 500
+del servidor?" por la forma del JSON — ambos llegan con `status: "error"`
+y el detalle en `message`/`errors`. El costo: cualquier excepción nueva
+que no esté explícitamente mapeada en `fromException()` cae al `default`
+(500 genérico) — si aparece un tipo de excepción que merece su propio
+código HTTP, hay que agregarlo ahí explícitamente.
+
+---
+
+## ADR-010 — Verificación de 2FA sin identificador de usuario en el payload
+
+**Contexto:** `lib/features/auth/data/repositories/auth_repository.dart`
+(ya construido del lado Flutter) manda **solo** `{code}` a
+`auth/two-factor` — nunca un `user_id`, `email` ni token intermedio del
+paso de login. El backend, antes de este ajuste, exigía `user_id` como
+campo obligatorio (`VerifyTwoFactorRequest`), algo que el cliente móvil
+nunca iba a poder cumplir.
+
+**Decisión:** `user_id` pasa de `required` a `sometimes` en
+`VerifyTwoFactorRequest` (el panel web sigue mandándolo por un campo
+oculto; la API simplemente no lo exige). `AuthController::twoFactor()`
+busca al usuario **por el código mismo**: el primero cuyo
+`two_factor_code` coincida, no esté expirado (`two_factor_expires_at >
+now()`) y tenga rol `teacher` o `student`, tomando el más reciente si
+hubiera colisión (`latest('two_factor_expires_at')`).
+
+**Consecuencias:** es una decisión de **seguridad reducida y consciente**:
+un código de 6 dígitos sin un identificador de usuario que lo acompañe
+tiene más superficie de colisión que "código + user_id". Se acepta porque
+(a) el código ya expira (`two_factor_expires_at`) y (b) cambiar el
+contrato significaría pedirle al equipo móvil que reconstruya una pantalla
+ya terminada y probada — más costoso que ajustar el backend. Si en la
+auditoría esto se señala como riesgo, la mitigación futura más barata es
+alargar el código (de 6 a 8 dígitos) o acortar su ventana de expiración,
+no necesariamente rehacer el contrato.
+
+---
+
+## ADR-011 — Endpoints de aviso de privacidad, grupos extendidos y
+calificaciones: nuevos del lado backend, contrato fijado por el móvil
+
+**Contexto:** varios endpoints que la app móvil ya consume
+(`privacy-notice` + `/accept`, `groups` como listado propio en vez de
+"mine", `groups/verify`, `groups/{group}/students`, `grades` +
+`/statistics`, `devices`) no existían del lado backend, o existían con
+otro nombre/forma (`groups/mine` en vez de `groups`). Estos eran
+justamente los puntos que el propio equipo móvil había dejado marcados
+como "pendiente de confirmación con el equipo backend" (ver el documento
+de seguimiento del equipo, insumo DE-03).
+
+**Decisión:** se construyeron `PrivacyController`, `GradeController`,
+`DeviceController` como nuevos, y se extendió `GroupController`
+(`index()`, `verify()`, `students()`), todos con la forma exacta que ya
+esperan los modelos Dart correspondientes
+(`PrivacyNoticeModel`, `GroupModel`, `StudentModel`, `GradeModel`,
+`GradePageModel`, `GradeStatisticsModel`) en vez de diseñar la forma de
+respuesta desde cero del lado backend.
+
+**Consecuencias:** se resuelve del lado servidor, sin pedirle nada nuevo
+al equipo móvil, pero quedan dos simplificaciones documentadas que valen
+la pena revisar con calma después de la entrega: (a) `GroupController
+::index()` oculta grupos cerrados (`is_closed`) solo para alumnos, no
+para docentes — resuelve RF-GRU-019 pero asume que un docente siempre
+quiere ver sus grupos cerrados también; (b) en `GradeController::index()`
+el campo `weight` se devuelve fijo en `100.0` porque **no existe hoy**
+ningún mecanismo real de ponderación entre exámenes de un mismo alumno —
+es un placeholder, no un cálculo. Si el proyecto necesita ponderación real
+más adelante, es una columna/regla nueva, no un ajuste de forma.
+
+---
+
+## ADR-012 — Flujo de examen de la API rediseñado alrededor de
+`exams/take` + `exams/{exam}/answers` (sin "current-question" aparte)
+
+**Contexto:** el lado web resuelve "iniciar intento" → "responder" →
+"terminar" → "ver resultado" como pasos separados dentro de la misma
+vista (Alpine.js). El cliente Flutter (`exam_repository.dart`,
+`exam_model.dart`, `answer_payload.dart`) ya estaba construido esperando
+un flujo distinto: `POST exams/take` con `exam_id` en el cuerpo (no en la
+URL) que entrega la primera pregunta, y cada `POST exams/{exam}/answers`
+que recibe la respuesta de la pregunta *actual* y devuelve la *siguiente*
+en la misma respuesta — sin un paso explícito de "dame la siguiente
+pregunta" ni un endpoint separado de "terminar".
+
+**Decisión:** se reescribió `Api\V1\AttemptController` alrededor de ese
+flujo. Internamente sigue usando `AttemptService` sin modificarlo — solo
+se agregaron, en el controlador, `normalizeAnswerPayload()` (traduce
+`selected_option_ids`/`pairs`/`text`/`code` del payload de Flutter a la
+forma interna que `AttemptService::gradeAnswer()` ya esperaba) y
+`questionPayload()` (traduce la pregunta interna a la forma de
+`QuestionModel` según su tipo, sin filtrar nunca la respuesta correcta).
+El examen se autofinaliza (y califica) cuando se responde la última
+pregunta — no hay un endpoint `submit`/`terminar` aparte del lado API.
+También se agregó `exams/{exam}/incidents` (incidentes anti-fraude:
+incrementa `incidents_count` y cancela el intento si excede
+`max_allowed_incidents`), que no tenía equivalente del lado web.
+
+**Consecuencias:** cero cambios de riesgo en `AttemptService` ni en
+`GradeCalculatorService` (la lógica de calificación, ya probada del lado
+web, no se tocó) — todo el ajuste quedó aislado en la capa de traducción
+del controlador. El costo: el avance de examen del lado API
+(`exams/{exam}/progress`, uso exclusivo del docente) puede contar dos
+veces a un alumno que esté en más de un grupo asignado al mismo examen —
+simplificación aceptada, documentada, no corregida en esta entrega.
+
+---
+
+## ADR-013 — `platform` fijo en `"android"` en el registro de dispositivo
+
+**Contexto:** `POST /v1/devices` (registro de token de notificaciones
+push) solo recibe `{"token": "..."}` del lado Flutter
+(`device_repository.dart`) — nunca un campo `platform`. El hallazgo M-12
+del propio equipo móvil ya documentaba que el alcance del proyecto es
+Android únicamente (excluye iOS explícitamente).
+
+**Decisión:** `DeviceController::store()` asume `platform: 'android'` al
+guardar (`UserDevice::updateOrCreate`), en vez de exigir un campo que el
+cliente nunca manda.
+
+**Consecuencias:** si el proyecto alguna vez soporta iOS, este es el
+primer lugar que hay que tocar — junto con pedirle al cliente que empiece
+a mandar su plataforma real.
+
+---
+
+## ADR-014 — Suite de pruebas de contrato (`tests/Feature/Api/
+MobileContractTest.php`) como validación antes de CI
+
+**Contexto:** este ajuste del contrato de API tocó prácticamente todos los
+controladores de `Api/V1`, sin poder correr PHP/Composer localmente en el
+entorno donde se escribió el código — la única validación real disponible
+es GitHub Actions, y cada vuelta de CI tiene un costo de tiempo que no
+vale la pena gastar en errores que una prueba local habría atrapado.
+
+**Decisión:** se agregó `tests/Feature/Api/MobileContractTest.php`
+cubriendo de punta a punta: login → 2FA → logout; aviso de privacidad
+(mostrar/aceptar); unirse a grupo por folio + listado + lista de alumnos
+(docente); el flujo completo de examen ejercitando los 4 tipos de
+reactivo en secuencia (opción múltiple, relacionar columnas, abierto,
+código) con verificación de que la calificación resultante sea la
+esperada; y registro de token de dispositivo. `phpunit.xml` se cambió de
+SQLite en memoria (default del esqueleto de Laravel) a PostgreSQL real,
+porque varias migraciones usan tipos propios de Postgres (`jsonb`) que
+SQLite no tiene — correr la suite contra un motor que el proyecto nunca
+usa de verdad no sirve como validación real.
+
+**Consecuencias:** cualquiera del equipo que corra `php artisan test`
+localmente necesita un Postgres disponible (ya sea Sail o uno instalado
+directo) — ya no basta con el SQLite que trae Laravel por defecto. A
+cambio, la suite sirve como documentación ejecutable del contrato: si
+alguien cambia la forma de un endpoint sin querer, esta prueba debería
+fallar antes de llegar a CI.
+
+---
+
 ## Cómo agregar una decisión nueva
 
 Copia el formato de arriba: Contexto (qué problema había y qué opciones

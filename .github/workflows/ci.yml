@@ -75,4 +75,27 @@ jobs:
         run: php artisan migrate --seed --force
 
       - name: Run test suite
-        run: php artisan test
+        run: |
+          set +e
+          php artisan test 2>&1 | tee /tmp/artisan-test.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            # Este sandbox no puede leer los logs de Actions directamente
+            # (gh run view --log / gh api .../logs están bloqueados), así
+            # que la única forma de diagnosticar una falla es a través de
+            # esta anotación ::error::. Para una excepción no capturada
+            # (p. ej. "Undefined array key"), lo que importa es el PRIMER
+            # frame del stack trace (dónde ocurrió realmente), no el final
+            # de la salida — por eso se busca el bloque completo de cada
+            # falla en vez de solo el tail.
+            sed 's/\x1b\[[0-9;]*m//g' /tmp/artisan-test.log > /tmp/artisan-test-clean.log
+            {
+              echo "=== Primer bloque de falla (con stack trace completo) ==="
+              grep -n -A 80 -m1 'FAILED' /tmp/artisan-test-clean.log
+              echo "=== Resumen final ==="
+              tail -n 15 /tmp/artisan-test-clean.log
+            } > /tmp/artisan-test-summary.log
+            echo "::error::php artisan test failed (exit $status).%0A$(head -c 9000 /tmp/artisan-test-summary.log | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit "$status"
+          fi
+        shell: bash

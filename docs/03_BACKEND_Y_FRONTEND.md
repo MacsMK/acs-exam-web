@@ -24,30 +24,57 @@ convención que sigue el lado API.
 
 ## 2. Rutas — API v1 (`routes/api.php`)
 
-Todo bajo `Route::prefix('v1')->name('api.v1.')`. Públicas: registro
-(docente/alumno), login, verificación 2FA. Todo lo demás requiere
-`auth:sanctum`:
+Todo bajo `Route::prefix('v1')->name('api.v1.')`. Este contrato quedó
+**alineado 1:1 contra `api_endpoints.dart` del repo `acs-exam-mobile`**
+(Flutter ya estaba construido contra ese contrato cuando se hizo el
+ajuste del lado del backend — ver ADR-009 a ADR-014 en
+`04_DECISIONES_ADR.md` para el porqué de cada punto).
+
+Públicas (sin token): registro (docente/alumno), login, `auth/two-factor`.
+Todo lo demás requiere `auth:sanctum` (`Authorization: Bearer <token>`):
 
 ```
+POST /v1/auth/register/teacher
+POST /v1/auth/register/student
+POST /v1/auth/login
+POST /v1/auth/two-factor        { code }  → { token, role }  (sin user_id, ver ADR-010)
+
 GET  /v1/auth/me
 POST /v1/auth/logout
-POST /v1/groups/join
-GET  /v1/groups/mine
-GET  /v1/exams/assigned-to-me
-POST /v1/exams/{exam}/attempts/start
-GET  /v1/attempts/{attempt}/current-question
-POST /v1/attempts/{attempt}/answers
-POST /v1/attempts/{attempt}/submit
+
+GET  /v1/privacy-notice                    → { version, title, content, accepted }
+POST /v1/privacy-notice/accept
+
+GET  /v1/groups                            → [{ id, name, folio, students_count }]
+POST /v1/groups/join            { folio } | { qr_payload }
+POST /v1/groups/verify          { folio } | { qr_payload }
+GET  /v1/groups/{group}/students           (solo docente)  → [{ id, name }]
+
+GET  /v1/exams                             → [{ id, title }]  (según rol)
+GET  /v1/exams/{exam}/progress             (solo docente)  → { answered_count, total_count }
+POST /v1/exams/take             { exam_id }                → { question, attempt_id, ... }
+POST /v1/exams/{exam}/answers   { question_id, ...payload según tipo } → siguiente pregunta o null
+POST /v1/exams/{exam}/incidents { incident_type }
+
+GET  /v1/grades                            (paginado, 20/página, forma nativa de ->paginate())
+GET  /v1/grades/statistics
+
+POST /v1/devices                { token }   (ver ADR-013, platform fijo "android")
 ```
 
-Nota para quien integre la app Flutter: el nombre de los endpoints de
-intento difiere un poco del lado web (`current-question`/`answers`/
-`submit` vs. `responder`/`terminar`/`resultado`) porque el lado API
-expone un paso explícito "dame la siguiente pregunta" pensado para una
-UI que avanza pregunta por pregunta sin recargar toda la vista, mientras
-que el lado web resuelve eso dentro de la misma vista con Alpine. La
-regla de negocio detrás (quién puede responder qué, cómo se califica) es
-la misma — vive en `AttemptService`, no en el controlador.
+Nota para quien integre la app Flutter: **ya no existe** un endpoint
+separado de "dame la siguiente pregunta" — `POST exams/take` entrega la
+primera pregunta del intento (crea el intento si no existe) y cada
+`POST exams/{exam}/answers` responde con la *siguiente* pregunta (o
+`data.question: null` cuando el examen terminó), en el mismo payload de
+respuesta. Es una sola conversación pregunta-respuesta, no dos pasos
+separados como en el lado web (`responder`/`terminar` con Alpine). La
+regla de negocio detrás (quién puede responder qué, cómo se califica)
+sigue siendo la misma — vive en `AttemptService`; lo que cambió es solo
+la forma en que el controlador de API empaqueta esa respuesta para que
+calce con `QuestionModel`/`ApiResponseModel` de Flutter. Ver
+`AttemptController::normalizeAnswerPayload()` y `::questionPayload()`
+para el detalle de esa traducción.
 
 ## 3. Controladores
 
@@ -73,9 +100,13 @@ la misma — vive en `AttemptService`, no en el controlador.
   resultado. Delgado: todo pasa por `AttemptService`.
 
 **API** (`app/Http/Controllers/Api/V1/`): `AuthController`,
-`GroupController`, `ExamController`, `AttemptController` — mismo patrón,
-mismos servicios, responses en JSON (`Resource`/arrays simples según el
-endpoint) en vez de vistas.
+`PrivacyController`, `GroupController`, `ExamController`,
+`AttemptController`, `GradeController`, `DeviceController` — mismo
+patrón, mismos servicios, respuestas siempre vía `App\Support\ApiResponse`
+(ver sección 2 y ADR-009) en vez de vistas. `GradeController` y
+`DeviceController` son controladores nuevos (no tenían equivalente del
+lado web porque no existe todavía una vista de calificaciones/dispositivos
+en el panel docente — son exclusivos de la app móvil por ahora).
 
 ## 4. Capa de servicios (la lógica real)
 

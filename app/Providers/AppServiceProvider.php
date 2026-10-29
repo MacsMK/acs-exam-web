@@ -18,6 +18,7 @@ namespace App\Providers;
 use App\Contracts\AiEvaluatorContract;
 use App\Models\PersonalAccessToken;
 use App\Services\MockAiEvaluator;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Sanctum\Sanctum;
 
@@ -45,5 +46,17 @@ class AppServiceProvider extends ServiceProvider
         // modelo, que ya apunta a la tabla con el prefijo institucional
         // (acs_personal_access_tokens, migración BD01-2026-024).
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
+
+        // Forzar la URL raíz a partir de APP_URL en vez de confiar en el
+        // Host que reciba la petición. Necesario detrás de proxies que
+        // reescriben el Host hacia el backend interno (ej. GitHub
+        // Codespaces port forwarding, que le manda a Laravel
+        // "Host: localhost:<puerto>" aunque el dominio público sea otro):
+        // sin esto, redirect()->route(...) arma la URL con ese Host
+        // interno y el navegador termina apuntando a un "localhost" que
+        // no existe para quien no sea el dueño de la máquina/Codespace.
+        if ($url = config('app.url')) {
+            URL::forceRootUrl($url);
+        }
     }
 }
