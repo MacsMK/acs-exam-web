@@ -16,19 +16,19 @@
         <div class="grid grid-cols-2 gap-3">
             <div>
                 <label class="block text-[0.8125rem] font-medium text-slate-800 mb-1">Nombre(s)</label>
-                <input type="text" name="first_name" value="{{ old('first_name') }}" required
+                <input type="text" name="first_name" value="{{ old('first_name') }}" required maxlength="100"
                        class="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech">
             </div>
             <div>
                 <label class="block text-[0.8125rem] font-medium text-slate-800 mb-1">Apellido(s)</label>
-                <input type="text" name="last_name" value="{{ old('last_name') }}" required
+                <input type="text" name="last_name" value="{{ old('last_name') }}" required maxlength="100"
                        class="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech">
             </div>
         </div>
 
         <div>
             <label class="block text-[0.8125rem] font-medium text-slate-800 mb-1">Correo electrónico</label>
-            <input type="email" name="email" value="{{ old('email') }}" required
+            <input type="email" name="email" value="{{ old('email') }}" required maxlength="255"
                    class="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech">
         </div>
 
@@ -49,7 +49,7 @@
                 <label class="block text-[0.8125rem] font-medium text-slate-800 mb-1">Confirmar contraseña</label>
                 <input type="password" name="password_confirmation" required minlength="8"
                        class="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech">
-                <p class="text-sm text-red-600 mt-1" data-password-warning hidden aria-live="polite">
+                <p class="text-acode-danger text-xs mt-1" data-password-warning hidden aria-live="polite">
                     Los campos contraseña y confirmar contraseña deben coincidir
                 </p>
             </div>
@@ -62,7 +62,7 @@
                     value="1"
                     class="mt-0.5"
                     required>
-                <span>Acepto el</span>
+                <span>Acepto el </span>
             </label>
 
             <button type="button"
