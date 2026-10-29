@@ -116,7 +116,7 @@ class AuthService
 
         if (! $user || ! Hash::check($password, $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['Las credenciales no coinciden con ningún registro.'],
+                'email' => ['Las credenciales ingresadas no coinciden con nuestros registros'],
             ]);
         }
 
