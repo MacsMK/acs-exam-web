@@ -24,7 +24,6 @@
     x-show="show"
     x-cloak
     class="fixed inset-0 z-50 overflow-y-auto px-4 py-6 sm:px-0 flex items-center justify-center"
-    style="display: none;"
     role="dialog"
     aria-modal="true"
 >

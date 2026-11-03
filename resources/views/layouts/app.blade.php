@@ -146,7 +146,7 @@
                             x-transition:leave-start="transform opacity-100 scale-100"
                             x-transition:leave-end="transform opacity-0 scale-95"
                             class="absolute right-0 mt-2 w-56 rounded-xl bg-white shadow-xl border border-slate-200 py-1.5 text-slate-800 z-50 divide-y divide-slate-100"
-                            style="display: none;"
+                            x-cloak
                         >
                             <div class="px-4 py-2.5">
                                 <p class="text-xs font-semibold text-slate-800">{{ auth()->user()->full_name }}</p>
@@ -282,7 +282,6 @@
                 x-show="mobileDrawerOpen"
                 x-cloak
                 class="fixed inset-0 z-50 lg:hidden flex"
-                style="display: none;"
             >
                 {{-- Backdrop blur --}}
                 <div

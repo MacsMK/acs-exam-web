@@ -45,7 +45,7 @@
                         aria-label="Mostrar u ocultar contraseña"
                     >
                         <x-icon name="eye" class="w-5 h-5" x-show="!showPass" />
-                        <x-icon name="eyeSlash" class="w-5 h-5" x-show="showPass" style="display: none;" />
+                        <x-icon name="eyeSlash" class="w-5 h-5" x-show="showPass" x-cloak />
                     </button>
                 </div>
             </x-form.group>

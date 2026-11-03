@@ -147,7 +147,7 @@
             </div>
 
             {{-- Configuración de Relación de Columnas --}}
-            <div x-show="type === 'matching'" class="space-y-3 border-t border-slate-200 pt-5" style="display: none;">
+            <div x-show="type === 'matching'" class="space-y-3 border-t border-slate-200 pt-5" x-cloak>
                 <div class="flex items-center justify-between">
                     <label class="block text-xs font-semibold text-slate-800 uppercase tracking-wider">
                         Pares de correspondencia (Concepto ↔ Definición)
@@ -193,7 +193,7 @@
             </div>
 
             {{-- Configuración de Pregunta Abierta --}}
-            <div x-show="type === 'open'" class="space-y-4 border-t border-slate-200 pt-5" style="display: none;">
+            <div x-show="type === 'open'" class="space-y-4 border-t border-slate-200 pt-5" x-cloak>
                 <x-form.group
                     name="reference_answer"
                     label="Respuesta esperada o modelo de referencia"
@@ -219,7 +219,7 @@
             </div>
 
             {{-- Configuración de Pregunta de Programación --}}
-            <div x-show="type === 'code'" class="space-y-4 border-t border-slate-200 pt-5" style="display: none;">
+            <div x-show="type === 'code'" class="space-y-4 border-t border-slate-200 pt-5" x-cloak>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <x-form.group name="programming_language" label="Lenguaje de programación">
                         <x-form.input
