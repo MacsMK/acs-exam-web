@@ -103,7 +103,7 @@ class AuthService
      */
     public function issueTwoFactorCode(User $user): void
     {
-        $code = (string) random_int(100000, 999999);
+        $code = $this->generateUniqueCode($user);
 
         $user->forceFill([
             'two_factor_code' => $code,
@@ -111,6 +111,27 @@ class AuthService
         ])->save();
 
         Log::info("[2FA DEMO] Código para {$user->email}: {$code} (válido 10 min)");
+    }
+
+    /**
+     * Genera un código de 6 dígitos que no coincida con el de ningún otro
+     * usuario con código vigente. La API móvil localiza al usuario solo por
+     * el código (Api\V1\AuthController::twoFactor), así que dos códigos
+     * iguales y vigentes a la vez podrían entregar el token de la cuenta
+     * equivocada.
+     */
+    private function generateUniqueCode(User $user): string
+    {
+        do {
+            $code = (string) random_int(100000, 999999);
+
+            $inUse = User::where('two_factor_code', $code)
+                ->where('two_factor_expires_at', '>', now())
+                ->where('id', '!=', $user->id)
+                ->exists();
+        } while ($inUse);
+
+        return $code;
     }
 
     /**
