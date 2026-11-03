@@ -39,7 +39,7 @@ class AuthController extends Controller
         $user = $this->authService->register($request->validated(), 'teacher');
 
         return ApiResponse::success(
-            ['user_id' => $user->id, 'demo_code' => $user->two_factor_code],
+            $this->withDemoCode($user, ['user_id' => $user->id]),
             'Registro exitoso. Verifica tu código de un solo uso.',
             201,
         );
@@ -50,7 +50,7 @@ class AuthController extends Controller
         $user = $this->authService->register($request->validated(), 'student');
 
         return ApiResponse::success(
-            ['user_id' => $user->id, 'demo_code' => $user->two_factor_code],
+            $this->withDemoCode($user, ['user_id' => $user->id]),
             'Registro exitoso. Verifica tu código de un solo uso.',
             201,
         );
@@ -63,18 +63,30 @@ class AuthController extends Controller
             $request->string('password')->toString(),
         );
 
-        // `demo_code` expone el mismo código 2FA que ya se ve "gratis" en el
-        // panel web (resources/views/auth/verify-2fa.blade.php) y en
-        // storage/logs/laravel.log — no hay envío de correo real en este
-        // proyecto (MAIL_MAILER=log), así que sin esto la app móvil no tiene
-        // ninguna forma de conseguir el código salvo pedirle a alguien que
-        // revise el log del backend. No es una fuga de seguridad nueva: es
-        // la misma información que el panel web ya muestra en pantalla sin
-        // ninguna restricción.
         return ApiResponse::success(
-            ['demo_code' => $user->two_factor_code],
+            $this->withDemoCode($user, []),
             'Credenciales válidas. Verifica tu código de un solo uso.',
         );
+    }
+
+    /**
+     * `demo_code` es un campo opcional solo para entornos de demostración:
+     * únicamente se incluye cuando el correo NO sale de verdad
+     * (MAIL_MAILER=log o array), igual que el código ya visible en
+     * storage/logs/laravel.log. Con un correo real (smtp, ses, etc.) el
+     * código llega solo por ese medio y la API nunca lo devuelve, porque
+     * entregarlo en la respuesta anularía el segundo factor.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function withDemoCode(User $user, array $data): array
+    {
+        if (in_array(config('mail.default'), ['log', 'array'], true)) {
+            $data['demo_code'] = $user->two_factor_code;
+        }
+
+        return $data;
     }
 
     /**

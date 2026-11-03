@@ -30,8 +30,11 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
     Route::post('auth/register/teacher', [AuthController::class, 'registerTeacher'])->name('auth.register.teacher');
     Route::post('auth/register/student', [AuthController::class, 'registerStudent'])->name('auth.register.student');
-    Route::post('auth/login', [AuthController::class, 'login'])->name('auth.login');
-    Route::post('auth/two-factor', [AuthController::class, 'twoFactor'])->name('auth.two-factor');
+    // Límite de intentos por IP: el código 2FA tiene solo 6 dígitos y se
+    // localiza sin identificador de usuario, así que sin tope se podría
+    // adivinar por fuerza bruta.
+    Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:30,1')->name('auth.login');
+    Route::post('auth/two-factor', [AuthController::class, 'twoFactor'])->middleware('throttle:20,1')->name('auth.two-factor');
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('auth/me', [AuthController::class, 'me'])->name('auth.me');
