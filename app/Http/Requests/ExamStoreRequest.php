@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Archivo:        ExamStoreRequest.php
  * Ubicación:      app/Http/Requests/ExamStoreRequest.php
  * Requerimiento:  RW-19, RW-20, RW-21, RW-25, RW-26, RW-27
- * Autor:          Equipo de Desarrollo Web (A-Code Solutions)
+ * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 26/10/2026
  * Descripción:    FormRequest de alta de examen (datos base): título, escala de

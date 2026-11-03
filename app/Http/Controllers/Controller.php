@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Archivo:        Controller.php
  * Ubicación:      app/Http/Controllers/Controller.php
  * Requerimiento:  N/A (clase base de controladores; sin RF asociado)
- * Autor:          Equipo de Desarrollo Web (A-Code Solutions)
+ * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Clase base abstracta de todos los controladores web y de la API v1.

@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Archivo:        GroupStoreRequest.php
  * Ubicación:      app/Http/Requests/GroupStoreRequest.php
  * Requerimiento:  RW-32 a RW-36
- * Autor:          Equipo de Desarrollo Web (A-Code Solutions)
+ * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 26/10/2026
  * Descripción:    FormRequest de alta de grupo. Solo el docente dueño lo crea
