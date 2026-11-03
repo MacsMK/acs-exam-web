@@ -28,7 +28,6 @@ use App\Services\AttemptService;
 use App\Support\ApiResponse;
 use DomainException;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class AttemptController extends Controller
 {
@@ -95,22 +94,6 @@ class AttemptController extends Controller
         }
 
         return ApiResponse::success($this->questionResponse($attempt));
-    }
-
-    /**
-     * Finaliza explícitamente un intento en curso si el cliente lo invoca.
-     */
-    public function finish(Request $request, Exam $exam): JsonResponse
-    {
-        $attempt = $this->attemptForUser($exam, $request->user());
-
-        try {
-            $attempt = $this->attemptService->submitFinal($attempt);
-        } catch (DomainException $e) {
-            return ApiResponse::error($e->getMessage(), 409);
-        }
-
-        return ApiResponse::success($this->questionResponse($attempt), 'Examen finalizado.');
     }
 
     /**

@@ -2,7 +2,7 @@
 
 > **Estado:** Aceptado  
 > **Fecha:** 27 de Octubre de 2026  
-> **Decisores:** `db-eloquent-architect`, `backend-laravel-specialist`  
+> **Decisores:** Equipo 4 (A-Code Solutions)  
 > **Normativa de Referencia:** Manual `MPW-V2` (§2.4, §5.4, §5.5, §6.7)
 
 ---

@@ -2,7 +2,7 @@
 
 > **Estado:** Aceptado  
 > **Fecha:** 27 de Octubre de 2026  
-> **Decisores:** `security-vulnerability-auditor`, `backend-laravel-specialist`  
+> **Decisores:** Equipo 4 (A-Code Solutions)  
 > **Normativa de Referencia:** Manual `MPW-V2` (§5.6.1), `RNF-CON-001`, `RF-EXA-032`, `RF-EXA-047`
 
 ---

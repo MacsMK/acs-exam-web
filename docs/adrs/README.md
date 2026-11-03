@@ -33,7 +33,7 @@ Este directorio almacena el registro histórico e incremental de decisiones arqu
 ### Bloque II — Auditoría Normativa, Arquitectura y Refactorización Integral (Sprint 2 / Auditoría V2)
 | Código | Título | Estado | Módulos Impactados | Resumen |
 | :---: | :--- | :---: | :--- | :--- |
-| **[ADR-015](ADR-015_Topologia_Multiagente_MSA_V1.md)** | Topología de 8 Subagentes Especializados en 3 Anillos (`MSA-V1`) | **Aceptado** | `.agents/`, `docs/`, `AGENTS.md` | Separación estricta entre auditores (solo lectura), ingenieros (escritura por dominio) y QA. |
+| **ADR-015** | Número retirado del catálogo | — | — | Se conserva el número para no renumerar los ADR posteriores; no corresponde a una decisión de arquitectura del sistema. |
 | **[ADR-016](ADR-016_Capa_Repositorios_Eloquent_y_Eager_Loading.md)** | Implementación de Capa de Repositorios y Erradicación de N+1 | **Aceptado** | `app/Repositories/`, `AppServiceProvider.php` | Contratos e implementaciones Eloquent; activación de `Model::preventLazyLoading()`. |
 | **[ADR-017](ADR-017_Erradicacion_Validaciones_Inline_FormRequests_Estandar.md)** | Erradicación de `$request->validate()` Inline y Adopción de Form Requests | **Aceptado** | `app/Http/Requests/`, `Controllers/` | 16 FormRequests con mensajes canónicos en español (MPW-V2 Tabla 17) y corrección de IDOR. |
 | **[ADR-018](ADR-018_Calificacion_Proporcional_Matching_y_Omision_IA.md)** | Calificación Proporcional en Matching (`RF-EVA-002`) y Omisión de IA (`RF-EVA-008`) | **Aceptado** | `app/Services/AttemptService.php` | Puntaje fraccional en pares y omisión de consumo de IA en reactivos abiertos en blanco. |

@@ -2,7 +2,7 @@
 
 > **Estado:** Aceptado  
 > **Fecha:** 27 de Octubre de 2026  
-> **Decisores:** `normative-compliance-auditor`, `backend-laravel-specialist`  
+> **Decisores:** Equipo 4 (A-Code Solutions)  
 > **Requerimientos Asociados:** `RF-EVA-002` (Propuesta P-114), `RF-EVA-008` (Propuesta P-126), `RF-IAR-001` (Propuesta P-118), `RF-EVA-009` (Propuesta P-136)
 
 ---

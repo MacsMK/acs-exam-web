@@ -13,12 +13,9 @@ ni el historial del chat.
    controladores, middleware, vistas Blade y el sistema de diseño
    `acode-*` con los valores exactos.
 4. **[04_DECISIONES_ADR.md](04_DECISIONES_ADR.md)** y carpeta **[adrs/](adrs/README.md)** —
-   registro completo de las 21 decisiones de arquitectura (ADR-001 al ADR-021),
-   desviaciones justificadas respecto a los manuales, topología de subagentes
-   y refactorización de seguridad, repositorios y paridad móvil.
-5. **[05_MANUAL_SUBAGENTES_Y_FLUJO.md](05_MANUAL_SUBAGENTES_Y_FLUJO.md)** —
-   arquitectura en 3 anillos de los 8 subagentes especializados, matriz de
-   dominios de archivos y flujo operativo de auditoría, refactorización y QA.
+   registro de las decisiones de arquitectura (ADR-001 al ADR-021, sin el
+   número ADR-015), desviaciones justificadas respecto a los manuales y
+   refactorización de seguridad, repositorios y paridad móvil.
 
 Para levantar el proyecto localmente (con o sin Docker), credenciales de
 demo y flujo sugerido de demostración, ver el `README.md` en la raíz del

@@ -2,7 +2,7 @@
 
 > **Estado:** Aceptado  
 > **Fecha:** 27 de Octubre de 2026  
-> **Decisores:** `api-mobile-contract-verifier`, `backend-laravel-specialist`  
+> **Decisores:** Equipo 4 (A-Code Solutions)  
 > **Normativa de Referencia:** `MPW-V2` (§6.5), `MPM-V1`, `RF-API-*`, `MobileContractTest.php`
 
 ---

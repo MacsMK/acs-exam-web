@@ -2,7 +2,7 @@
 
 > **Estado:** Aceptado  
 > **Fecha:** 27 de Octubre de 2026  
-> **Decisores:** `backend-laravel-specialist`, `architecture-quality-auditor`  
+> **Decisores:** Equipo 4 (A-Code Solutions)  
 > **Normativa de Referencia:** Manual `MPW-V2` (§2.1, §6.3, §8.11 Tabla 17)
 
 ---
