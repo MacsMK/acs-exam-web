@@ -18,6 +18,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Contracts\AiEvaluatorContract;
+use App\Contracts\PushNotifierContract;
 use App\Models\PersonalAccessToken;
 use App\Repositories\Contracts\AttemptRepositoryInterface;
 use App\Repositories\Contracts\ExamRepositoryInterface;
@@ -28,6 +29,8 @@ use App\Repositories\Eloquent\EloquentExamRepository;
 use App\Repositories\Eloquent\EloquentGroupRepository;
 use App\Repositories\Eloquent\EloquentQuestionRepository;
 use App\Services\MockAiEvaluator;
+use App\Services\Push\FcmPushNotifier;
+use App\Services\Push\NullPushNotifier;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -45,6 +48,13 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(AiEvaluatorContract::class, match (env('AI_EVALUATOR_DRIVER', 'mock')) {
             default => MockAiEvaluator::class,
         });
+
+        // FCM_ENABLED=false (demo, desarrollo y CI) no contacta a Firebase;
+        // true envía por FCM HTTP v1 con la cuenta de servicio de
+        // FCM_CREDENTIALS_PATH (MPM-V4 §6.8).
+        $this->app->bind(PushNotifierContract::class, static fn () => config('services.fcm.enabled')
+            ? app(FcmPushNotifier::class)
+            : app(NullPushNotifier::class));
 
         $this->app->bind(ExamRepositoryInterface::class, EloquentExamRepository::class);
         $this->app->bind(GroupRepositoryInterface::class, EloquentGroupRepository::class);

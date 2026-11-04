@@ -43,6 +43,7 @@ class AttemptService
     public function __construct(
         private readonly ExamAssemblyService $assemblyService,
         private readonly AiEvaluatorContract $aiEvaluator,
+        private readonly ExamNotificationService $examNotifications,
     ) {
     }
 
@@ -75,7 +76,7 @@ class AttemptService
 
         abort_unless($group, 403, 'No perteneces a ningún grupo asignado a este examen.');
 
-        return DB::transaction(function () use ($exam, $student, $group): StudentAttempt {
+        $attempt = DB::transaction(function () use ($exam, $student, $group): StudentAttempt {
             return StudentAttempt::firstOrCreate(
                 ['exam_id' => $exam->id, 'student_id' => $student->id],
                 [
@@ -87,6 +88,13 @@ class AttemptService
                 ],
             );
         });
+
+        // Solo el primer inicio de cada alumno cuenta; reanudar no avisa.
+        if ($attempt->wasRecentlyCreated) {
+            $this->examNotifications->examStarted($exam, $attempt);
+        }
+
+        return $attempt;
     }
 
     /**
@@ -238,7 +246,7 @@ class AttemptService
 
         $this->assertAttemptWithinTimeLimit($attempt);
 
-        return DB::transaction(static function () use ($attempt): StudentAttempt {
+        $submitted = DB::transaction(static function () use ($attempt): StudentAttempt {
             $answers = $attempt->answers()->with('examQuestion.question')->get();
 
             $objectiveScore = (float) $answers
@@ -263,6 +271,10 @@ class AttemptService
 
             return $attempt->fresh();
         });
+
+        $this->examNotifications->attemptClosed($submitted);
+
+        return $submitted;
     }
 
     /**

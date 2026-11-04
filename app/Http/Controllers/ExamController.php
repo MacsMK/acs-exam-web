@@ -20,6 +20,7 @@ use App\Http\Requests\ExamStoreRequest;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
 use App\Services\ExamAssemblyService;
+use App\Services\ExamNotificationService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -89,7 +90,7 @@ class ExamController extends Controller
         return redirect()->route('exams.assemble', $exam)->with('status', 'Reactivo sustituido (nuevo sorteo, RW-14).');
     }
 
-    public function publish(Exam $exam): RedirectResponse
+    public function publish(Exam $exam, ExamNotificationService $notifications): RedirectResponse
     {
         $this->authorizeExam($exam);
 
@@ -100,6 +101,8 @@ class ExamController extends Controller
         abort_if($totalPoints <= 0, 422, 'La suma de ponderaciones del examen debe ser mayor que cero.');
 
         $exam->update(['is_published' => true]);
+
+        $notifications->examPublished($exam);
 
         return redirect()->route('exams.index')->with('status', 'Examen publicado.');
     }
