@@ -34,4 +34,17 @@ class LoginRequest extends FormRequest
             'password' => ['required', 'string'],
         ];
     }
+
+    /**
+    * @return array<string, string>
+    */
+    public function messages(): array
+    {
+        return [
+            'email.required' => 'El campo correo electrónico es obligatorio',
+            'email.email' => 'El correo electrónico no tiene un formato válido',
+            'password.required' => 'El campo contraseña es obligatorio',
+            'password.string' => 'El campo contraseña no tiene un formato válido',
+        ];
+    }
 }

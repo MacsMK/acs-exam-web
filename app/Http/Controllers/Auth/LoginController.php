@@ -42,6 +42,8 @@ class LoginController extends Controller
             $request->string('password')->toString(),
         );
 
+        $request->session()->put('pending_2fa_user_id', $user->id);
+
         return redirect()
             ->route('auth.verify-2fa.show', ['user' => $user->id])
             ->with('status', 'Te enviamos un código de verificación.');
@@ -49,6 +51,11 @@ class LoginController extends Controller
 
     public function showTwoFactorForm(User $user): View
     {
+        abort_unless(
+            (int) session('pending_2fa_user_id') === $user->id,
+            403
+        );
+
         return view('auth.verify-2fa', ['user' => $user]);
     }
 
@@ -56,7 +63,14 @@ class LoginController extends Controller
     {
         $user = User::findOrFail($request->integer('user_id'));
 
+        abort_unless(
+            (int) $request->session()->get('pending_2fa_user_id') === $user->id,
+            403
+        );
+
         $this->authService->verifyTwoFactorCode($user, $request->string('code')->toString());
+
+        $request->session()->forget('pending_2fa_user_id');
 
         Auth::login($user);
         $request->session()->regenerate();
