@@ -38,26 +38,37 @@ class QuestionStoreRequest extends FormRequest
             'default_time_seconds' => ['required', 'integer', 'min:1'],
 
             // multiple_choice
-            'options' => ['required_if:question_type,multiple_choice', 'array', 'min:2'],
-            'options.*' => ['string'],
-            'correct_option_index' => ['required_if:question_type,multiple_choice', 'integer', 'min:0'],
+            'options' => ['exclude_unless:question_type,multiple_choice', 'required', 'array', 'min:2', 'max:6'],
+            'options.*' => ['exclude_unless:question_type,multiple_choice', 'required', 'string'],
+            'correct_option_index' => [
+                'exclude_unless:question_type,multiple_choice',
+                'required',
+                'integer',
+                'min:0',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $options = $this->input('options', []);
+                    if (is_array($options) && !empty($options) && (int) $value >= count($options)) {
+                        $fail('El índice de la respuesta correcta debe corresponder a una de las opciones registradas.');
+                    }
+                },
+            ],
 
             // matching
-            'concepts' => ['required_if:question_type,matching', 'array', 'min:2'],
-            'concepts.*' => ['string'],
-            'definitions' => ['required_if:question_type,matching', 'array', 'min:2'],
-            'definitions.*' => ['string'],
+            'concepts' => ['exclude_unless:question_type,matching', 'required', 'array', 'min:2', 'max:8'],
+            'concepts.*' => ['exclude_unless:question_type,matching', 'required', 'string'],
+            'definitions' => ['exclude_unless:question_type,matching', 'required', 'array', 'min:2', 'max:8'],
+            'definitions.*' => ['exclude_unless:question_type,matching', 'required', 'string'],
 
             // open
-            'reference_answer' => ['required_if:question_type,open', 'string'],
-            'evaluation_rubric' => ['nullable', 'string'],
+            'reference_answer' => ['exclude_unless:question_type,open', 'required', 'string'],
+            'evaluation_rubric' => ['exclude_unless:question_type,open', 'nullable', 'string'],
 
             // code
-            'programming_language' => ['required_if:question_type,code', 'string', 'max:40'],
-            'is_find_error' => ['sometimes', 'boolean'],
-            'starter_code' => ['nullable', 'string'],
-            'reference_solution' => ['required_if:question_type,code', 'string'],
-            'instructions' => ['required_if:question_type,code', 'string'],
+            'programming_language' => ['exclude_unless:question_type,code', 'required', 'string', 'max:40'],
+            'is_find_error' => ['exclude_unless:question_type,code', 'sometimes', 'boolean'],
+            'starter_code' => ['exclude_unless:question_type,code', 'required_if:is_find_error,1', 'required_if:is_find_error,true', 'nullable', 'string'],
+            'reference_solution' => ['exclude_unless:question_type,code', 'required', 'string'],
+            'instructions' => ['exclude_unless:question_type,code', 'required', 'string'],
         ];
     }
 
@@ -79,13 +90,20 @@ class QuestionStoreRequest extends FormRequest
             'default_time_seconds.min' => 'El tiempo límite debe ser mayor o igual que 1',
             'options.required_if' => 'El campo opciones de respuesta es obligatorio',
             'options.min' => 'Las opciones de respuesta deben contener al menos 2 elementos',
+            'options.max' => 'Las opciones de respuesta no deben exceder 6 alternativas',
+            'options.*.required' => 'Cada alternativa de respuesta debe contener texto',
             'correct_option_index.required_if' => 'El campo respuesta correcta es obligatorio',
             'concepts.required_if' => 'El campo conceptos es obligatorio',
             'concepts.min' => 'Los conceptos deben contener al menos 2 elementos',
+            'concepts.max' => 'Los conceptos no deben exceder 8 pares',
+            'concepts.*.required' => 'Cada concepto debe contener texto',
             'definitions.required_if' => 'El campo definiciones es obligatorio',
             'definitions.min' => 'Las definiciones deben contener al menos 2 elementos',
+            'definitions.max' => 'Las definiciones no deben exceder 8 pares',
+            'definitions.*.required' => 'Cada definición debe contener texto',
             'reference_answer.required_if' => 'El campo respuesta de referencia es obligatorio',
             'programming_language.required_if' => 'El campo lenguaje de programación es obligatorio',
+            'starter_code.required_if' => 'En la modalidad de encontrar el error, el código inicial con defecto es obligatorio',
             'reference_solution.required_if' => 'El campo solución de referencia es obligatorio',
             'instructions.required_if' => 'El campo instrucciones es obligatorio',
         ];

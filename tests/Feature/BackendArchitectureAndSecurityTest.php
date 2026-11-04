@@ -360,6 +360,54 @@ class BackendArchitectureAndSecurityTest extends TestCase
         ]);
     }
 
+    public function test_question_store_request_enforces_normative_bounds_and_find_error_starter_code(): void
+    {
+        $teacher = $this->createUser('teacher');
+
+        // 1. En modalidad is_find_error=true, starter_code vacio falla
+        $response = $this->actingAs($teacher)->post(route('questions.store'), [
+            'title' => 'Debugging Test',
+            'stem' => 'Encuentra el error',
+            'question_type' => 'code',
+            'default_points' => 5,
+            'default_time_seconds' => 600,
+            'programming_language' => 'PHP',
+            'is_find_error' => '1',
+            'starter_code' => '',
+            'reference_solution' => 'echo "fixed";',
+            'instructions' => 'Arregla la sintaxis',
+        ]);
+        $response->assertSessionHasErrors('starter_code');
+
+        // 2. Exceder 6 opciones en opcion multiple falla
+        $responseOpt = $this->actingAs($teacher)->post(route('questions.store'), [
+            'title' => 'Too many options',
+            'stem' => 'Elige una',
+            'question_type' => 'multiple_choice',
+            'default_points' => 2,
+            'default_time_seconds' => 60,
+            'options' => ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+            'correct_option_index' => 0,
+        ]);
+        $responseOpt->assertSessionHasErrors('options');
+
+        // 3. Guardado valido redirige a questions.index
+        $responseValid = $this->actingAs($teacher)->post(route('questions.store'), [
+            'title' => 'Valid Question',
+            'stem' => 'Enunciado valido',
+            'question_type' => 'multiple_choice',
+            'default_points' => 2,
+            'default_time_seconds' => 60,
+            'options' => ['Opcion 1', 'Opcion 2'],
+            'correct_option_index' => 1,
+        ]);
+        $responseValid->assertRedirect(route('questions.index'));
+        $this->assertDatabaseHas('acs_questions', [
+            'teacher_id' => $teacher->id,
+            'title' => 'Valid Question',
+        ]);
+    }
+
     private function createUser(string $role): User
     {
         return User::create([
