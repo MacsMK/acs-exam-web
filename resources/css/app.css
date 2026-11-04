@@ -20,3 +20,12 @@
     --color-acode-surface: #E9F0F5;
     --color-acode-ink: #0F172A;
 }
+
+/*
+ * Oculta los elementos marcados con x-cloak hasta que Alpine termina de
+ * inicializar. Sustituye los estilos en línea "display: none" de las vistas
+ * (MPW-V2 §7.4.2: sin style="" en Blade).
+ */
+[x-cloak] {
+    display: none !important;
+}
