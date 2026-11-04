@@ -13,7 +13,7 @@ ni el historial del chat.
    controladores, middleware, vistas Blade y el sistema de diseño
    `acode-*` con los valores exactos.
 4. **[04_DECISIONES_ADR.md](04_DECISIONES_ADR.md)** y carpeta **[adrs/](adrs/README.md)** —
-   registro de las decisiones de arquitectura (ADR-001 al ADR-022, sin el
+   registro de las decisiones de arquitectura (ADR-001 al ADR-029, sin el
    número ADR-015), desviaciones justificadas respecto a los manuales y
    refactorización de seguridad, repositorios y paridad móvil.
 

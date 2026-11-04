@@ -1,4 +1,4 @@
-# ADR-022 — Cronómetro por Pregunta con Reloj del Servidor y Respuestas Extemporáneas
+# ADR-029 — Cronómetro por Pregunta con Reloj del Servidor y Respuestas Extemporáneas
 
 > **Estado:** Aceptado  
 > **Fecha:** 3 de Noviembre de 2026  

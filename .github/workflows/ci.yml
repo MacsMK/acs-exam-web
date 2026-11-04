@@ -77,6 +77,8 @@ jobs:
       - name: Run test suite
         run: |
           set +e
+          export DB_HOST=127.0.0.1
+          export DB_DATABASE=acs_exam_web
           php artisan test 2>&1 | tee /tmp/artisan-test.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then

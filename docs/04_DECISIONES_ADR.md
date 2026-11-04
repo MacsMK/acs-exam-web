@@ -381,6 +381,33 @@ fallar antes de llegar a CI.
 
 ---
 
+## Bloque II y III — Decisiones Arquitectónicas Extendidas (`docs/adrs/`)
+
+A partir del Sprint 2 y Sprint 3, las decisiones de arquitectura se gestionan mediante archivos especializados individuales en [`docs/adrs/`](adrs/README.md) bajo el estándar canónico `MSA-V1`, homologado con los manuales `MPW-V2`, `MC-V2`, `MD-V2` y el formato `DE-06`:
+
+- **Bloque II (Sprint 2 — Auditoría Normativa y Refactorización Integral):**
+  - [ADR-015](adrs/ADR-015_Topologia_Multiagente_MSA_V1.md): Topología de 8 Subagentes Especializados en 3 Anillos (`MSA-V1`).
+  - [ADR-016](adrs/ADR-016_Capa_Repositorios_Eloquent_y_Eager_Loading.md): Implementación de Capa de Repositorios y Erradicación de N+1.
+  - [ADR-017](adrs/ADR-017_Erradicacion_Validaciones_Inline_FormRequests_Estandar.md): Erradicación de `$request->validate()` Inline y Adopción de Form Requests.
+  - [ADR-018](adrs/ADR-018_Calificacion_Proporcional_Matching_y_Omision_IA.md): Calificación Proporcional en Matching (`RF-EVA-002`) y Omisión de IA (`RF-EVA-008`).
+  - [ADR-019](adrs/ADR-019_Validacion_Server_Side_Tiempo_Ventana_y_Estado_Intentos.md): Validación Server-Side de Tiempo, Ventana de Examen y Estado de Intentos.
+  - [ADR-020](adrs/ADR-020_Sistema_Diseno_Blade_Layout_Exam_Runner_y_Anti_Trampa.md): Sistema de Diseño Blade, Layout `exam-runner` y Sensores Anti-Trampa.
+  - [ADR-021](adrs/ADR-021_Paridad_Contratos_API_v1_Preservacion_Decimales_y_Mobile.md): Paridad de Contratos API v1: Preservación de Decimales JSON y Cliente Flutter.
+
+- **Bloque III (Sprint 3 — Modernización y Reestructuración Frontend UI Kit A-Code):**
+  - [ADR-022](adrs/ADR-022_Biblioteca_Componentes_Atomicos_Blade_UI_Kit_A_Code.md): Biblioteca de Componentes Atómicos Blade y Sistema de Formularios Modulares (`UI Kit A-Code`).
+  - [ADR-023](adrs/ADR-023_Homologacion_SweetAlert2_Erradicacion_Dialogos_Nativos.md): Homologación de SweetAlert2 (`alerts.js`), Erradicación de Diálogos Nativos y Catálogo de 18 Verbos.
+  - [ADR-024](adrs/ADR-024_Arquitectura_Layout_Maestro_Docente_Sidebar_Retractil_y_Footer.md): Arquitectura de Layouts Maestros: Sidebar Retráctil (260px/72px), Menú Drawer y Footer de Dos Secciones.
+  - [ADR-025](adrs/ADR-025_Analitica_ChartJS_Metricas_Desempeno_y_Componentes_Examen.md): Visualización Analítica con Chart.js 4.4 (`RF-CAL-005`), Componentes Especializados y Escapado de Directivas Blade/Alpine (`::class`).
+  - [ADR-026](adrs/ADR-026_Asistente_Guiado_Stepper_Wizard_y_Aislamiento_exclude_unless_Banco_Preguntas.md): Asistente Guiado (Stepper Wizard de 3 Pasos), Aislamiento con `exclude_unless` y Blindaje de Datos en Banco de Preguntas.
+  - [ADR-027](adrs/ADR-027_Banco_Reactivos_Copy_On_Write_Filtros_SQL_y_CSV_Batch.md): Banco de Reactivos — Patrón Copy-On-Write para Exámenes Históricos, Vistas Canónicas, Filtros Multidimensionales SQL e Importador Masivo CSV.
+  - [ADR-028](adrs/ADR-028_Preservacion_Evidencia_Academica_y_Borrado_Logico_SoftDeletes_en_Reactivos.md): Preservación de Evidencia Académica y Borrado Lógico (`SoftDeletes`) en Entidades del Banco de Reactivos (`RF-BAN-011`).
+  - [ADR-029](adrs/ADR-029_Cronometro_Por_Pregunta_con_Reloj_del_Servidor.md): Cronómetro por Pregunta con Reloj del Servidor y Respuestas Extemporáneas (`late_answer`, tolerancia de 3 s)
+
+Consulta el [Catálogo Maestro de ADRs en `docs/adrs/README.md`](adrs/README.md) para el detalle técnico completo de cada decisión.
+
+---
+
 ## Cómo agregar una decisión nueva
 
 Copia el formato de arriba: Contexto (qué problema había y qué opciones

@@ -47,8 +47,12 @@ Route::middleware('auth')->group(function (): void {
         Route::resource('groups', GroupController::class)->only(['index', 'create', 'store', 'show']);
         Route::post('groups/{group}/cerrar', [GroupController::class, 'close'])->name('groups.close');
 
-        Route::resource('questions', QuestionController::class)->only(['index', 'create', 'store']);
+        Route::get('questions/template/csv', [QuestionController::class, 'downloadTemplate'])->name('questions.template.csv');
+        Route::post('questions/import', [QuestionController::class, 'import'])->name('questions.import');
+        Route::post('questions/{question}/duplicate', [QuestionController::class, 'duplicate'])->name('questions.duplicate');
         Route::post('questions/{question}/parafrasis', [QuestionController::class, 'storeParaphrase'])->name('questions.paraphrase.store');
+        Route::delete('questions/{question}/parafrasis/{paraphrase}', [QuestionController::class, 'destroyParaphrase'])->name('questions.paraphrase.destroy');
+        Route::resource('questions', QuestionController::class);
 
         Route::resource('exams', ExamController::class)->only(['index', 'create', 'store']);
         Route::get('exams/{exam}/armar', [ExamController::class, 'assemble'])->name('exams.assemble');

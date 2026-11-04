@@ -33,7 +33,7 @@ El control del tiempo y estado del examen dependía principalmente del cronómet
    - Se verifica que el `exam_question_id` enviado coincida exactamente con la pregunta activa en `question_sequence_payload[$current_question_index]`. Intentos de enviar reactivos fuera de orden son rechazados con `HTTP 422`.
 4. **Tolerancia de Red en Tiempo Límite:**
    - Se calcula el límite de tiempo a partir de `started_at + duration_minutes + 60s` de tolerancia por latencia de red. Si el tiempo expira, el intento se finaliza automáticamente por el servidor.
-   - **Alcance de los 60 s:** este margen aplica a la duración total del intento y a la ventana `ends_at`. El límite de cada pregunta tiene su propia tolerancia de 3 s (`MPW-V2 §5.6.1`), definida en `ADR-022`.
+   - **Alcance de los 60 s:** este margen aplica a la duración total del intento y a la ventana `ends_at`. El límite de cada pregunta tiene su propia tolerancia de 3 s (`MPW-V2 §5.6.1`), definida en `ADR-029`.
 
 ---
 
