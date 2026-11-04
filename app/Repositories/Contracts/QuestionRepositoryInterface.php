@@ -11,10 +11,11 @@ declare(strict_types=1);
  * Ubicación:      app/Repositories/Contracts/QuestionRepositoryInterface.php
  * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V2 §2.4 y §6.7)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Fecha Creación: 28/10/2026
- * Descripción:    Contrato del repositorio del banco de preguntas polimórfico
- *                 y sus paráfrasis anti-copia.
+ * Descripción:    Contrato del repositorio del banco de preguntas polimórfico,
+ *                 consultas filtradas, paráfrasis anti-copia, duplicación
+ *                 segura y soft deletes.
  * ============================================================================
  */
 
@@ -23,8 +24,8 @@ namespace App\Repositories\Contracts;
 use App\Models\Question;
 use App\Models\QuestionParaphrase;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 
 /**
  * Contrato de persistencia y consulta para la entidad Question y sus variantes.
@@ -41,6 +42,28 @@ interface QuestionRepositoryInterface
      * @return LengthAwarePaginator<Question>
      */
     public function paginateForTeacher(int $teacherId, int $perPage = 20): LengthAwarePaginator;
+
+    /**
+     * Obtiene los reactivos de un docente con filtros avanzados y búsqueda textual, paginados en SQL.
+     *
+     * @param int                  $teacherId Identificador del docente autor.
+     * @param array<string, mixed> $filters   Filtros de consulta (search, question_type, subject_tag, paraphrase_status, sort_by).
+     * @param int                  $perPage   Registros por página en SQL.
+     * @return LengthAwarePaginator<Question>
+     */
+    public function paginateForTeacherWithFilters(
+        int $teacherId,
+        array $filters,
+        int $perPage = 20
+    ): LengthAwarePaginator;
+
+    /**
+     * Obtiene la colección de asignaturas / materias únicas registradas por el docente.
+     *
+     * @param int $teacherId Identificador del docente autor.
+     * @return Collection<int, string>
+     */
+    public function getDistinctSubjectsForTeacher(int $teacherId): Collection;
 
     /**
      * Busca un reactivo por su identificador precargando su variante polimórfica y paráfrasis.
@@ -75,6 +98,22 @@ interface QuestionRepositoryInterface
      * @return Question
      */
     public function createWithVariant(int $teacherId, array $questionData, Model $questionable): Question;
+
+    /**
+     * Clona un reactivo y su variante polimórfica transaccionalmente.
+     *
+     * @param Question $question Reactivo canónico a duplicar.
+     * @return Question
+     */
+    public function duplicate(Question $question): Question;
+
+    /**
+     * Elimina lógicamente un reactivo (Soft Delete).
+     *
+     * @param Question $question Reactivo a eliminar.
+     * @return bool
+     */
+    public function destroySafely(Question $question): bool;
 
     /**
      * Registra una nueva paráfrasis anti-copia asociada a un reactivo canónico.

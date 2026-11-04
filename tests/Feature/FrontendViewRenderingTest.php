@@ -238,6 +238,9 @@ class FrontendViewRenderingTest extends TestCase
         $questionsCreate->assertOk();
         $questionsCreate->assertSee('Crear Reactivo');
         $questionsCreate->assertSee('Título identificador del reactivo');
+        $questionsCreate->assertSee('Continuar al paso 2');
+        $questionsCreate->assertSee('Volver al listado');
+        $questionsCreate->assertSee('Modo Auditoría / Debugging');
 
         // 6. exams.index
         $examsIndex = $this->actingAs($teacher)->get(route('exams.index'));
