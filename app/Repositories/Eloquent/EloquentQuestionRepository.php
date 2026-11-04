@@ -11,24 +11,24 @@ declare(strict_types=1);
  * Ubicación:      app/Repositories/Eloquent/EloquentQuestionRepository.php
  * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V2 §2.4 y §6.7)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Fecha Creación: 28/10/2026
  * Descripción:    Implementación Eloquent del repositorio del banco de
  *                 preguntas polimórfico con Eager Loading (with, withCount),
- *                 paginación en SQL y aislamiento multi-docente.
+ *                 paginación en SQL, filtros avanzados, duplicación transaccional,
+ *                 SoftDeletes y aislamiento multi-docente.
  * ============================================================================
  */
 
 namespace App\Repositories\Eloquent;
 
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
-
 use App\Models\Question;
 use App\Models\QuestionParaphrase;
 use App\Repositories\Contracts\QuestionRepositoryInterface;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Repositorio Eloquent para la entidad Question y sus variantes polimórficas.
@@ -52,6 +52,45 @@ class EloquentQuestionRepository implements QuestionRepositoryInterface
             ->withCount(['paraphrases', 'childQuestions'])
             ->latest()
             ->paginate($perPage);
+    }
+
+    /**
+     * Obtiene los reactivos de un docente con filtros avanzados y búsqueda textual, paginados en SQL.
+     *
+     * @param int                  $teacherId Identificador del docente autor.
+     * @param array<string, mixed> $filters   Filtros de consulta (search, question_type, subject_tag, paraphrase_status, sort_by).
+     * @param int                  $perPage   Registros por página en SQL.
+     * @return LengthAwarePaginator<Question>
+     */
+    public function paginateForTeacherWithFilters(
+        int $teacherId,
+        array $filters,
+        int $perPage = 20
+    ): LengthAwarePaginator {
+        return Question::query()
+            ->forTeacher($teacherId)
+            ->search($filters['search'] ?? null)
+            ->filterBy($filters)
+            ->with(['questionable', 'paraphrases'])
+            ->withCount(['paraphrases', 'childQuestions'])
+            ->paginate($perPage);
+    }
+
+    /**
+     * Obtiene la colección de asignaturas / materias únicas registradas por el docente.
+     *
+     * @param int $teacherId Identificador del docente autor.
+     * @return Collection<int, string>
+     */
+    public function getDistinctSubjectsForTeacher(int $teacherId): Collection
+    {
+        return Question::query()
+            ->forTeacher($teacherId)
+            ->whereNotNull('subject_tag')
+            ->where('subject_tag', '!=', '')
+            ->distinct()
+            ->orderBy('subject_tag')
+            ->pluck('subject_tag');
     }
 
     /**
@@ -119,6 +158,48 @@ class EloquentQuestionRepository implements QuestionRepositoryInterface
 
             return $question->load(['questionable']);
         });
+    }
+
+    /**
+     * Clona un reactivo y su variante polimórfica transaccionalmente.
+     *
+     * @param Question $question Reactivo canónico a duplicar.
+     * @return Question
+     */
+    public function duplicate(Question $question): Question
+    {
+        return DB::transaction(function () use ($question): Question {
+            $question->loadMissing('questionable');
+
+            $clonedQuestionable = null;
+            if ($question->questionable !== null) {
+                $clonedQuestionable = $question->questionable->replicate();
+                $clonedQuestionable->save();
+            }
+
+            $clonedQuestion = $question->replicate();
+            $clonedQuestion->title = "{$question->title} (Copia)";
+
+            if ($clonedQuestionable !== null) {
+                $clonedQuestion->questionable_id = $clonedQuestionable->getKey();
+                $clonedQuestion->questionable_type = $clonedQuestionable::class;
+            }
+
+            $clonedQuestion->save();
+
+            return $clonedQuestion->load(['questionable', 'paraphrases']);
+        });
+    }
+
+    /**
+     * Elimina lógicamente un reactivo (Soft Delete).
+     *
+     * @param Question $question Reactivo a eliminar.
+     * @return bool
+     */
+    public function destroySafely(Question $question): bool
+    {
+        return (bool) $question->delete();
     }
 
     /**
