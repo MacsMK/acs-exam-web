@@ -58,8 +58,10 @@ class ExamQuestionTimingTest extends TestCase
     {
         parent::setUp();
 
-        // Reloj congelado: los saltos de tiempo de cada prueba son exactos.
-        $this->freezeTime();
+        // Reloj congelado en un segundo entero: las columnas timestamp de
+        // PostgreSQL guardan segundos (sin fracciones), así que un instante con
+        // microsegundos se redondearía al guardarse y movería el límite medido.
+        $this->freezeSecond();
 
         $teacher = $this->createUser('teacher');
         $student = $this->createUser('student');

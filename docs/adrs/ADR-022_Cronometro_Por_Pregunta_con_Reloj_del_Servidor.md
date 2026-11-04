@@ -28,5 +28,6 @@ La auditoría de la API contra el manual móvil encontró que el servidor **no e
 
 ## 3. Consecuencias
 - **Positivas:** el servidor es de verdad la autoridad del tiempo por pregunta; reabrir la app o recargar la página no devuelve el tiempo completo; el comportamiento coincide con ambos manuales; no requiere migración.
+- **Precisión:** las columnas `timestamp` de PostgreSQL guardan segundos enteros, por lo que el tiempo transcurrido tiene un error de hasta ±1 s respecto al instante real; la tolerancia de 3 s lo absorbe. Las pruebas congelan el reloj en un segundo entero (`freezeSecond()`) para medir los límites con exactitud.
 - **Negativas / a vigilar:** una conexión muy lenta puede marcar como extemporánea una respuesta enviada a tiempo; por eso la tolerancia es configurable en una sola constante. El primer cálculo depende de `started_at` del intento.
 - **Impacto en documentación:** `MPW-V2 §5.6.1` debe citar el campo `late_answer` y la derivación del momento de entrega; `MPM-V4 §6.5` (Tabla 12) debe documentar `late_answer`; se registra en `DE-06`.
