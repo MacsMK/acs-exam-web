@@ -118,7 +118,7 @@ cambiar la variable de entorno, sin tocar `AttemptService`.
 ## Notificaciones push (Firebase Cloud Messaging)
 
 El backend envía los avisos de la Tabla 14 del manual móvil (`exam.assigned`,
-`exam.opened`, `exam.started`, `exam.finished`) — ver `docs/adrs/ADR-023`.
+`exam.opened`, `exam.started`, `exam.finished`) — ver `docs/adrs/ADR-030`.
 Vienen **apagadas** (`FCM_ENABLED=false`): sin llave no se contacta a Firebase
 y nada del demo cambia. Para activarlas:
 

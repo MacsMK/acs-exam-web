@@ -1,4 +1,4 @@
-# ADR-023 — Notificaciones Push (FCM) en el Ciclo de Vida del Examen
+# ADR-030 — Notificaciones Push (FCM) en el Ciclo de Vida del Examen
 
 > **Estado:** Aceptado  
 > **Fecha:** 3 de Noviembre de 2026  
