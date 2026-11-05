@@ -81,7 +81,11 @@ class AttemptController extends Controller
         }
 
         try {
-            $this->attemptService->submitAnswer($attempt, $examQuestion->id, $this->normalizeAnswerPayload($data));
+            $isLate = $this->attemptService->submitAnswer(
+                $attempt,
+                $examQuestion->id,
+                $this->normalizeAnswerPayload($data),
+            );
 
             $attempt = $attempt->fresh();
 
@@ -93,7 +97,10 @@ class AttemptController extends Controller
             return ApiResponse::error($e->getMessage(), 409);
         }
 
-        return ApiResponse::success($this->questionResponse($attempt));
+        // late_answer: la respuesta llegó después del límite de la pregunta más
+        // la tolerancia de 3 s (MPW-V2 §5.6.1); se guardó con cero puntos y el
+        // cliente muestra el mensaje oficial de tiempo agotado (MPM-V4 §5.4.1).
+        return ApiResponse::success(array_merge($this->questionResponse($attempt), ['late_answer' => $isLate]));
     }
 
     /**
@@ -184,7 +191,7 @@ class AttemptController extends Controller
 
         return [
             'question' => $this->questionPayload($current['question']),
-            'remaining_seconds' => $current['time_limit_seconds'],
+            'remaining_seconds' => $current['remaining_seconds'],
         ];
     }
 

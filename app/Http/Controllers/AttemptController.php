@@ -88,12 +88,17 @@ class AttemptController extends Controller
         };
 
         try {
-            $this->attemptService->submitAnswer($attempt, (int) $data['exam_question_id'], $answerPayload);
+            $isLate = $this->attemptService->submitAnswer($attempt, (int) $data['exam_question_id'], $answerPayload);
         } catch (DomainException $e) {
             return redirect()->route('attempts.result', $attempt)->withErrors(['attempt' => $e->getMessage()]);
         }
 
-        return redirect()->route('attempts.show', $attempt);
+        $next = redirect()->route('attempts.show', $attempt);
+
+        // Mensaje oficial "Tiempo agotado" (MPW-V2 §7.8) cuando la respuesta llegó fuera de tiempo.
+        return $isLate
+            ? $next->with('status', 'El tiempo asignado a este reactivo ha concluido. Tu avance fue guardado.')
+            : $next;
     }
 
     public function finish(StudentAttempt $attempt): RedirectResponse

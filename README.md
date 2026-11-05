@@ -115,6 +115,23 @@ aislado detrás de `App\Contracts\AiEvaluatorContract`
 evaluador real (p. ej. Gemini) más adelante es agregar un nuevo driver y
 cambiar la variable de entorno, sin tocar `AttemptService`.
 
+## Notificaciones push (Firebase Cloud Messaging)
+
+El backend envía los avisos de la Tabla 14 del manual móvil (`exam.assigned`,
+`exam.opened`, `exam.started`, `exam.finished`) — ver `docs/adrs/ADR-030`.
+Vienen **apagadas** (`FCM_ENABLED=false`): sin llave no se contacta a Firebase
+y nada del demo cambia. Para activarlas:
+
+1. En la consola de Firebase: Configuración del proyecto → Cuentas de servicio
+   → *Generar nueva clave privada*. Se descarga un archivo `.json`.
+2. Guárdalo como `storage/app/private/firebase-service-account.json`
+   (esa carpeta está ignorada por git; **nunca** subas este archivo).
+3. En tu `.env`: `FCM_ENABLED=true` (y, si quieres, `FCM_PROJECT_ID`; si lo
+   dejas vacío se toma del propio archivo).
+4. Los avisos de "ya abrió" y "ya terminó" salen del comando `exams:push-due`,
+   que corre cada minuto. En local: `php artisan schedule:work`; en
+   producción, la entrada de cron `* * * * * php artisan schedule:run`.
+
 ## Documentación técnica completa
 
 Para arquitectura a detalle, el esquema de base de datos completo, rutas/

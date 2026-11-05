@@ -26,15 +26,24 @@ use App\Models\QuestionParaphrase;
 use App\Models\StudentAnswer;
 use App\Models\StudentAttempt;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class AttemptService
 {
+    /**
+     * Tolerancia técnica de red, en segundos, que se suma al límite de cada
+     * pregunta antes de considerar una respuesta extemporánea (MPW-V2 §5.6.1
+     * y MPM-V4 §5.4.1: tres segundos).
+     */
+    public const QUESTION_TIME_TOLERANCE_SECONDS = 3;
+
     public function __construct(
         private readonly ExamAssemblyService $assemblyService,
         private readonly AiEvaluatorContract $aiEvaluator,
+        private readonly ExamNotificationService $examNotifications,
     ) {
     }
 
@@ -67,7 +76,7 @@ class AttemptService
 
         abort_unless($group, 403, 'No perteneces a ningún grupo asignado a este examen.');
 
-        return DB::transaction(function () use ($exam, $student, $group): StudentAttempt {
+        $attempt = DB::transaction(function () use ($exam, $student, $group): StudentAttempt {
             return StudentAttempt::firstOrCreate(
                 ['exam_id' => $exam->id, 'student_id' => $student->id],
                 [
@@ -79,6 +88,13 @@ class AttemptService
                 ],
             );
         });
+
+        // Solo el primer inicio de cada alumno cuenta; reanudar no avisa.
+        if ($attempt->wasRecentlyCreated) {
+            $this->examNotifications->examStarted($exam, $attempt);
+        }
+
+        return $attempt;
     }
 
     /**
@@ -100,9 +116,64 @@ class AttemptService
             'index' => $attempt->current_question_index,
             'total' => count($sequence),
             'time_limit_seconds' => $examQuestion->time_limit_seconds,
+            'remaining_seconds' => $this->remainingSeconds($attempt, (int) $examQuestion->time_limit_seconds),
             'points_weight' => $examQuestion->points_weight,
             'question' => $this->questionPayloadWithoutAnswer($examQuestion, $attempt),
         ];
+    }
+
+    /**
+     * Momento en que el servidor entregó la pregunta activa: la respuesta
+     * anterior (cada respuesta devuelve la siguiente pregunta) o, para la
+     * primera pregunta, el inicio del intento. No requiere columnas nuevas.
+     */
+    public function questionServedAt(StudentAttempt $attempt): CarbonInterface
+    {
+        $lastAnswer = StudentAnswer::query()
+            ->where('student_attempt_id', $attempt->id)
+            ->whereNotNull('answered_at')
+            ->latest('answered_at')
+            ->first();
+
+        return $lastAnswer?->answered_at ?? $attempt->started_at ?? now();
+    }
+
+    /**
+     * Segundos transcurridos en la pregunta activa según el reloj del
+     * servidor (MPW-V2 §5.6.1: el cliente nunca es la autoridad del tiempo).
+     */
+    public function elapsedOnActiveQuestion(StudentAttempt $attempt): float
+    {
+        return max(0.0, (float) $this->questionServedAt($attempt)->diffInSeconds(now(), false));
+    }
+
+    /**
+     * Segundos que le quedan al alumno en la pregunta activa, entre 0 y el
+     * límite de la pregunta. Reabrir la app o volver a consultar el examen ya
+     * no devuelve el tiempo completo (MPM-V4 §5.4.1).
+     */
+    public function remainingSeconds(StudentAttempt $attempt, int $timeLimitSeconds): int
+    {
+        if ($timeLimitSeconds <= 0) {
+            return 0;
+        }
+
+        $remaining = ceil($timeLimitSeconds - $this->elapsedOnActiveQuestion($attempt));
+
+        return (int) max(0, min($timeLimitSeconds, $remaining));
+    }
+
+    /**
+     * Indica si una respuesta que llega ahora excede el límite de la pregunta
+     * activa más la tolerancia técnica de tres segundos.
+     */
+    public function isAnswerLate(StudentAttempt $attempt, int $timeLimitSeconds): bool
+    {
+        if ($timeLimitSeconds <= 0) {
+            return false;
+        }
+
+        return $this->elapsedOnActiveQuestion($attempt) > $timeLimitSeconds + self::QUESTION_TIME_TOLERANCE_SECONDS;
     }
 
     /**
@@ -118,11 +189,17 @@ class AttemptService
 
     /**
      * Registra y califica la respuesta de una pregunta validando estado activo
-     * y tiempo límite del lado servidor con tolerancia de red de 60 segundos.
+     * y tiempo del lado servidor: la ventana del examen (con margen de 60
+     * segundos) y el límite de la propia pregunta (con tolerancia de 3
+     * segundos, MPW-V2 §5.6.1). Una respuesta extemporánea se conserva para
+     * la revisión docente, pero se califica con cero puntos y sin evaluador
+     * de IA; el intento avanza igual a la siguiente pregunta.
+     *
+     * @return bool true cuando la respuesta fue extemporánea
      *
      * @throws DomainException
      */
-    public function submitAnswer(StudentAttempt $attempt, int $examQuestionId, mixed $answerPayload): void
+    public function submitAnswer(StudentAttempt $attempt, int $examQuestionId, mixed $answerPayload): bool
     {
         if ($attempt->status !== 'in_progress') {
             throw new DomainException('El intento ya no se encuentra activo.');
@@ -134,12 +211,16 @@ class AttemptService
         $question = $examQuestion->question;
         $questionable = $question->questionable;
 
-        $graded = $this->gradeAnswer(
-            $question->question_type,
-            $questionable,
-            $answerPayload,
-            (float) $examQuestion->points_weight,
-        );
+        $isLate = $this->isAnswerLate($attempt, (int) $examQuestion->time_limit_seconds);
+
+        $graded = $isLate
+            ? ['is_correct' => false, 'points_awarded' => 0.0]
+            : $this->gradeAnswer(
+                $question->question_type,
+                $questionable,
+                $answerPayload,
+                (float) $examQuestion->points_weight,
+            );
 
         DB::transaction(static function () use ($attempt, $examQuestion, $graded, $answerPayload): void {
             StudentAnswer::updateOrCreate(
@@ -153,6 +234,8 @@ class AttemptService
             // No se puede regresar a una pregunta anterior aunque sobre tiempo (RW-20).
             $attempt->increment('current_question_index');
         });
+
+        return $isLate;
     }
 
     public function submitFinal(StudentAttempt $attempt): StudentAttempt
@@ -163,7 +246,7 @@ class AttemptService
 
         $this->assertAttemptWithinTimeLimit($attempt);
 
-        return DB::transaction(static function () use ($attempt): StudentAttempt {
+        $submitted = DB::transaction(static function () use ($attempt): StudentAttempt {
             $answers = $attempt->answers()->with('examQuestion.question')->get();
 
             $objectiveScore = (float) $answers
@@ -188,6 +271,10 @@ class AttemptService
 
             return $attempt->fresh();
         });
+
+        $this->examNotifications->attemptClosed($submitted);
+
+        return $submitted;
     }
 
     /**
