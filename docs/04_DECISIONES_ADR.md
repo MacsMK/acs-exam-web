@@ -404,6 +404,7 @@ A partir del Sprint 2 y Sprint 3, las decisiones de arquitectura se gestionan me
   - [ADR-028](adrs/ADR-028_Preservacion_Evidencia_Academica_y_Borrado_Logico_SoftDeletes_en_Reactivos.md): Preservación de Evidencia Académica y Borrado Lógico (`SoftDeletes`) en Entidades del Banco de Reactivos (`RF-BAN-011`).
   - [ADR-029](adrs/ADR-029_Cronometro_Por_Pregunta_con_Reloj_del_Servidor.md): Cronómetro por Pregunta con Reloj del Servidor y Respuestas Extemporáneas (`late_answer`, tolerancia de 3 s)
   - [ADR-030](adrs/ADR-030_Notificaciones_Push_FCM_en_el_Ciclo_del_Examen.md): Notificaciones Push (FCM) en el Ciclo de Vida del Examen (`exam.assigned/opened/started/finished`, apagado por defecto)
+  - [ADR-031](adrs/ADR-031_Registro_Web_con_Aviso_de_Privacidad_Versionado_y_Sesion_2FA_Pendiente.md): Registro Web con Aviso de Privacidad Versionado, Validaciones Unificadas y Sesión 2FA Pendiente (`privacy_notice_id`, `pending_2fa_user_id`).
 
 Consulta el [Catálogo Maestro de ADRs en `docs/adrs/README.md`](adrs/README.md) para el detalle técnico completo de cada decisión.
 

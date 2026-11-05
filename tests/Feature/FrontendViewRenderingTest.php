@@ -86,7 +86,12 @@ class FrontendViewRenderingTest extends TestCase
         $user = $this->createUser('teacher');
         $user->forceFill(['two_factor_code' => '654321'])->save();
 
-        $twoFactorResponse = $this->get(route('auth.verify-2fa.show', $user));
+        // La pantalla 2FA solo se abre en el navegador que acaba de pasar la
+        // contraseña (sesión `pending_2fa_user_id`); sin ella responde 403.
+        $this->get(route('auth.verify-2fa.show', $user))->assertForbidden();
+
+        $twoFactorResponse = $this->withSession(['pending_2fa_user_id' => $user->id])
+            ->get(route('auth.verify-2fa.show', $user));
         $twoFactorResponse->assertOk();
         $twoFactorResponse->assertSee('Verificación en Dos Pasos');
         $twoFactorResponse->assertSee('A-Code Solutions');

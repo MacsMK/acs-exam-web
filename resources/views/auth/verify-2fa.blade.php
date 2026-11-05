@@ -53,20 +53,25 @@
             <input type="hidden" name="user_id" value="{{ $user->id }}">
 
             <div>
-                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 text-center mb-2">
+                <label for="verification-code" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 text-center mb-2">
                     Código de 6 dígitos
                 </label>
                 <input
+                    id="verification-code"
                     type="text"
                     name="code"
                     inputmode="numeric"
                     maxlength="6"
+                    pattern="[0-9]{6}"
                     required
                     autofocus
                     placeholder="000000"
                     autocomplete="one-time-code"
+                    aria-describedby="code-warning"
                     class="w-full h-14 rounded-lg border border-slate-300 text-center text-2xl font-mono tracking-[0.5em] text-acode-primary bg-white focus:outline-none focus:ring-2 focus:ring-acode-tech focus:border-acode-tech font-bold"
                 />
+                {{-- Mensaje de validación en cliente (RF-AUT-005) --}}
+                <p id="code-warning" class="text-acode-danger text-xs mt-1 text-center" hidden aria-live="polite"></p>
             </div>
 
             {{-- Contador regresivo de validez de 10 minutos --}}
@@ -92,3 +97,37 @@
         </div>
     </div>
 @endsection
+
+@push('scripts')
+<script>
+    const codeField = document.getElementById('verification-code');
+    const codeWarning = document.getElementById('code-warning');
+
+    function updateCodeWarning(show) {
+        codeWarning.hidden = !show;
+        codeWarning.textContent = show
+            ? (codeField.validity.valueMissing
+                ? 'El campo código de verificación es obligatorio'
+                : 'El código de verificación debe contener 6 dígitos')
+            : '';
+
+        codeField.classList.toggle('border-acode-danger', show);
+        codeField.classList.toggle('border-slate-300', !show);
+        codeField.setAttribute('aria-invalid', String(show));
+    }
+
+    codeField.addEventListener('invalid', function (event) {
+        event.preventDefault();
+        updateCodeWarning(true);
+        codeField.focus();
+    });
+
+    codeField.addEventListener('input', function () {
+        codeField.value = codeField.value.replace(/[^0-9]/g, '');
+
+        if (!codeWarning.hidden) {
+            updateCodeWarning(!codeField.validity.valid);
+        }
+    });
+</script>
+@endpush
