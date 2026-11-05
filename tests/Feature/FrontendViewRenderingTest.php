@@ -86,7 +86,12 @@ class FrontendViewRenderingTest extends TestCase
         $user = $this->createUser('teacher');
         $user->forceFill(['two_factor_code' => '654321'])->save();
 
-        $twoFactorResponse = $this->get(route('auth.verify-2fa.show', $user));
+        // La pantalla 2FA solo se abre en el navegador que acaba de pasar la
+        // contraseña (sesión `pending_2fa_user_id`); sin ella responde 403.
+        $this->get(route('auth.verify-2fa.show', $user))->assertForbidden();
+
+        $twoFactorResponse = $this->withSession(['pending_2fa_user_id' => $user->id])
+            ->get(route('auth.verify-2fa.show', $user));
         $twoFactorResponse->assertOk();
         $twoFactorResponse->assertSee('Verificación en Dos Pasos');
         $twoFactorResponse->assertSee('A-Code Solutions');
@@ -95,6 +100,30 @@ class FrontendViewRenderingTest extends TestCase
         $twoFactorResponse->assertSee('alerts.js');
         $twoFactorResponse->assertSee($user->email);
         $twoFactorResponse->assertSee('654321');
+    }
+
+    /**
+     * El código 2FA solo se muestra en pantalla en modo demo (correo que no
+     * sale de verdad). Con un correo real, llega únicamente por correo.
+     */
+    public function test_two_factor_demo_banner_is_hidden_when_mail_is_real(): void
+    {
+        $user = $this->createUser('teacher');
+        $user->forceFill(['two_factor_code' => '654321'])->save();
+
+        config(['mail.default' => 'log']);
+        $this->withSession(['pending_2fa_user_id' => $user->id])
+            ->get(route('auth.verify-2fa.show', $user))
+            ->assertOk()
+            ->assertSee('Modo demo')
+            ->assertSee('654321');
+
+        config(['mail.default' => 'smtp']);
+        $this->withSession(['pending_2fa_user_id' => $user->id])
+            ->get(route('auth.verify-2fa.show', $user))
+            ->assertOk()
+            ->assertDontSee('Modo demo')
+            ->assertDontSee('654321');
     }
 
     /**

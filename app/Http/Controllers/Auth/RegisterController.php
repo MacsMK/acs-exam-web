@@ -28,17 +28,28 @@ class RegisterController extends Controller
 
     public function showTeacherForm(): View
     {
-        return view('auth.register-teacher');
+        $privacyNotice = $this->authService->currentPrivacyNotice();
+
+        return view('auth.register-teacher', compact('privacyNotice'));
     }
 
     public function showStudentForm(): View
     {
-        return view('auth.register-student');
+        $privacyNotice = $this->authService->currentPrivacyNotice();
+
+        return view('auth.register-student', compact('privacyNotice'));
     }
 
     public function storeTeacher(RegisterTeacherRequest $request): RedirectResponse
     {
-        $user = $this->authService->register($request->validated(), 'teacher');
+        $user = $this->authService->registerWeb(
+            $request->validated(),
+            'teacher',
+            $request->input('privacy_notice_id'),
+            $request->ip(),
+        );
+
+        $request->session()->put('pending_2fa_user_id', $user->id);
 
         return redirect()
             ->route('auth.verify-2fa.show', ['user' => $user->id])
@@ -47,8 +58,15 @@ class RegisterController extends Controller
 
     public function storeStudent(RegisterStudentRequest $request): RedirectResponse
     {
-        $user = $this->authService->register($request->validated(), 'student');
+        $user = $this->authService->registerWeb(
+            $request->validated(),
+            'student',
+            $request->input('privacy_notice_id'),
+            $request->ip(),
+        );
 
+        $request->session()->put('pending_2fa_user_id', $user->id);
+        
         return redirect()
             ->route('auth.verify-2fa.show', ['user' => $user->id])
             ->with('status', 'Te enviamos un código de verificación.');

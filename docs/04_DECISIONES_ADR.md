@@ -402,6 +402,7 @@ A partir del Sprint 2 y Sprint 3, las decisiones de arquitectura se gestionan me
   - [ADR-026](adrs/ADR-026_Asistente_Guiado_Stepper_Wizard_y_Aislamiento_exclude_unless_Banco_Preguntas.md): Asistente Guiado (Stepper Wizard de 3 Pasos), Aislamiento con `exclude_unless` y Blindaje de Datos en Banco de Preguntas.
   - [ADR-027](adrs/ADR-027_Banco_Reactivos_Copy_On_Write_Filtros_SQL_y_CSV_Batch.md): Banco de Reactivos — Patrón Copy-On-Write para Exámenes Históricos, Vistas Canónicas, Filtros Multidimensionales SQL e Importador Masivo CSV.
   - [ADR-028](adrs/ADR-028_Preservacion_Evidencia_Academica_y_Borrado_Logico_SoftDeletes_en_Reactivos.md): Preservación de Evidencia Académica y Borrado Lógico (`SoftDeletes`) en Entidades del Banco de Reactivos (`RF-BAN-011`).
+  - [ADR-031](adrs/ADR-031_Registro_Web_con_Aviso_de_Privacidad_Versionado_y_Sesion_2FA_Pendiente.md): Registro Web con Aviso de Privacidad Versionado, Validaciones Unificadas y Sesión 2FA Pendiente (`privacy_notice_id`, `pending_2fa_user_id`).
 
 Consulta el [Catálogo Maestro de ADRs en `docs/adrs/README.md`](adrs/README.md) para el detalle técnico completo de cada decisión.
 
