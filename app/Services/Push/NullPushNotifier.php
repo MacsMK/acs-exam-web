@@ -9,8 +9,10 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        NullPushNotifier.php
  * Ubicación:      app/Services/Push/NullPushNotifier.php
- * Requerimiento:  Notificaciones push (MPM-V4 §6.8, Tabla 14); código de
- *                 DE-01 pendiente de registro
+ * Requerimiento:  RF-EXA-054 (Notificación de programación o publicación
+ *                 de exámenes); los avisos exam.opened, exam.started y
+ *                 exam.finished aún no tienen código en DE-01
+ *                 (MPM-V4 §6.8, Tabla 14)
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 03/11/2026

@@ -3,7 +3,7 @@
 > **Estado:** Aceptado  
 > **Fecha:** 3 de Noviembre de 2026  
 > **Decisores:** Equipo 4 (A-Code Solutions)  
-> **Normativa de Referencia:** `MPM-V4` (§6.8, Tabla 14), `MPW-V2` (§1.3.4), `RF` de notificaciones del Listado de Requerimientos (docente: "ya comenzó / ya terminó"; alumno: aviso de examen), `FcmPushNotifierTest.php`, `ExamPushNotificationsTest.php`
+> **Normativa de Referencia:** `MPM-V4` (§6.8, Tabla 14), `MPW-V2` (§1.3.4), `RF-EXA-054` del `DE-01` (notificación push a los estudiantes del grupo al programar o publicar un examen), Listado de Requerimientos (docente: "ya comenzó / ya terminó"), `FcmPushNotifierTest.php`, `ExamPushNotificationsTest.php`
 
 ---
 
@@ -35,5 +35,5 @@ La app móvil ya registra su token FCM (`POST /api/v1/devices`, tabla `acs_user_
 ## 3. Consecuencias
 - **Positivas:** el requisito de notificaciones queda cubierto de extremo a extremo; el comportamiento sin llave es idéntico al anterior; sin migraciones ni dependencias nuevas; pruebas sin salir a internet.
 - **A confirmar con el equipo (DE-03):** los momentos exactos de `exam.started` ("primer alumno que inicia") y `exam.finished` ("vence la ventana o todos terminaron") son la interpretación vigente de la Tabla 14; el `group_id` de los avisos al docente es el del alumno que inició (`exam.started`) y el primer grupo del examen (`exam.finished`).
-- **A vigilar:** el aviso `exam.opened` depende de que el programador de tareas esté activo; sin él, solo se envía al publicar. El código DE-01 de este requisito está pendiente de registro (no se inventó uno).
+- **A vigilar:** el aviso `exam.opened` depende de que el programador de tareas esté activo; sin él, solo se envía al publicar. `RF-EXA-054` cubre únicamente el aviso `exam.assigned` (al programar o publicar); los avisos `exam.opened`, `exam.started` y `exam.finished` **no tienen código en el `DE-01`** y se solicitó su registro al responsable del formato (no se inventó ninguno).
 - **Impacto en documentación:** `MPW-V2` debe incorporar la sección de notificaciones (contrato, variables `FCM_*`, comando programado y tabla de eventos); `MPM-V4 §6.8` ya describe el lado cliente. Se registra en `DE-06`.
