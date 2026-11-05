@@ -14,8 +14,8 @@
         </p>
     </div>
 
-    {{-- Banner de código de verificación en modo demo --}}
-    @if ($user->two_factor_code)
+    {{-- Banner de código en modo demo: solo si el correo no sale de verdad (MAIL_MAILER=log|array), igual que `demo_code` en la API --}}
+    @if ($user->two_factor_code && in_array(config('mail.default'), ['log', 'array'], true))
         <div class="mb-5 rounded-xl border border-acode-warning/40 bg-acode-warning/10 p-3.5 text-xs text-slate-800 flex items-start gap-2.5">
             <x-icon name="warning" class="w-4 h-4 text-acode-warning shrink-0 mt-0.5" />
             <div>

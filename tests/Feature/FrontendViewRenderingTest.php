@@ -103,6 +103,30 @@ class FrontendViewRenderingTest extends TestCase
     }
 
     /**
+     * El código 2FA solo se muestra en pantalla en modo demo (correo que no
+     * sale de verdad). Con un correo real, llega únicamente por correo.
+     */
+    public function test_two_factor_demo_banner_is_hidden_when_mail_is_real(): void
+    {
+        $user = $this->createUser('teacher');
+        $user->forceFill(['two_factor_code' => '654321'])->save();
+
+        config(['mail.default' => 'log']);
+        $this->withSession(['pending_2fa_user_id' => $user->id])
+            ->get(route('auth.verify-2fa.show', $user))
+            ->assertOk()
+            ->assertSee('Modo demo')
+            ->assertSee('654321');
+
+        config(['mail.default' => 'smtp']);
+        $this->withSession(['pending_2fa_user_id' => $user->id])
+            ->get(route('auth.verify-2fa.show', $user))
+            ->assertOk()
+            ->assertDontSee('Modo demo')
+            ->assertDontSee('654321');
+    }
+
+    /**
      * b) Panel de control docente (dashboard) autenticado como teacher
      *    retorna 200, renderiza métricas y componente Chart.js / canvas.
      */
