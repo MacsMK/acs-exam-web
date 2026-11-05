@@ -1,6 +1,16 @@
-@extends('layouts.guest')
+@extends('layouts.register')
 
 @section('title', 'Registro de docente')
+
+@section('registration_role', 'teacher')
+
+@section('registration_description')
+    Organiza tus grupos, crea evaluaciones y da seguimiento al aprendizaje de tus estudiantes.
+@endsection
+
+@section('registration_tagline')
+    Comienza a transformar tu manera de evaluar.
+@endsection
 
 @section('content')
     <h1 class="text-lg font-semibold text-acode-primary mb-1">Registro de docente</h1>
