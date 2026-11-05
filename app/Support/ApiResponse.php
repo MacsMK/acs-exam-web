@@ -31,6 +31,18 @@ use Throwable;
 
 final class ApiResponse
 {
+    /**
+     * Opciones de serialización JSON de toda la API (ADR-021):
+     * - JSON_PRESERVE_ZERO_FRACTION: un float exacto como 40.0 viaja como
+     *   `40.0`, no como `40`. Sin esto PHP lo serializa como entero y un
+     *   modelo Dart que espera `double` falla con "type 'int' is not a
+     *   subtype of type 'double'".
+     * - JSON_UNESCAPED_UNICODE: los acentos viajan como UTF-8 legible.
+     */
+    private const JSON_OPTIONS = JSON_PRESERVE_ZERO_FRACTION | JSON_UNESCAPED_UNICODE;
+
+    private const JSON_HEADERS = ['Content-Type' => 'application/json; charset=utf-8'];
+
     public static function success(mixed $data = null, string $message = 'OK', int $code = 200): JsonResponse
     {
         return response()->json([
@@ -39,7 +51,7 @@ final class ApiResponse
             'message' => $message,
             'data' => $data,
             'errors' => null,
-        ], $code);
+        ], $code, self::JSON_HEADERS, self::JSON_OPTIONS);
     }
 
     public static function error(string $message, int $code = 422, mixed $errors = null): JsonResponse
@@ -50,7 +62,7 @@ final class ApiResponse
             'message' => $message,
             'data' => null,
             'errors' => $errors,
-        ], $code);
+        ], $code, self::JSON_HEADERS, self::JSON_OPTIONS);
     }
 
     /**
