@@ -582,9 +582,9 @@ class FormRequestRulesTest extends TestCase
         );
 
         $this->assertSame('El campo nombre es obligatorio', $validator->errors()->first('first_name'));
-        $this->assertSame('El teléfono debe tener exactamente 10 dígitos.', $validator->errors()->first('phone'));
+        $this->assertSame('El teléfono debe contener 10 dígitos', $validator->errors()->first('phone'));
         $this->assertSame(
-            'Debes aceptar el aviso de privacidad para continuar.',
+            'Debes aceptar el aviso de privacidad para continuar',
             $validator->errors()->first('accepts_privacy_notice'),
         );
     }
