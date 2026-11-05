@@ -28,8 +28,13 @@
             }
         }"
     >
-        <form method="POST" action="{{ route('auth.register.teacher.store') }}" class="space-y-4">
+        <form method="POST" action="{{ route('auth.register.teacher.store') }}" id="register-form" class="space-y-4">
             @csrf
+
+            {{-- Versión del aviso de privacidad que se acepta (RF-AUT-011) --}}
+            @if ($privacyNotice)
+                <input type="hidden" name="privacy_notice_id" value="{{ $privacyNotice->id }}">
+            @endif
 
             {{-- Grid de 2 columnas para Nombres y Apellidos --}}
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -37,6 +42,7 @@
                     <x-form.input
                         type="text"
                         name="first_name"
+                        maxlength="100"
                         value="{{ old('first_name') }}"
                         required
                         autofocus
@@ -48,6 +54,7 @@
                     <x-form.input
                         type="text"
                         name="last_name"
+                        maxlength="100"
                         value="{{ old('last_name') }}"
                         required
                         placeholder="Tus apellidos"
@@ -60,6 +67,7 @@
                 <x-form.input
                     type="email"
                     name="email"
+                    maxlength="255"
                     value="{{ old('email') }}"
                     required
                     prefixIcon="userTie"
@@ -74,6 +82,8 @@
                     name="phone"
                     value="{{ old('phone') }}"
                     maxlength="10"
+                    pattern="[0-9]{10}"
+                    inputmode="numeric"
                     required
                     prefixIcon="shield"
                     placeholder="5512345678"
@@ -111,10 +121,10 @@
             {{-- Alerta reactiva de no coincidencia de contraseñas --}}
             <div x-show="!passwordsMatch" x-cloak class="text-xs text-acode-danger flex items-center gap-1 font-medium">
                 <x-icon name="warning" class="w-4 h-4 shrink-0" />
-                <span>Las contraseñas no coinciden. Por favor verifícalas.</span>
+                <span>Los campos contraseña y confirmar contraseña deben coincidir</span>
             </div>
 
-            {{-- Casilla vinculada con Modal de Términos de Servicio y Privacidad (RF-AUT-003) --}}
+            {{-- Casilla vinculada con Modal de Términos de Servicio y Privacidad (RF-AUT-011) --}}
             <div class="pt-1">
                 <label class="flex items-start gap-2 text-xs text-slate-600 cursor-pointer select-none">
                     <input
@@ -122,6 +132,7 @@
                         name="accepts_privacy_notice"
                         value="1"
                         x-model="acceptedTerms"
+                        required
                         class="rounded border-slate-300 text-acode-tech focus:ring-acode-tech mt-0.5"
                     >
                     <span>
@@ -151,17 +162,25 @@
             </div>
         </form>
 
-        {{-- Modal de Términos de Servicio y Privacidad con scroll obligatorio (RF-AUT-003, MPW-V2 §8.6.1) --}}
+        {{-- Modal de Términos de Servicio y Privacidad con scroll obligatorio (RF-AUT-011, MPW-V2 §8.6.1) --}}
         <x-modal name="terms-modal" title="Aviso de Privacidad y Términos de Servicio" maxWidth="2xl">
             <div class="space-y-3">
                 <p class="text-xs text-slate-500">
-                    Conforme al requerimiento normativo <strong>RF-AUT-003</strong>, es obligatorio desplazarse hasta el final del documento para habilitar la casilla de aceptación.
+                    Conforme al requerimiento normativo <strong>RF-AUT-011</strong>, es obligatorio desplazarse hasta el final del documento para habilitar la casilla de aceptación.
                 </p>
 
                 <div
                     @scroll="checkScroll($event)"
                     class="max-h-64 overflow-y-auto p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 space-y-3 leading-relaxed"
                 >
+                    {{-- Aviso de privacidad vigente, versionado en BD (RF-AUT-011): su versión queda registrada al aceptar --}}
+                    @if ($privacyNotice)
+                        <div class="p-3 bg-acode-surface border border-slate-200 rounded-lg">
+                            <p class="font-bold text-acode-primary">Aviso de privacidad vigente · Versión {{ $privacyNotice->version }}</p>
+                            <p class="mt-1 whitespace-pre-line">{{ $privacyNotice->content }}</p>
+                        </div>
+                    @endif
+
                     <h4 class="font-bold text-acode-primary">1. Identidad y Domicilio del Responsable</h4>
                     <p>A-Code Solutions (Equipo 4), con domicilio operativo institucional, es responsable del tratamiento y salvaguarda de sus datos personales conforme a los lineamientos normativos de la Plataforma Evaluadora.</p>
 
@@ -220,3 +239,133 @@
         </a>
     </div>
 @endsection
+
+@push('scripts')
+<script>
+    {{-- Validación en cliente (RF-AUT-001, RF-AUT-011): mensajes bajo cada campo, mismas frases que el servidor. --}}
+    (function () {
+        const form = document.getElementById('register-form');
+
+        function filterInput(field, allowedCharacters) {
+            if (!field) {
+                return;
+            }
+
+            function clean() {
+                const original = field.value;
+                const cursor = field.selectionStart;
+                const beforeCursor = original.slice(0, cursor);
+                const cleaned = original.replace(allowedCharacters, '');
+                const cleanedBeforeCursor = beforeCursor.replace(allowedCharacters, '');
+
+                if (cleaned !== original) {
+                    field.value = cleaned;
+                    field.setSelectionRange(
+                        cleanedBeforeCursor.length,
+                        cleanedBeforeCursor.length
+                    );
+                }
+            }
+
+            field.addEventListener('input', function (event) {
+                if (!event.isComposing) {
+                    clean();
+                }
+            });
+
+            field.addEventListener('compositionend', clean);
+        }
+
+        filterInput(form.querySelector('[name="first_name"]'), /[^\p{L}\p{M} ]/gu);
+        filterInput(form.querySelector('[name="last_name"]'), /[^\p{L}\p{M} ]/gu);
+        filterInput(form.querySelector('[name="phone"]'), /[^0-9]/g);
+
+        const fieldNames = {
+            first_name: 'nombre',
+            last_name: 'apellidos',
+            email: 'correo electrónico',
+            phone: 'teléfono',
+            password: 'contraseña',
+            password_confirmation: 'confirmar contraseña',
+            accepts_privacy_notice: 'aceptación del aviso de privacidad'
+        };
+
+        function errorMessage(field) {
+            const name = fieldNames[field.name] || field.name;
+
+            if (field.validity.valueMissing) {
+                return `El campo ${name} es obligatorio`;
+            }
+
+            if (field.validity.typeMismatch) {
+                return `El ${name} no tiene un formato válido`;
+            }
+
+            if (field.validity.patternMismatch && field.name === 'phone') {
+                return 'El teléfono debe contener 10 dígitos';
+            }
+
+            if (field.validity.tooShort) {
+                return `La ${name} debe tener al menos ${field.minLength} caracteres`;
+            }
+
+            return field.validationMessage;
+        }
+
+        function clearFieldError(field) {
+            const message = form.querySelector(`[data-error-for="${field.name}"]`);
+
+            if (message) {
+                message.remove();
+            }
+
+            if (field.type !== 'checkbox') {
+                field.classList.remove('border-acode-danger');
+                field.classList.add('border-slate-300');
+            }
+        }
+
+        // Cada campo inválido genera este evento al intentar enviar.
+        form.addEventListener('invalid', function (event) {
+            const field = event.target;
+
+            // Se sustituye la burbuja nativa por mensajes bajo los campos.
+            event.preventDefault();
+
+            let message = form.querySelector(`[data-error-for="${field.name}"]`);
+
+            if (!message) {
+                message = document.createElement('p');
+                message.dataset.errorFor = field.name;
+                message.className = 'text-xs text-acode-danger mt-1 font-medium';
+                message.setAttribute('aria-live', 'polite');
+
+                // El input vive dentro de un contenedor relativo (x-form.input): el mensaje va debajo de éste.
+                const anchor = field.type === 'checkbox'
+                    ? field.closest('label')
+                    : (field.closest('.relative') || field);
+
+                anchor.insertAdjacentElement('afterend', message);
+            }
+
+            message.textContent = errorMessage(field);
+
+            if (field.type !== 'checkbox') {
+                field.classList.remove('border-slate-300');
+                field.classList.add('border-acode-danger');
+            }
+        }, true);
+
+        function updateFieldError(event) {
+            const field = event.target;
+
+            if (field.name && field.validity.valid) {
+                clearFieldError(field);
+            }
+        }
+
+        form.addEventListener('input', updateFieldError);
+        form.addEventListener('change', updateFieldError);
+    })();
+</script>
+@endpush
