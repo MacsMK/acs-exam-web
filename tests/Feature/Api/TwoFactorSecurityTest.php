@@ -20,6 +20,7 @@ namespace Tests\Feature\Api;
 use App\Models\User;
 use App\Services\AuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class TwoFactorSecurityTest extends TestCase
@@ -43,6 +44,7 @@ class TwoFactorSecurityTest extends TestCase
     public function test_login_never_returns_the_code_when_mail_is_real(): void
     {
         config(['mail.default' => 'smtp']);
+        Mail::fake(); // no se abre ninguna conexión SMTP real en la prueba
         $user = $this->createStudent();
 
         $response = $this->postJson('/api/v1/auth/login', [
@@ -59,6 +61,7 @@ class TwoFactorSecurityTest extends TestCase
     public function test_register_never_returns_the_code_when_mail_is_real(): void
     {
         config(['mail.default' => 'smtp']);
+        Mail::fake(); // no se abre ninguna conexión SMTP real en la prueba
 
         $response = $this->postJson('/api/v1/auth/register/student', [
             'first_name' => 'Luis',
