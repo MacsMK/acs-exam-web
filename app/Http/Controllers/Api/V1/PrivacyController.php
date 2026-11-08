@@ -16,6 +16,9 @@ declare(strict_types=1);
  *              (acs-exam-mobile, privacy_notice_model.dart) y no vale la
  *              pena una migración nueva solo por un título, dado que el
  *              contenido real vive en `content`.
+ *              `current` (api.v1.privacy.current) es la única ruta pública:
+ *              entrega el mismo aviso sin `accepted` para que la app móvil
+ *              lo muestre antes del registro (RF-AUT-011, ADR-034).
  * ============================================================================
  */
 
@@ -43,6 +46,21 @@ class PrivacyController extends Controller
             'title' => "Aviso de Privacidad {$notice->version}",
             'content' => $notice->content,
             'accepted' => $accepted,
+        ]);
+    }
+
+    /**
+     * Aviso vigente para un cliente sin sesión (antes del registro). No
+     * incluye `accepted`: sin usuario no hay aceptación que informar.
+     */
+    public function current(): JsonResponse
+    {
+        $notice = $this->latestNotice();
+
+        return ApiResponse::success([
+            'version' => $notice->version,
+            'title' => "Aviso de Privacidad {$notice->version}",
+            'content' => $notice->content,
         ]);
     }
 

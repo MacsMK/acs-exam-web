@@ -30,7 +30,8 @@ Todo bajo `Route::prefix('v1')->name('api.v1.')`. Este contrato quedó
 ajuste del lado del backend — ver ADR-009 a ADR-014 en
 `04_DECISIONES_ADR.md` para el porqué de cada punto).
 
-Públicas (sin token): registro (docente/alumno), login, `auth/two-factor`.
+Públicas (sin token): registro (docente/alumno), login, `auth/two-factor` y
+`privacy-notice/current` (ADR-034).
 Todo lo demás requiere `auth:sanctum` (`Authorization: Bearer <token>`):
 
 ```
@@ -43,6 +44,7 @@ GET  /v1/auth/me
 POST /v1/auth/logout
 
 GET  /v1/privacy-notice                    → { version, title, content, accepted }
+GET  /v1/privacy-notice/current            → { version, title, content }  (pública, ADR-034)
 POST /v1/privacy-notice/accept
 
 GET  /v1/groups                            → [{ id, name, folio, students_count }]
