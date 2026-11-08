@@ -60,6 +60,7 @@ class TeacherGradingService
         }
 
         return StudentAttempt::where('student_id', $user->id)
+            ->inCurrentGroupsOfStudent($user->id)
             ->whereNotNull('final_score')
             ->with('exam')
             ->latest('submitted_at')

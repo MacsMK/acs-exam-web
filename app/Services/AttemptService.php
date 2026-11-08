@@ -291,19 +291,45 @@ class AttemptService
             return;
         }
 
+        if ($this->deadlineHasPassed($attempt, $exam)) {
+            $attempt->update(['status' => 'expired', 'submitted_at' => now()]);
+            throw new DomainException('El tiempo límite del examen ha expirado.');
+        }
+    }
+
+    /**
+     * Indica si el intento sigue en curso (RF-GRU-017): no fue enviado ni
+     * cancelado y su duración y la ventana del examen aún no vencen, con la
+     * misma tolerancia de 60 segundos de la validación de envío. El estado
+     * `expired` solo se marca cuando alguien intenta enviar el intento, así
+     * que uno abandonado a medias deja de contar como en curso al vencer.
+     */
+    public function isInProgress(StudentAttempt $attempt): bool
+    {
+        if ($attempt->status !== 'in_progress') {
+            return false;
+        }
+
+        $exam = $attempt->relationLoaded('exam') ? $attempt->exam : $attempt->exam()->first();
+
+        return $exam === null || ! $this->deadlineHasPassed($attempt, $exam);
+    }
+
+    /**
+     * Venció la duración del intento o la ventana del examen (tolerancia de
+     * red de 60 segundos en ambos casos).
+     */
+    private function deadlineHasPassed(StudentAttempt $attempt, Exam $exam): bool
+    {
         $durationMinutes = (int) ($exam->duration_minutes ?? 0);
         if ($durationMinutes > 0 && $attempt->started_at !== null) {
             $deadline = $attempt->started_at->copy()->addMinutes($durationMinutes)->addSeconds(60);
             if (now()->gt($deadline)) {
-                $attempt->update(['status' => 'expired', 'submitted_at' => now()]);
-                throw new DomainException('El tiempo límite del examen ha expirado.');
+                return true;
             }
         }
 
-        if ($exam->ends_at !== null && now()->gt($exam->ends_at->copy()->addSeconds(60))) {
-            $attempt->update(['status' => 'expired', 'submitted_at' => now()]);
-            throw new DomainException('El tiempo límite del examen ha expirado.');
-        }
+        return $exam->ends_at !== null && now()->gt($exam->ends_at->copy()->addSeconds(60));
     }
 
     /**

@@ -25,9 +25,20 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 class AuthService
 {
+    /**
+     * Vigencia del código de verificación, en minutos (RF-AUT-005).
+     */
+    public const TWO_FACTOR_TTL_MINUTES = 10;
+
+    /**
+     * Espera mínima, en segundos, entre dos envíos del código (RF-AUT-006).
+     */
+    public const TWO_FACTOR_RESEND_SECONDS = 60;
+
     /**
      * Obtiene el aviso de privacidad publicado más reciente.
      */
@@ -163,18 +174,60 @@ class AuthService
 
         $user->forceFill([
             'two_factor_code' => $code,
-            'two_factor_expires_at' => now()->addMinutes(10),
+            'two_factor_expires_at' => now()->addMinutes(self::TWO_FACTOR_TTL_MINUTES),
         ])->save();
 
         Mail::raw(
             "Tu código de verificación es: {$code}\n\n"
-            ."Es válido durante 10 minutos.\n"
+            .'Es válido durante '.self::TWO_FACTOR_TTL_MINUTES." minutos.\n"
             ."Si no solicitaste este código, ignora este mensaje.",
             function ($message) use ($user): void {
                 $message->to($user->email)
                     ->subject('Código de verificación - A-Code Solutions');
             }
         );
+    }
+
+    /**
+     * Reenvía el código del segundo paso (RF-AUT-006). Solo procede si hay una
+     * verificación pendiente para el correo (el código se borra al verificarse)
+     * y si pasaron al menos TWO_FACTOR_RESEND_SECONDS desde el último envío,
+     * que se deduce de la vigencia del código vigente. Emitir uno nuevo
+     * sobrescribe el anterior, por lo que este queda invalidado.
+     *
+     * @return User|null Cuenta a la que se reenvió; null si no hay verificación
+     *                   pendiente (la API responde igual para no revelar qué
+     *                   cuentas existen).
+     *
+     * @throws TooManyRequestsHttpException Si aún no transcurren los 60 segundos.
+     */
+    public function resendTwoFactorCode(string $email): ?User
+    {
+        $user = User::where('email', $email)
+            ->whereIn('role', ['teacher', 'student'])
+            ->where('is_active', true)
+            ->first();
+
+        if ($user === null || $user->two_factor_code === null || $user->two_factor_expires_at === null) {
+            return null;
+        }
+
+        $availableAt = $user->two_factor_expires_at->copy()
+            ->subMinutes(self::TWO_FACTOR_TTL_MINUTES)
+            ->addSeconds(self::TWO_FACTOR_RESEND_SECONDS);
+
+        if (now()->lt($availableAt)) {
+            $wait = max(1, $availableAt->getTimestamp() - now()->getTimestamp());
+
+            throw new TooManyRequestsHttpException(
+                $wait,
+                "Espera {$wait} segundos para solicitar un nuevo código.",
+            );
+        }
+
+        $this->issueTwoFactorCode($user);
+
+        return $user->fresh();
     }
 
     /**

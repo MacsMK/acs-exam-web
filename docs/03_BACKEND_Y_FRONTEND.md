@@ -39,6 +39,7 @@ POST /v1/auth/register/teacher
 POST /v1/auth/register/student
 POST /v1/auth/login
 POST /v1/auth/two-factor        { code }  → { token, role }  (sin user_id, ver ADR-010)
+POST /v1/auth/two-factor/resend { email }  → 200 uniforme; 429 si no pasaron 60 s (ADR-035)
 
 GET  /v1/auth/me
 POST /v1/auth/logout
@@ -51,6 +52,7 @@ GET  /v1/groups                            → [{ id, name, folio, students_coun
 POST /v1/groups/join            { folio } | { qr_payload }
 POST /v1/groups/verify          { folio } | { qr_payload }
 GET  /v1/groups/{group}/students           (solo docente)  → [{ id, name }]
+POST /v1/groups/{group}/leave              (solo alumno)   → 409 con un intento en curso (ADR-036)
 
 GET  /v1/exams                             → [{ id, title }]  (según rol)
 GET  /v1/exams/{exam}/progress             (solo docente)  → { answered_count, total_count }

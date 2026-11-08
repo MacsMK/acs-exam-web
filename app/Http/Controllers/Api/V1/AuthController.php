@@ -21,6 +21,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterStudentRequest;
 use App\Http\Requests\RegisterTeacherRequest;
+use App\Http\Requests\ResendTwoFactorRequest;
 use App\Http\Requests\VerifyTwoFactorRequest;
 use App\Models\User;
 use App\Services\AuthService;
@@ -120,6 +121,21 @@ class AuthController extends Controller
         $token = $user->createToken('acs-exam-mobile')->plainTextToken;
 
         return ApiResponse::success(['token' => $token, 'role' => $user->role]);
+    }
+
+    /**
+     * api.v1.auth.two-factor.resend (RF-AUT-006, ADR-035). Responde lo mismo
+     * exista o no una verificación pendiente para el correo, para no revelar
+     * qué cuentas existen; solo avisa (429) cuando falta esperar el intervalo.
+     */
+    public function resendTwoFactor(ResendTwoFactorRequest $request): JsonResponse
+    {
+        $user = $this->authService->resendTwoFactorCode($request->string('email')->toString());
+
+        return ApiResponse::success(
+            $user !== null ? $this->withDemoCode($user, []) : [],
+            'Si existe una verificación pendiente para ese correo, se envió un nuevo código.',
+        );
     }
 
     public function me(): JsonResponse
