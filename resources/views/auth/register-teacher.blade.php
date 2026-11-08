@@ -204,7 +204,7 @@
                     <span class="text-xs text-slate-500" x-show="!hasScrolledToBottom">
                         Desplázate hacia abajo para habilitar el botón
                     </span>
-                    <span class="text-xs font-semibold text-acode-accent" x-show="hasScrolledToBottom" style="display: none;">
+                    <span class="text-xs font-semibold text-acode-accent" x-show="hasScrolledToBottom" x-cloak>
                         ✓ Lectura completada
                     </span>
 
