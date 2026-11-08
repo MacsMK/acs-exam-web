@@ -403,6 +403,7 @@ A partir del Sprint 2 y Sprint 3, las decisiones de arquitectura se gestionan me
   - [ADR-027](adrs/ADR-027_Banco_Reactivos_Copy_On_Write_Filtros_SQL_y_CSV_Batch.md): Banco de Reactivos — Patrón Copy-On-Write para Exámenes Históricos, Vistas Canónicas, Filtros Multidimensionales SQL e Importador Masivo CSV.
   - [ADR-028](adrs/ADR-028_Preservacion_Evidencia_Academica_y_Borrado_Logico_SoftDeletes_en_Reactivos.md): Preservación de Evidencia Académica y Borrado Lógico (`SoftDeletes`) en Entidades del Banco de Reactivos (`RF-BAN-011`).
   - [ADR-031](adrs/ADR-031_Registro_Web_con_Aviso_de_Privacidad_Versionado_y_Sesion_2FA_Pendiente.md): Registro Web con Aviso de Privacidad Versionado, Validaciones Unificadas y Sesión 2FA Pendiente (`privacy_notice_id`, `pending_2fa_user_id`).
+  - [ADR-034](adrs/ADR-034_Aviso_de_Privacidad_Publico_para_el_Registro_Movil.md): Aviso de Privacidad Público para el Registro desde la App Móvil (`GET /api/v1/privacy-notice/current`, `RF-AUT-011`).
 
 Consulta el [Catálogo Maestro de ADRs en `docs/adrs/README.md`](adrs/README.md) para el detalle técnico completo de cada decisión.
 
