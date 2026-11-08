@@ -262,6 +262,17 @@ auditoría esto se señala como riesgo, la mitigación futura más barata es
 alargar el código (de 6 a 8 dígitos) o acortar su ventana de expiración,
 no necesariamente rehacer el contrato.
 
+**Actualización (02/11/2026) — mitigaciones aplicadas sin cambiar el
+contrato:** (1) `AuthService::issueTwoFactorCode` genera un código que no
+coincide con el de ningún otro usuario con código vigente, así que la
+búsqueda solo por código ya no puede devolver la cuenta equivocada;
+(2) `auth/login` (30/min) y `auth/two-factor` (20/min) tienen límite de
+intentos por IP (`throttle`), lo que vuelve inviable adivinar el código por
+fuerza bruta; (3) `demo_code` en la respuesta de `login` y de los registros
+es un campo opcional que solo se incluye cuando `MAIL_MAILER` es `log` o
+`array`; con un correo real la API nunca devuelve el código. Pruebas en
+`tests/Feature/Api/TwoFactorSecurityTest.php`.
+
 ---
 
 ## ADR-011 — Endpoints de aviso de privacidad, grupos extendidos y
