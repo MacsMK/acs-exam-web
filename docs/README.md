@@ -12,9 +12,10 @@ ni el historial del chat.
 3. **[03_BACKEND_Y_FRONTEND.md](03_BACKEND_Y_FRONTEND.md)** — rutas,
    controladores, middleware, vistas Blade y el sistema de diseño
    `acode-*` con los valores exactos.
-4. **[04_DECISIONES_ADR.md](04_DECISIONES_ADR.md)** — por qué cada
-   decisión que se desvía de los manuales quedó así (Laravel 13 vs 11,
-   Fortify diferido, Sail, Reverb sin uso funcional aún, etc.).
+4. **[04_DECISIONES_ADR.md](04_DECISIONES_ADR.md)** y carpeta **[adrs/](adrs/README.md)** —
+   registro de las decisiones de arquitectura (ADR-001 al ADR-031, sin el
+   número ADR-015), desviaciones justificadas respecto a los manuales y
+   refactorización de seguridad, repositorios y paridad móvil.
 
 Para levantar el proyecto localmente (con o sin Docker), credenciales de
 demo y flujo sugerido de demostración, ver el `README.md` en la raíz del

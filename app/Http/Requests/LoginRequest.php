@@ -36,8 +36,8 @@ class LoginRequest extends FormRequest
     }
 
     /**
-    * @return array<string, string>
-    */
+     * @return array<string, string>
+     */
     public function messages(): array
     {
         return [

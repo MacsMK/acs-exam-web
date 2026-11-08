@@ -36,6 +36,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
     Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:30,1')->name('auth.login');
     Route::post('auth/two-factor', [AuthController::class, 'twoFactor'])->middleware('throttle:20,1')->name('auth.two-factor');
 
+    // Aviso de privacidad vigente para quien aún no tiene sesión (RF-AUT-011:
+    // consultarlo antes de registrarse). Solo lectura; ver ADR-034.
+    Route::get('privacy-notice/current', [PrivacyController::class, 'current'])->name('privacy.current');
+
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('auth/me', [AuthController::class, 'me'])->name('auth.me');
         Route::post('auth/logout', [AuthController::class, 'logout'])->name('auth.logout');

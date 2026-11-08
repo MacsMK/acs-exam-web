@@ -92,6 +92,30 @@ el código se muestra directamente en la pantalla de verificación (para
 poder probar sin bandeja de correo real) y además se escribe en
 `storage/logs/laravel.log`.
 
+### Datos orgánicos (opcional, para volumen realista)
+
+Si se necesita una base con más gente y nombres reales en español (acentos,
+nombres compuestos, dos apellidos) se puede sembrar, **además** de lo anterior:
+
+```bash
+php artisan db:seed --class=OrganicDataSeeder
+```
+
+Crea 3 docentes (`@docentes.acode-solutions.test`), 6 grupos y 30 alumnos
+(`@alumnos.acode-solutions.test`) repartidos entre los grupos; todos con la
+contraseña **`Demo1234`**, aviso de privacidad aceptado y teléfono de 10
+dígitos cuando lo tienen. Es idempotente: puede ejecutarse varias veces sin
+duplicar registros. No forma parte de `DatabaseSeeder` a propósito.
+
+### Pruebas de validación de campos
+
+`tests/Feature/Validation/FormRequestRulesTest.php` prueba, con casos
+parametrizados (`#[DataProvider]`, el equivalente PHP de `pytest.mark.parametrize`),
+las reglas reales de los `FormRequest`: límites exactos (100/101 caracteres,
+9/10/11 dígitos de teléfono, código de 6 dígitos), campos ausentes, formatos
+inválidos y que los tipos de incidente que envía la app móvil sigan aceptados.
+Se ejecutan con `php artisan test --filter=FormRequestRulesTest`.
+
 ## Flujo sugerido para la demo
 
 1. Entra como docente (`docente.demo@...`) → Dashboard → Grupos / Reactivos
@@ -114,6 +138,23 @@ aislado detrás de `App\Contracts\AiEvaluatorContract`
 (`app/Providers/AppServiceProvider::register()`), así que conectar un
 evaluador real (p. ej. Gemini) más adelante es agregar un nuevo driver y
 cambiar la variable de entorno, sin tocar `AttemptService`.
+
+## Notificaciones push (Firebase Cloud Messaging)
+
+El backend envía los avisos de la Tabla 14 del manual móvil (`exam.assigned`,
+`exam.opened`, `exam.started`, `exam.finished`) — ver `docs/adrs/ADR-030`.
+Vienen **apagadas** (`FCM_ENABLED=false`): sin llave no se contacta a Firebase
+y nada del demo cambia. Para activarlas:
+
+1. En la consola de Firebase: Configuración del proyecto → Cuentas de servicio
+   → *Generar nueva clave privada*. Se descarga un archivo `.json`.
+2. Guárdalo como `storage/app/private/firebase-service-account.json`
+   (esa carpeta está ignorada por git; **nunca** subas este archivo).
+3. En tu `.env`: `FCM_ENABLED=true` (y, si quieres, `FCM_PROJECT_ID`; si lo
+   dejas vacío se toma del propio archivo).
+4. Los avisos de "ya abrió" y "ya terminó" salen del comando `exams:push-due`,
+   que corre cada minuto. En local: `php artisan schedule:work`; en
+   producción, la entrada de cron `* * * * * php artisan schedule:run`.
 
 ## Documentación técnica completa
 

@@ -8,24 +8,23 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     AuthService.php
  * Ubicación:   app/Services/AuthService.php
- * Descripción: Lógica de registro/login/2FA compartida entre el panel web
- *              y la API móvil v1, para no duplicarla entre controladores.
- *              2FA: código de un solo uso de 6 dígitos (MPM-V2 §6.6.1).
- *              En este entorno de DEMO el código se escribe también al log
- *              (storage/logs/laravel.log) además de "enviarse" por correo,
- *              para que se pueda probar sin bandeja de entrada real.
+ * Descripción: Lógica transaccional de registro/login/2FA/aceptación de aviso
+ *              de privacidad (RF-PRI-001, MPM-V2 §6.6.1) compartida entre el
+ *              panel web y la API móvil v1.
  * ============================================================================
  */
 
 namespace App\Services;
 
+use App\Models\PrivacyAcceptance;
+use App\Models\PrivacyNotice;
 use App\Models\User;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
-use App\Models\PrivacyNotice;
-use App\Models\PrivacyAcceptance;
-use Illuminate\Support\Facades\DB;
 
 class AuthService
 {
@@ -68,7 +67,10 @@ class AuthService
         }
 
         return DB::transaction(function () use ($data, $role, $notice, $ipAddress): User {
-            $user = $this->register($data, $role);
+            $user = $this->register(
+                Arr::except($data, ['accepts_privacy_notice', 'privacy_accepted']),
+                $role,
+            );
 
             PrivacyAcceptance::create([
                 'user_id' => $user->id,
@@ -82,26 +84,47 @@ class AuthService
     }
 
     /**
-     * Crea un usuario con el rol indicado y le genera ya el primer código
-     * 2FA, para que el flujo de registro → verificación sea uno solo.
+     * Crea un usuario con el rol indicado dentro de una transacción, registra
+     * la aceptación del aviso de privacidad vigente si el llamador la indica
+     * (RF-AUT-011, flujo de la API) y emite el primer código 2FA, para que el
+     * registro → verificación sea uno solo.
      *
      * @param array<string, mixed> $data
      */
     public function register(array $data, string $role): User
     {
-        $user = User::create([
-            'role' => $role,
-            'first_name' => $data['first_name'],
-            'last_name' => $data['last_name'],
-            'email' => $data['email'],
-            'phone' => $data['phone'] ?? null,
-            'password' => $data['password'],
-            'is_active' => true,
-        ]);
+        return DB::transaction(function () use ($data, $role): User {
+            $user = User::create([
+                'role' => $role,
+                'first_name' => $data['first_name'],
+                'last_name' => $data['last_name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'] ?? null,
+                'password' => $data['password'],
+                'is_active' => true,
+            ]);
 
-        $this->issueTwoFactorCode($user);
+            $privacyAccepted = (bool) ($data['accepts_privacy_notice'] ?? $data['privacy_accepted'] ?? false);
+            if ($privacyAccepted) {
+                $currentNotice = PrivacyNotice::latest('published_at')->first();
+                if ($currentNotice !== null) {
+                    PrivacyAcceptance::updateOrCreate(
+                        [
+                            'user_id' => $user->id,
+                            'privacy_notice_id' => $currentNotice->id,
+                        ],
+                        [
+                            'accepted_at' => now(),
+                            'ip_address' => request()?->ip(),
+                        ],
+                    );
+                }
+            }
 
-        return $user;
+            $this->issueTwoFactorCode($user);
+
+            return $user;
+        });
     }
 
     /**
@@ -197,5 +220,13 @@ class AuthService
             'two_factor_expires_at' => null,
             'two_factor_verified_at' => now(),
         ])->save();
+    }
+
+    /**
+     * Cierra la sesión autenticada en el guard web.
+     */
+    public function logout(?User $user = null): void
+    {
+        Auth::guard('web')->logout();
     }
 }

@@ -47,6 +47,7 @@ class VerifyTwoFactorRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'user_id.exists' => 'La opción seleccionada en usuario no es válida',
             'code.required' => 'El campo código de verificación es obligatorio',
             'code.digits' => 'El código de verificación debe contener 6 dígitos',
         ];

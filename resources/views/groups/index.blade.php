@@ -1,53 +1,83 @@
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: groups/index.blade.php (MPW-V2 §5.2.2, §7.3, §7.8.2, §8.4, §8.8, Tabla 20) --}}
 @extends('layouts.app')
 
-@section('title', 'Mis grupos')
+@section('title', 'Grupos Escolares')
 
 @section('content')
-    <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold text-acode-primary">Mis grupos</h1>
-        <a href="{{ route('groups.create') }}" class="h-10 px-4 inline-flex items-center rounded-md bg-acode-primary text-white text-sm font-semibold hover:bg-[#0e1f36]">
-            + Nuevo grupo
-        </a>
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-acode-primary tracking-tight">Grupos Escolares</h1>
+            <p class="text-sm text-slate-500 mt-0.5">Administra tus salones y materias para matriculación de alumnos.</p>
+        </div>
+
+        <x-button :href="route('groups.create')" variant="primary" size="md">
+            <x-icon name="add" class="w-4 h-4 mr-1.5" />
+            Crear grupo
+        </x-button>
     </div>
 
-    @if ($groups->isEmpty())
-        <div class="bg-white rounded-lg border border-slate-200 p-8 text-center text-sm text-slate-500">
-            Todavía no tienes grupos. Crea el primero para poder asignarle exámenes.
-        </div>
-    @else
-        <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
-            <table class="w-full text-sm">
-                <thead class="bg-acode-primary text-white text-xs uppercase tracking-wide">
-                    <tr>
-                        <th class="text-left px-4 py-3">Nombre</th>
-                        <th class="text-left px-4 py-3">Materia</th>
-                        <th class="text-left px-4 py-3">Folio</th>
-                        <th class="text-left px-4 py-3">Alumnos</th>
-                        <th class="text-left px-4 py-3">Estado</th>
-                        <th class="px-4 py-3"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($groups as $group)
-                        <tr class="even:bg-acode-surface hover:bg-blue-50/70">
-                            <td class="px-4 py-3 font-medium text-slate-800">{{ $group->name }}</td>
-                            <td class="px-4 py-3">{{ $group->subject ?? '—' }}</td>
-                            <td class="px-4 py-3 font-mono">{{ $group->access_folio }}</td>
-                            <td class="px-4 py-3">{{ $group->students_count }}</td>
-                            <td class="px-4 py-3">
-                                @if ($group->is_closed)
-                                    <span class="inline-flex px-2 py-0.5 rounded-full text-xs bg-slate-200 text-slate-600">Cerrado</span>
-                                @else
-                                    <span class="inline-flex px-2 py-0.5 rounded-full text-xs bg-acode-accent/15 text-acode-accent">Activo</span>
-                                @endif
-                            </td>
-                            <td class="px-4 py-3 text-right">
-                                <a href="{{ route('groups.show', $group) }}" class="text-acode-tech font-medium">Ver →</a>
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
-    @endif
+    {{-- Barra de Búsqueda y Filtrado (MPW-V2 §8.8) --}}
+    <x-search-filter
+        :action="route('groups.index')"
+        placeholder="Buscar grupo por nombre o materia…"
+    />
+
+    <x-table>
+        <x-slot:header>
+            <x-table.th>Nombre del Grupo</x-table.th>
+            <x-table.th>Materia / Asignatura</x-table.th>
+            <x-table.th align="center">Folio de Acceso</x-table.th>
+            <x-table.th align="center">Alumnos</x-table.th>
+            <x-table.th align="center">Estado</x-table.th>
+            <x-table.th align="right">Acciones</x-table.th>
+        </x-slot:header>
+
+        @forelse ($groups as $group)
+            <tr>
+                <x-table.td>
+                    <span class="font-bold text-slate-800">{{ $group->name }}</span>
+                </x-table.td>
+                <x-table.td>
+                    <span class="text-slate-600">{{ $group->subject ?? '—' }}</span>
+                </x-table.td>
+                <x-table.td align="center">
+                    <span class="font-mono text-xs font-semibold bg-acode-surface px-2.5 py-1 rounded-md border border-slate-200 text-acode-primary select-all">
+                        {{ $group->access_folio }}
+                    </span>
+                </x-table.td>
+                <x-table.td align="center">
+                    <span class="font-semibold text-slate-700">{{ $group->students_count }}</span>
+                </x-table.td>
+                <x-table.td align="center">
+                    @if ($group->is_closed)
+                        <x-badge variant="neutral">Cerrado</x-badge>
+                    @else
+                        <x-badge variant="accent">Activo</x-badge>
+                    @endif
+                </x-table.td>
+                <x-table.td align="right">
+                    <x-button :href="route('groups.show', $group)" variant="secondary" size="sm">
+                        <x-icon name="view" class="w-3.5 h-3.5 mr-1" />
+                        Ver detalle
+                    </x-button>
+                </x-table.td>
+            </tr>
+        @empty
+            <tr>
+                <td colspan="6" class="p-0">
+                    <x-empty-state
+                        class="border-0 shadow-none rounded-none py-10"
+                        icon="userGroup"
+                        title="Sin grupos escolares"
+                        message="Todavía no tienes grupos asignados. Da de alta tu primer grupo escolar."
+                    >
+                        <x-button :href="route('groups.create')" variant="primary" size="sm">
+                            <x-icon name="add" class="w-4 h-4 mr-1.5" />
+                            Crear grupo
+                        </x-button>
+                    </x-empty-state>
+                </td>
+            </tr>
+        @endforelse
+    </x-table>
 @endsection
