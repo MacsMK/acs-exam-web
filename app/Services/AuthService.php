@@ -16,6 +16,8 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use RuntimeException;
+
 use App\Models\PrivacyAcceptance;
 use App\Models\PrivacyNotice;
 use App\Models\User;
@@ -186,7 +188,15 @@ class AuthService
      */
     private function generateUniqueCode(User $user): string
     {
+        $attempts = 0;
+        $maxAttempts = 50;
+
         do {
+            $attempts++;
+            if ($attempts > $maxAttempts) {
+                throw new RuntimeException('No fue posible generar un código 2FA único tras múltiples intentos.');
+            }
+
             $code = (string) random_int(100000, 999999);
 
             $inUse = User::where('two_factor_code', $code)

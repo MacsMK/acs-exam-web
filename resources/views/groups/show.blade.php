@@ -15,6 +15,10 @@
         </div>
 
         <div class="flex items-center gap-2">
+            <x-button :href="route('groups.periods.index', $group)" variant="primary" size="sm">
+                <x-icon name="documentText" class="w-3.5 h-3.5 mr-1" />
+                Periodos y Sábana de Notas
+            </x-button>
             <x-button :href="route('groups.index')" variant="neutral" size="sm">
                 <x-icon name="chevronDown" class="w-3.5 h-3.5 rotate-90 mr-1" />
                 Volver

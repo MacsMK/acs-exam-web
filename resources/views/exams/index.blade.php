@@ -60,10 +60,22 @@
                     @endif
                 </x-table.td>
                 <x-table.td align="right">
-                    <x-button :href="route('exams.assemble', $exam)" variant="secondary" size="sm">
-                        <x-icon name="edit" class="w-3.5 h-3.5 mr-1" />
-                        Editar examen
-                    </x-button>
+                    <div class="flex items-center justify-end space-x-2">
+                        @if ($exam->is_published)
+                            <x-button :href="route('exams.monitor', $exam)" variant="primary" size="sm">
+                                <x-icon name="clock" class="w-3.5 h-3.5 mr-1 text-emerald-300" />
+                                Monitoreo
+                            </x-button>
+                        @endif
+                        <x-button :href="route('exams.revision.index', $exam)" variant="ghost" size="sm">
+                            <x-icon name="check" class="w-3.5 h-3.5 mr-1" />
+                            Revisiones
+                        </x-button>
+                        <x-button :href="route('exams.assemble', $exam)" variant="secondary" size="sm">
+                            <x-icon name="edit" class="w-3.5 h-3.5 mr-1" />
+                            Editar
+                        </x-button>
+                    </div>
                 </x-table.td>
             </tr>
         @empty

@@ -28,6 +28,7 @@ use App\Repositories\Eloquent\EloquentAttemptRepository;
 use App\Repositories\Eloquent\EloquentExamRepository;
 use App\Repositories\Eloquent\EloquentGroupRepository;
 use App\Repositories\Eloquent\EloquentQuestionRepository;
+use App\Services\Ai\GeminiAiEvaluator;
 use App\Services\MockAiEvaluator;
 use App\Services\Push\FcmPushNotifier;
 use App\Services\Push\NullPushNotifier;
@@ -43,10 +44,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // AI_EVALUATOR_DRIVER=mock en demo (sin llave externa); cambiar a
-        // un driver real (ej. "gemini") cuando exista esa integración.
-        $this->app->bind(AiEvaluatorContract::class, match (env('AI_EVALUATOR_DRIVER', 'mock')) {
-            default => MockAiEvaluator::class,
+        // Driver de evaluación asistida por IA: 'gemini' (GeminiAiEvaluator con
+        // fallback a MockAiEvaluator) o 'mock' (MockAiEvaluator léxico local).
+        $this->app->bind(AiEvaluatorContract::class, static function ($app) {
+            return config('services.ai.driver', 'gemini') === 'gemini'
+                ? $app->make(GeminiAiEvaluator::class)
+                : $app->make(MockAiEvaluator::class);
         });
 
         // FCM_ENABLED=false (demo, desarrollo y CI) no contacta a Firebase;

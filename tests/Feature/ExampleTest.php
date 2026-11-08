@@ -10,12 +10,12 @@ class ExampleTest extends TestCase
     /**
      * A basic test example.
      */
-    public function test_the_root_redirects_to_login(): void
+    public function test_the_root_renders_the_landing_page(): void
     {
-        // routes/web.php: Route::redirect('/', '/login') — no hay página
-        // pública en "/", todo entra por el login (MPW-V2 layout guest).
         $response = $this->get('/');
 
-        $response->assertRedirect('/login');
+        $response->assertOk();
+        $response->assertSee('A-Code Solutions');
+        $response->assertSee('Planes y Precios');
     }
 }

@@ -29,14 +29,21 @@ use RuntimeException;
 
 class GroupEnrollmentService
 {
+    public function __construct(
+        private readonly SubscriptionLimitService $subscriptionLimitService,
+    ) {
+    }
+
     /**
      * Crea un grupo para el docente con un folio único garantizado mediante
-     * ciclo finito (MPW-V2 §5.2.1).
+     * ciclo finito (MPW-V2 §5.2.1) validando cuotas de suscripción (RF-SUS-007, RF-SUS-010).
      *
      * @param array<string, mixed> $data
      */
     public function createGroup(User $teacher, array $data): Group
     {
+        $this->subscriptionLimitService?->ensureCanCreateGroup($teacher);
+
         return DB::transaction(function () use ($teacher, $data): Group {
             return Group::create([
                 'teacher_id' => $teacher->id,
@@ -78,6 +85,8 @@ class GroupEnrollmentService
                 $errorField => ['Este grupo ya cerró el ciclo (RW-35).'],
             ]);
         }
+
+        $this->subscriptionLimitService?->ensureCanEnrollStudent($group);
 
         DB::transaction(static function () use ($group, $student): void {
             $group->students()->syncWithoutDetaching([

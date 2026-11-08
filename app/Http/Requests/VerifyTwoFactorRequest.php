@@ -37,6 +37,7 @@ class VerifyTwoFactorRequest extends FormRequest
     {
         return [
             'user_id' => ['sometimes', 'integer', 'exists:acs_users,id'],
+            'email' => ['sometimes', 'string', 'email:rfc', 'max:150'],
             'code' => ['required', 'digits:6'],
         ];
     }

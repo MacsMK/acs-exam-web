@@ -35,6 +35,16 @@ return [
         'timeout' => (int) env('FCM_TIMEOUT', 10),
     ],
 
+    'ai' => [
+        'driver' => env('AI_EVALUATOR_DRIVER', 'gemini'),
+    ],
+
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY', env('AI_API_KEY')),
+        'model' => env('GEMINI_MODEL', 'gemini-1.5-flash'),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 15),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

@@ -20,6 +20,9 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Contracts\AiEvaluatorContract;
+use App\Events\ExamAttemptIncidentReported;
+use App\Events\ExamAttemptStarted;
+use App\Events\ExamAttemptSubmitted;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
 use App\Models\QuestionParaphrase;
@@ -92,6 +95,16 @@ class AttemptService
         // Solo el primer inicio de cada alumno cuenta; reanudar no avisa.
         if ($attempt->wasRecentlyCreated) {
             $this->examNotifications->examStarted($exam, $attempt);
+
+            $studentUser = $attempt->relationLoaded('student') ? $attempt->student : $attempt->student()->first();
+            ExamAttemptStarted::dispatch(
+                (int) $exam->id,
+                (int) $attempt->id,
+                (int) $student->id,
+                $studentUser ? $studentUser->full_name : 'Estudiante #' . $student->id,
+                now()->format('H:i:s'),
+                'in_progress'
+            );
         }
 
         return $attempt;
@@ -223,8 +236,10 @@ class AttemptService
             );
 
         DB::transaction(static function () use ($attempt, $examQuestion, $graded, $answerPayload): void {
+            $lockedAttempt = StudentAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+
             StudentAnswer::updateOrCreate(
-                ['student_attempt_id' => $attempt->id, 'exam_question_id' => $examQuestion->id],
+                ['student_attempt_id' => $lockedAttempt->id, 'exam_question_id' => $examQuestion->id],
                 array_merge($graded, [
                     'answer_payload' => $answerPayload,
                     'answered_at' => now(),
@@ -232,10 +247,49 @@ class AttemptService
             );
 
             // No se puede regresar a una pregunta anterior aunque sobre tiempo (RW-20).
-            $attempt->increment('current_question_index');
+            $lockedAttempt->increment('current_question_index');
         });
 
         return $isLate;
+    }
+
+    /**
+     * Registra un incidente de sospecha anti-trampa, incrementa el contador
+     * y emite el evento en vivo por WebSockets Reverb (RW-12, RW-16, ADR-019).
+     */
+    public function reportIncident(StudentAttempt $attempt, string $incidentType, string $description = ''): StudentAttempt
+    {
+        $exam = $attempt->relationLoaded('exam') ? $attempt->exam : $attempt->exam()->first();
+        $student = $attempt->relationLoaded('student') ? $attempt->student : $attempt->student()->first();
+
+        $isCancelled = false;
+        if ($attempt->status === 'in_progress') {
+            $attempt->increment('incidents_count');
+            $attempt->refresh();
+
+            if ($exam && $attempt->incidents_count > $exam->max_allowed_incidents) {
+                $attempt->update([
+                    'status' => 'cancelled_by_incident',
+                    'submitted_at' => now(),
+                    'final_score' => 0.0,
+                ]);
+                $isCancelled = true;
+            }
+        }
+
+        ExamAttemptIncidentReported::dispatch(
+            (int) $attempt->exam_id,
+            (int) $attempt->id,
+            (int) $attempt->student_id,
+            $student ? $student->full_name : 'Estudiante #' . $attempt->student_id,
+            $incidentType,
+            $description,
+            (int) $attempt->incidents_count,
+            now()->format('H:i:s'),
+            $isCancelled
+        );
+
+        return $attempt;
     }
 
     public function submitFinal(StudentAttempt $attempt): StudentAttempt
@@ -273,6 +327,17 @@ class AttemptService
         });
 
         $this->examNotifications->attemptClosed($submitted);
+
+        $studentUser = $submitted->relationLoaded('student') ? $submitted->student : $submitted->student()->first();
+        ExamAttemptSubmitted::dispatch(
+            (int) $submitted->exam_id,
+            (int) $submitted->id,
+            (int) $submitted->student_id,
+            $studentUser ? $studentUser->full_name : 'Estudiante #' . $submitted->student_id,
+            now()->format('H:i:s'),
+            $submitted->final_score !== null ? (float) $submitted->final_score : null,
+            (string) $submitted->status
+        );
 
         return $submitted;
     }

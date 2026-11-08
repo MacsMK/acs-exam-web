@@ -20,6 +20,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Scopes\TenantTeacherScope;
+use Illuminate\Database\Eloquent\Attributes\ScopedBy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -31,8 +33,22 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * @package App\Models
  */
+#[ScopedBy([TenantTeacherScope::class])]
 class Exam extends Model
 {
+    /**
+     * Resuelve el enlace de ruta sin scopes globales para permitir que la capa de
+     * políticas/controlador emita 403 Forbidden ante intentos de IDOR (MPW-V2 §6.6).
+     *
+     * @param mixed $value
+     * @param string|null $field
+     * @return Model|null
+     */
+    public function resolveRouteBinding($value, $field = null): ?Model
+    {
+        return $this->withoutGlobalScopes()->where($field ?? $this->getRouteKeyName(), $value)->first();
+    }
+
     /**
      * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4).
      *

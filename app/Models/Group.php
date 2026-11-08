@@ -26,6 +26,8 @@ namespace App\Models;
 
 use RuntimeException;
 
+use App\Models\Scopes\TenantTeacherScope;
+use Illuminate\Database\Eloquent\Attributes\ScopedBy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -38,8 +40,22 @@ use Illuminate\Support\Str;
  *
  * @package App\Models
  */
+#[ScopedBy([TenantTeacherScope::class])]
 class Group extends Model
 {
+    /**
+     * Resuelve el enlace de ruta sin scopes globales para permitir que la capa de
+     * políticas/controlador emita 403 Forbidden ante intentos de IDOR (MPW-V2 §6.6).
+     *
+     * @param mixed $value
+     * @param string|null $field
+     * @return Model|null
+     */
+    public function resolveRouteBinding($value, $field = null): ?Model
+    {
+        return $this->withoutGlobalScopes()->where($field ?? $this->getRouteKeyName(), $value)->first();
+    }
+
     /**
      * Cota máxima de intentos para generar un folio aleatorio sin colisión (MPW-V2 §5.2.1).
      */

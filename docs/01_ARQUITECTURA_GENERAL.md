@@ -33,8 +33,9 @@ todo, la lógica de negocio (ver sección 4).
 | Base de datos | PostgreSQL (15 en Docker/Sail, o la que tengas local) |
 | Autenticación API | Laravel Sanctum ^4.0 (tokens personales) |
 | Autenticación web | Sesión propia (`AuthService` + `LoginController`/`RegisterController`, **no** Fortify — ver `04_DECISIONES_ADR.md`) |
-| WebSockets | Laravel Reverb ^1.0 (instalado y el contenedor corre; todavía sin ninguna funcionalidad que emita eventos — ver ADR) |
+| WebSockets | Laravel Reverb ^1.0 (activo y operativo: monitoreo docente en vivo de exámenes, eventos anti-trampa y entregas en tiempo real — ADR-039) |
 | Entorno de desarrollo | Laravel Sail (Docker) — `compose.yaml` en la raíz, 3 servicios: `laravel.test`, `pgsql`, `reverb` |
+| Inteligencia Artificial | Google Gemini 1.5 Flash API con esquema JSON estructurado, minimización LFPDPPP y fallback resiliente a MockAiEvaluator (ADR-038) |
 | Frontend del panel web | Blade + Tailwind CSS y Alpine.js **por CDN** (sin Node/Vite ni paso de build) |
 | Testing | PHPUnit ^12 vía `php artisan test` |
 | CI | GitHub Actions (`.github/workflows/ci.yml`) — instala con Composer, migra con `--seed` sobre un contenedor `postgres:16`, corre la suite completa en cada push |
@@ -134,7 +135,7 @@ resources/views/                Blade del panel web (Tailwind/Alpine por CDN, pa
 routes/
   web.php                       Panel docente + flujo alumno de prueba
   api.php                       API v1 para Flutter
-  channels.php                  Canales de Reverb (infraestructura, sin uso funcional aún)
+  channels.php                  Canales privados de Reverb (monitoreo docente en vivo `exam.{examId}`)
 compose.yaml                    Laravel Sail: laravel.test + pgsql + reverb
 .github/workflows/ci.yml        CI: composer install + migrate --seed + test, en cada push
 docs/                           Esta carpeta
@@ -179,8 +180,8 @@ del lado de Flutter, solo consumirse.
 - `03_BACKEND_Y_FRONTEND.md` — rutas, middleware, vistas Blade y el sistema
   de diseño `acode-*` en detalle.
 - `04_DECISIONES_ADR.md` — por qué se tomó cada decisión que se desvía del
-  manual (Laravel 13 vs 11, Fortify diferido, Sail, Reverb sin uso
-  funcional, etc.), con su justificación, incluyendo las decisiones del
+  manual (Laravel 13 vs 11, Fortify diferido, Sail, Reverb en tiempo real,
+  evaluador de IA Google Gemini, etc.), con su justificación, incluyendo las decisiones del
   contrato de API v1 frente a la app móvil (ADR-009 a ADR-014).
 - `README.md` (raíz del repo) — cómo levantar el proyecto (con o sin
   Docker), credenciales de demo, flujo sugerido para una demostración.

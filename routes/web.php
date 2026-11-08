@@ -17,13 +17,17 @@ use App\Http\Controllers\AttemptController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EvaluationPeriodController;
 use App\Http\Controllers\ExamController;
+use App\Http\Controllers\ExamMonitorController;
 use App\Http\Controllers\GroupController;
+use App\Http\Controllers\LandingController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\StudentExamController;
+use App\Http\Controllers\TeacherReviewController;
 use Illuminate\Support\Facades\Route;
 
-Route::redirect('/', '/login');
+Route::get('/', [LandingController::class, 'index'])->name('landing');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('register/docente', [RegisterController::class, 'showTeacherForm'])->name('auth.register.teacher.show');
@@ -32,10 +36,10 @@ Route::middleware('guest')->group(function (): void {
     Route::post('register/alumno', [RegisterController::class, 'storeStudent'])->name('auth.register.student.store');
 
     Route::get('login', [LoginController::class, 'showLoginForm'])->name('auth.login.show');
-    Route::post('login', [LoginController::class, 'login'])->name('auth.login.store');
+    Route::post('login', [LoginController::class, 'login'])->middleware('throttle:10,1')->name('auth.login.store');
 
     Route::get('verificar-codigo/{user}', [LoginController::class, 'showTwoFactorForm'])->name('auth.verify-2fa.show');
-    Route::post('verificar-codigo', [LoginController::class, 'verifyTwoFactor'])->name('auth.verify-2fa.store');
+    Route::post('verificar-codigo', [LoginController::class, 'verifyTwoFactor'])->middleware('throttle:10,1')->name('auth.verify-2fa.store');
 });
 
 Route::middleware('auth')->group(function (): void {
@@ -46,6 +50,11 @@ Route::middleware('auth')->group(function (): void {
     Route::middleware('role:teacher')->group(function (): void {
         Route::resource('groups', GroupController::class)->only(['index', 'create', 'store', 'show']);
         Route::post('groups/{group}/cerrar', [GroupController::class, 'close'])->name('groups.close');
+        Route::get('groups/{group}/periodos', [EvaluationPeriodController::class, 'index'])->name('groups.periods.index');
+        Route::post('groups/{group}/periodos', [EvaluationPeriodController::class, 'store'])->name('groups.periods.store');
+        Route::get('groups/{group}/periodos/{period}/sabana', [EvaluationPeriodController::class, 'gradebook'])->name('groups.periods.gradebook');
+        Route::post('groups/{group}/periodos/{period}/sabana', [EvaluationPeriodController::class, 'saveGradebook'])->name('groups.periods.gradebook.save');
+        Route::get('groups/{group}/periodos/{period}/sabana/export', [EvaluationPeriodController::class, 'exportGradebook'])->name('groups.periods.gradebook.export');
 
         Route::get('questions/template/csv', [QuestionController::class, 'downloadTemplate'])->name('questions.template.csv');
         Route::post('questions/import', [QuestionController::class, 'import'])->name('questions.import');
@@ -59,6 +68,10 @@ Route::middleware('auth')->group(function (): void {
         Route::post('exams/{exam}/apartados', [ExamController::class, 'storeSection'])->name('exams.sections.store');
         Route::post('exams/{exam}/reactivos/{examQuestion}/nuevo-sorteo', [ExamController::class, 'reshuffleQuestion'])->name('exams.questions.reshuffle');
         Route::post('exams/{exam}/publicar', [ExamController::class, 'publish'])->name('exams.publish');
+        Route::get('exams/{exam}/monitoreo', [ExamMonitorController::class, 'show'])->name('exams.monitor');
+        Route::get('exams/{exam}/revision', [TeacherReviewController::class, 'index'])->name('exams.revision.index');
+        Route::get('exams/{exam}/revision/{attempt}', [TeacherReviewController::class, 'show'])->name('exams.revision.show');
+        Route::post('exams/{exam}/revision/{attempt}', [TeacherReviewController::class, 'update'])->name('exams.revision.update');
     });
 
     Route::middleware('role:student')->group(function (): void {

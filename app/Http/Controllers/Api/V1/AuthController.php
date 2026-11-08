@@ -105,11 +105,15 @@ class AuthController extends Controller
     {
         $code = $request->string('code')->toString();
 
-        $user = User::where('two_factor_code', $code)
+        $query = User::where('two_factor_code', $code)
             ->where('two_factor_expires_at', '>', now())
-            ->whereIn('role', ['teacher', 'student'])
-            ->latest('two_factor_expires_at')
-            ->first();
+            ->whereIn('role', ['teacher', 'student']);
+
+        if ($request->filled('email')) {
+            $query->where('email', $request->string('email')->toString());
+        }
+
+        $user = $query->latest('two_factor_expires_at')->first();
 
         if ($user === null) {
             throw ValidationException::withMessages(['code' => ['El código es inválido o expiró. Solicita uno nuevo.']]);

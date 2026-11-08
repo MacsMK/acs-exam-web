@@ -111,16 +111,13 @@ class AttemptController extends Controller
     public function incidents(AttemptIncidentStoreRequest $request, Exam $exam): JsonResponse
     {
         $attempt = $this->attemptForUser($exam, $request->user());
-        $request->validated();
+        $data = $request->validated();
 
-        if ($attempt->status === 'in_progress') {
-            $attempt->increment('incidents_count');
-            $attempt->refresh();
-
-            if ($attempt->incidents_count > $exam->max_allowed_incidents) {
-                $attempt->update(['status' => 'cancelled_by_incident', 'submitted_at' => now()]);
-            }
-        }
+        $this->attemptService->reportIncident(
+            $attempt,
+            (string) ($data['incident_type'] ?? 'unknown'),
+            (string) ($data['description'] ?? '')
+        );
 
         return ApiResponse::success(null, 'Incidente registrado.');
     }

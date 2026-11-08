@@ -418,6 +418,13 @@ A partir del Sprint 2 y Sprint 3, las decisiones de arquitectura se gestionan me
   - [ADR-031](adrs/ADR-031_Registro_Web_con_Aviso_de_Privacidad_Versionado_y_Sesion_2FA_Pendiente.md): Registro Web con Aviso de Privacidad Versionado, Validaciones Unificadas y Sesión 2FA Pendiente (`privacy_notice_id`, `pending_2fa_user_id`).
   - [ADR-034](adrs/ADR-034_Aviso_de_Privacidad_Publico_para_el_Registro_Movil.md): Aviso de Privacidad Público para el Registro desde la App Móvil (`GET /api/v1/privacy-notice/current`, `RF-AUT-011`).
 
+- **Bloque IV (Sprint 4 — Fase 1, Fase 2 y Fase 4: Calificaciones, SaaS, IA y Tiempo Real):**
+  - [ADR-035](adrs/ADR-035_Periodos_Evaluacion_Sabana_Notas_y_Recoteje_Docente.md): Periodos de Evaluación, Sábana de Notas Web y Recoteje Docente de IA (`RF-CAL-001..027`, `RF-EVA-009`, `RF-IAR-002`).
+  - [ADR-036](adrs/ADR-036_Exportacion_Sabanas_Calificaciones_Excel.md): Exportación de Sábanas de Calificaciones a Excel (.xlsx) y Representación Normativa (`RF-REP-014`, `RF-REP-015`, `RF-CAL-021`, `RW-28`, `RW-38`).
+  - [ADR-037](adrs/ADR-037_Servicio_Transaccional_Limites_Cuotas_SaaS.md): Servicio Transaccional de Límites y Cuotas SaaS y Regla Freemium Acumulada (`RF-SUS-001..015`, `RF-SUS-010`, `RW-01..04`, `RNF-SEG-003`).
+  - [ADR-038](adrs/ADR-038_Integracion_Gemini_15_Flash_y_Evaluacion_Semantica_IA.md): Integración de Google Gemini 1.5 Flash para Evaluación Semántica con Privacidad LFPDPPP y Fallback Resiliente (`RF-EVA-004`, `RF-EVA-005`, `RF-IAR-002`, `RNF-PRI-001`, `RNF-CON-002`).
+  - [ADR-039](adrs/ADR-039_Monitoreo_En_Vivo_WebSockets_Laravel_Reverb_y_Eventos_Examen.md): Monitoreo Docente en Vivo con WebSockets (Laravel Reverb), Canales Privados y Detección de Incidentes Anti-Trampa (`RW-12`, `RW-16`, `RNF-CON-001`, `RNF-CON-002`, `RNF-SEG-004`).
+
 Consulta el [Catálogo Maestro de ADRs en `docs/adrs/README.md`](adrs/README.md) para el detalle técnico completo de cada decisión.
 
 ---

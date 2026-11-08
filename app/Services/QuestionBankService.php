@@ -39,7 +39,8 @@ use Illuminate\Validation\ValidationException;
 class QuestionBankService
 {
     public function __construct(
-        private readonly QuestionRepositoryInterface $questionRepository
+        private readonly QuestionRepositoryInterface $questionRepository,
+        private readonly SubscriptionLimitService $subscriptionLimitService,
     ) {
     }
 
@@ -78,6 +79,8 @@ class QuestionBankService
      */
     public function createQuestion(User $teacher, array $data): Question
     {
+        $this->subscriptionLimitService?->ensureCanCreateQuestions($teacher, 1);
+
         return DB::transaction(function () use ($teacher, $data): Question {
             $questionable = $this->createQuestionableVariant((string) $data['question_type'], $data);
 

@@ -21,14 +21,17 @@ use App\Models\Exam;
 use App\Models\ExamQuestion;
 use App\Services\ExamAssemblyService;
 use App\Services\ExamNotificationService;
+use App\Services\SubscriptionLimitService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class ExamController extends Controller
 {
-    public function __construct(private readonly ExamAssemblyService $assemblyService)
-    {
+    public function __construct(
+        private readonly ExamAssemblyService $assemblyService,
+        private readonly SubscriptionLimitService $subscriptionLimitService,
+    ) {
     }
 
     public function index(Request $request): View
@@ -47,6 +50,8 @@ class ExamController extends Controller
 
     public function store(ExamStoreRequest $request): RedirectResponse
     {
+        $this->subscriptionLimitService?->ensureCanCreateExam($request->user());
+
         $exam = $this->assemblyService->createExam($request->user(), $request->validated());
 
         return redirect()->route('exams.assemble', $exam)->with('status', 'Examen creado. Ahora arma los apartados.');
@@ -93,6 +98,8 @@ class ExamController extends Controller
     public function publish(Exam $exam, ExamNotificationService $notifications): RedirectResponse
     {
         $this->authorizeExam($exam);
+
+        $this->subscriptionLimitService?->ensureCanPublishExam(request()->user(), $exam);
 
         $questionsCount = $exam->examQuestions()->count();
         abort_if($questionsCount === 0, 422, 'El examen no tiene reactivos todavía.');
