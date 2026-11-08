@@ -16,6 +16,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\AuditLog;
 use App\Models\Exam;
 use App\Models\Group;
 use App\Models\StudentAttempt;
@@ -31,6 +32,7 @@ class GroupEnrollmentService
 {
     public function __construct(
         private readonly SubscriptionLimitService $subscriptionLimitService,
+        private readonly AttemptService $attemptService,
     ) {
     }
 
@@ -125,6 +127,56 @@ class GroupEnrollmentService
         }
 
         return $group;
+    }
+
+    /**
+     * El alumno abandona un grupo al que pertenece (RF-GRU-012). La salida se
+     * rechaza mientras tenga un intento de examen en curso asociado al grupo
+     * (RF-GRU-017) y no finaliza ese intento. Al completarse pierde la
+     * pertenencia y, con ella, el acceso a los recursos y resultados del
+     * grupo; los intentos y calificaciones se conservan como evidencia
+     * académica (ADR-036) y la salida queda en la bitácora de auditoría.
+     *
+     * @throws ValidationException Si el alumno no pertenece al grupo.
+     * @throws DomainException     Si tiene un intento en curso en el grupo.
+     */
+    public function leaveGroup(User $student, Group $group): void
+    {
+        $belongs = $group->students()->where('acs_users.id', $student->id)->exists();
+
+        if (! $belongs) {
+            throw ValidationException::withMessages([
+                'group' => ['No perteneces a este grupo.'],
+            ]);
+        }
+
+        $hasAttemptInProgress = $group->studentAttempts()
+            ->where('student_id', $student->id)
+            ->where('status', 'in_progress')
+            ->with('exam')
+            ->get()
+            ->contains(fn (StudentAttempt $attempt): bool => $this->attemptService->isInProgress($attempt));
+
+        if ($hasAttemptInProgress) {
+            throw new DomainException(
+                'No puedes abandonar el grupo mientras tengas un examen en curso. '
+                .'Podrás hacerlo cuando ese intento haya finalizado.'
+            );
+        }
+
+        DB::transaction(static function () use ($group, $student): void {
+            $group->students()->detach($student->id);
+
+            AuditLog::create([
+                'user_id' => $student->id,
+                'action' => 'group.left',
+                'auditable_type' => Group::class,
+                'auditable_id' => $group->id,
+                'old_values' => ['student_id' => $student->id, 'group_id' => $group->id],
+                'ip_address' => request()->ip(),
+                'user_agent' => mb_substr((string) request()->userAgent(), 0, 255),
+            ]);
+        });
     }
 
     /**

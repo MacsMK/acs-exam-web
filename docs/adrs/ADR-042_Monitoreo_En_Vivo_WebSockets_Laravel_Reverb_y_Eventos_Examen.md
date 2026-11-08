@@ -1,4 +1,4 @@
-# ADR-039 — Monitoreo Docente en Vivo con WebSockets (Laravel Reverb), Canales Privados y Detección de Incidentes Anti-Trampa (`RW-12`, `RW-16`, `RNF-CON-001`, `RNF-CON-002`, `RNF-SEG-004`)
+# ADR-042 — Monitoreo Docente en Vivo con WebSockets (Laravel Reverb), Canales Privados y Detección de Incidentes Anti-Trampa (`RW-12`, `RW-16`, `RNF-CON-001`, `RNF-CON-002`, `RNF-SEG-004`)
 
 > **Estado:** Aceptado  
 > **Fecha:** 08 de Noviembre de 2026  

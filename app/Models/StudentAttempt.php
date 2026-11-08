@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -80,5 +81,21 @@ class StudentAttempt extends Model
     public function answers(): HasMany
     {
         return $this->hasMany(StudentAnswer::class);
+    }
+
+    /**
+     * Limita los intentos a los de grupos a los que el alumno pertenece hoy.
+     * Al salir de un grupo (RF-GRU-012) sus resultados dejan de ser visibles
+     * para él, pero se conservan como evidencia académica (ADR-036) y
+     * reaparecen si vuelve a unirse.
+     *
+     * @param Builder<StudentAttempt> $query
+     * @return Builder<StudentAttempt>
+     */
+    public function scopeInCurrentGroupsOfStudent(Builder $query, int $studentId): Builder
+    {
+        return $query->whereIn('group_id', static function ($sub) use ($studentId): void {
+            $sub->select('group_id')->from('acs_group_student')->where('student_id', $studentId);
+        });
     }
 }

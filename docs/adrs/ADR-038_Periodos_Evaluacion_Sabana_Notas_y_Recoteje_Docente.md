@@ -1,4 +1,4 @@
-# ADR-035 — Periodos de Evaluación, Sábana de Notas Web y Recoteje Docente de IA (`RF-CAL-001..027`, `RF-EVA-009`, `RF-IAR-002`)
+# ADR-038 — Periodos de Evaluación, Sábana de Notas Web y Recoteje Docente de IA (`RF-CAL-001..027`, `RF-EVA-009`, `RF-IAR-002`)
 
 > **Estado:** Aceptado  
 > **Fecha:** 08 de Noviembre de 2026  

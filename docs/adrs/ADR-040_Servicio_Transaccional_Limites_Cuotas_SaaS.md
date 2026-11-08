@@ -1,4 +1,4 @@
-# ADR-037 — Servicio Transaccional de Límites y Cuotas SaaS y Regla Freemium Acumulada (`RF-SUS-001..015`, `RF-SUS-010`, `RW-01..04`, `RNF-SEG-003`)
+# ADR-040 — Servicio Transaccional de Límites y Cuotas SaaS y Regla Freemium Acumulada (`RF-SUS-001..015`, `RF-SUS-010`, `RW-01..04`, `RNF-SEG-003`)
 
 > **Estado:** Aceptado  
 > **Fecha:** 08 de Noviembre de 2026  

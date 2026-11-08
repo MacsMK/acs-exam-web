@@ -1,4 +1,4 @@
-# ADR-038 — Integración de Google Gemini 1.5 Flash para Evaluación Semántica de Reactivos con Privacidad LFPDPPP y Fallback Resiliente (`RF-EVA-004`, `RF-EVA-005`, `RF-IAR-002`, `RNF-PRI-001`, `RNF-CON-002`)
+# ADR-041 — Integración de Google Gemini 1.5 Flash para Evaluación Semántica de Reactivos con Privacidad LFPDPPP y Fallback Resiliente (`RF-EVA-004`, `RF-EVA-005`, `RF-IAR-002`, `RNF-PRI-001`, `RNF-CON-002`)
 
 > **Estado:** Aceptado  
 > **Fecha:** 08 de Noviembre de 2026  

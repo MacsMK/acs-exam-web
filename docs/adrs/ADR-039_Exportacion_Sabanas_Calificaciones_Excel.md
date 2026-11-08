@@ -1,4 +1,4 @@
-# ADR-036 — Exportación de Sábanas de Calificaciones a Excel (.xlsx) y Representación Normativa (`RF-REP-014`, `RF-REP-015`, `RF-CAL-021`, `RW-28`, `RW-38`)
+# ADR-039 — Exportación de Sábanas de Calificaciones a Excel (.xlsx) y Representación Normativa (`RF-REP-014`, `RF-REP-015`, `RF-CAL-021`, `RW-28`, `RW-38`)
 
 > **Estado:** Aceptado  
 > **Fecha:** 08 de Noviembre de 2026  
