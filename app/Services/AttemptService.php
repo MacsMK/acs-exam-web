@@ -471,6 +471,17 @@ class AttemptService
         return array_merge($basePayload, $itemPayload);
     }
 
+    /**
+     * Enunciado que el estudiante vio en su intento (paráfrasis activa si la
+     * hay), para mostrarlo igual en la revisión posterior (RF-REP-005).
+     */
+    public function visibleStem(ExamQuestion $examQuestion, ?StudentAttempt $attempt = null): string
+    {
+        $paraphrase = $this->resolveActiveParaphrase($examQuestion, $attempt);
+
+        return $paraphrase !== null ? $paraphrase->stem : (string) $examQuestion->question->stem;
+    }
+
     private function resolveActiveParaphrase(ExamQuestion $examQuestion, ?StudentAttempt $attempt): ?QuestionParaphrase
     {
         $question = $examQuestion->question;

@@ -62,6 +62,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
         Route::get('grades', [GradeController::class, 'index'])->name('grades.index');
         Route::get('grades/statistics', [GradeController::class, 'statistics'])->name('grades.statistics');
+        Route::get('grades/{attempt}', [GradeController::class, 'show'])->whereNumber('attempt')->name('grades.show');
+        Route::get('grades/{attempt}/review', [GradeController::class, 'review'])->whereNumber('attempt')->name('grades.review');
 
         Route::post('devices', [DeviceController::class, 'store'])->name('devices.store');
     });

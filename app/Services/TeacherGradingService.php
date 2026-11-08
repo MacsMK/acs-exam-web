@@ -23,6 +23,10 @@ use Illuminate\Support\Collection;
 
 class TeacherGradingService
 {
+    public function __construct(private readonly StudentResultService $studentResults)
+    {
+    }
+
     /**
      * Devuelve el listado paginado de calificaciones sin N+1 y preservando el
      * contrato exacto esperado por la aplicación móvil.
@@ -36,7 +40,9 @@ class TeacherGradingService
         string $path = '',
         array $query = [],
     ): LengthAwarePaginator {
-        $rows = $this->gradeRowsForUser($user);
+        $rows = $user->role === 'teacher'
+            ? $this->gradeRowsForUser($user)
+            : $this->studentListRows($user);
 
         return new LengthAwarePaginator(
             $rows->forPage($page, $perPage)->values(),
@@ -45,6 +51,37 @@ class TeacherGradingService
             $page,
             ['path' => $path, 'query' => $query],
         );
+    }
+
+    /**
+     * Listado del alumno: calificaciones publicadas y, sin dato alguno de
+     * calificación, los intentos con evaluación pendiente (RF-REP-002),
+     * del más reciente al más antiguo.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function studentListRows(User $student): Collection
+    {
+        $published = StudentAttempt::where('student_id', $student->id)
+            ->inCurrentGroupsOfStudent($student->id)
+            ->whereNotNull('final_score')
+            ->with('exam')
+            ->get()
+            ->map(fn (StudentAttempt $attempt): array => [
+                'submitted_at' => $attempt->submitted_at,
+                'row' => $this->formatPayload(
+                    (string) $attempt->id,
+                    $attempt->exam->title,
+                    (float) $attempt->final_score,
+                    $attempt->exam->grading_scale,
+                ),
+            ]);
+
+        return $published
+            ->concat($this->studentResults->pendingRowsForStudent($student))
+            ->sortByDesc(fn (array $entry) => $entry['submitted_at']?->getTimestamp() ?? 0)
+            ->pluck('row')
+            ->values();
     }
 
     /**
@@ -111,6 +148,7 @@ class TeacherGradingService
             'score' => round($score, 2),
             'weight' => 100.0,
             'is_passing' => $score >= $passingThreshold,
+            'status' => 'published',
         ];
     }
 }

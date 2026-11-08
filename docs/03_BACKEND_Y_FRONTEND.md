@@ -60,8 +60,10 @@ POST /v1/exams/take             { exam_id }                → { question, attem
 POST /v1/exams/{exam}/answers   { question_id, ...payload según tipo } → siguiente pregunta o null
 POST /v1/exams/{exam}/incidents { incident_type }
 
-GET  /v1/grades                            (paginado, 20/página, forma nativa de ->paginate())
+GET  /v1/grades                            (paginado, 20/página, forma nativa de ->paginate(); cada fila lleva status published|pending, ADR-037)
 GET  /v1/grades/statistics
+GET  /v1/grades/{attempt}                  (solo alumno dueño) → pendiente, o puntos por apartado/pregunta + teacher_comments (ADR-037)
+GET  /v1/grades/{attempt}/review           (solo alumno dueño) → respuestas y soluciones; 403 hasta publicar y cerrar el acceso (ADR-037)
 
 POST /v1/devices                { token }   (ver ADR-013, platform fijo "android")
 ```
