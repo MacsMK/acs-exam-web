@@ -18,7 +18,7 @@
 
             {{-- Cronómetro Alpine.js con aviso visual rojo en <=10s y auto-envío SweetAlert2 (ADR-020) --}}
             <x-exam.timer
-                :seconds="(int) $current['time_limit_seconds']"
+                :seconds="(int) $current['remaining_seconds']"
                 formRef="answerForm"
             />
         </div>
