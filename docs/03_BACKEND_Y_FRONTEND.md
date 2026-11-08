@@ -39,6 +39,7 @@ POST /v1/auth/register/teacher
 POST /v1/auth/register/student
 POST /v1/auth/login
 POST /v1/auth/two-factor        { code }  → { token, role }  (sin user_id, ver ADR-010)
+POST /v1/auth/two-factor/resend { email }  → 200 uniforme; 429 si no pasaron 60 s (ADR-035)
 
 GET  /v1/auth/me
 POST /v1/auth/logout
@@ -51,6 +52,7 @@ GET  /v1/groups                            → [{ id, name, folio, students_coun
 POST /v1/groups/join            { folio } | { qr_payload }
 POST /v1/groups/verify          { folio } | { qr_payload }
 GET  /v1/groups/{group}/students           (solo docente)  → [{ id, name }]
+POST /v1/groups/{group}/leave              (solo alumno)   → 409 con un intento en curso (ADR-036)
 
 GET  /v1/exams                             → [{ id, title }]  (según rol)
 GET  /v1/exams/{exam}/progress             (solo docente)  → { answered_count, total_count }
@@ -58,8 +60,10 @@ POST /v1/exams/take             { exam_id }                → { question, attem
 POST /v1/exams/{exam}/answers   { question_id, ...payload según tipo } → siguiente pregunta o null
 POST /v1/exams/{exam}/incidents { incident_type }
 
-GET  /v1/grades                            (paginado, 20/página, forma nativa de ->paginate())
+GET  /v1/grades                            (paginado, 20/página, forma nativa de ->paginate(); cada fila lleva status published|pending, ADR-037)
 GET  /v1/grades/statistics
+GET  /v1/grades/{attempt}                  (solo alumno dueño) → pendiente, o puntos por apartado/pregunta + teacher_comments (ADR-037)
+GET  /v1/grades/{attempt}/review           (solo alumno dueño) → respuestas y soluciones; 403 hasta publicar y cerrar el acceso (ADR-037)
 
 POST /v1/devices                { token }   (ver ADR-013, platform fijo "android")
 ```

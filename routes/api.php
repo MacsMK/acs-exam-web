@@ -35,6 +35,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
     // adivinar por fuerza bruta.
     Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:30,1')->name('auth.login');
     Route::post('auth/two-factor', [AuthController::class, 'twoFactor'])->middleware('throttle:20,1')->name('auth.two-factor');
+    Route::post('auth/two-factor/resend', [AuthController::class, 'resendTwoFactor'])->middleware('throttle:10,1')->name('auth.two-factor.resend');
 
     // Aviso de privacidad vigente para quien aún no tiene sesión (RF-AUT-011:
     // consultarlo antes de registrarse). Solo lectura; ver ADR-034.
@@ -51,6 +52,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::post('groups/join', [GroupController::class, 'join'])->name('groups.join');
         Route::post('groups/verify', [GroupController::class, 'verify'])->name('groups.verify');
         Route::get('groups/{group}/students', [GroupController::class, 'students'])->name('groups.students');
+        Route::post('groups/{group}/leave', [GroupController::class, 'leave'])->name('groups.leave');
 
         Route::get('exams', [ExamController::class, 'index'])->name('exams.index');
         Route::get('exams/{exam}/progress', [ExamController::class, 'progress'])->name('exams.progress');
@@ -60,6 +62,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
         Route::get('grades', [GradeController::class, 'index'])->name('grades.index');
         Route::get('grades/statistics', [GradeController::class, 'statistics'])->name('grades.statistics');
+        Route::get('grades/{attempt}', [GradeController::class, 'show'])->whereNumber('attempt')->name('grades.show');
+        Route::get('grades/{attempt}/review', [GradeController::class, 'review'])->whereNumber('attempt')->name('grades.review');
 
         Route::post('devices', [DeviceController::class, 'store'])->name('devices.store');
     });

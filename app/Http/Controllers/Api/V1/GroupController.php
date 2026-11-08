@@ -10,7 +10,8 @@ declare(strict_types=1);
  * Ubicación:   app/Http/Controllers/Api/V1/GroupController.php
  * Descripción: api.v1.groups.* (MPM-V4 Tabla 12, MPW-V2 §6.1, §6.3) para la
  *              app móvil: listar grupos (según rol), unirse por folio o QR,
- *              verificar pertenencia por QR/folio y listar alumnos de un grupo.
+ *              verificar pertenencia por QR/folio, listar alumnos de un grupo
+ *              y salir de un grupo (alumno).
  * ============================================================================
  */
 
@@ -91,6 +92,20 @@ class GroupController extends Controller
         return ApiResponse::success(
             $students->map(fn ($student) => ['id' => (string) $student->id, 'name' => $student->full_name])->all(),
         );
+    }
+
+    /**
+     * api.v1.groups.leave (RF-GRU-012 y RF-GRU-017, ADR-036): el alumno
+     * abandona un grupo al que pertenece. Rechaza (409) si tiene un intento de
+     * examen en curso asociado al grupo.
+     */
+    public function leave(Request $request, Group $group): JsonResponse
+    {
+        abort_unless($request->user()->role === 'student', 403);
+
+        $this->groupEnrollmentService->leaveGroup($request->user(), $group);
+
+        return ApiResponse::success(null, 'Saliste del grupo.');
     }
 
     /**

@@ -186,6 +186,7 @@ class EloquentAttemptRepository implements AttemptRepositoryInterface
     {
         return StudentAttempt::query()
             ->where('student_id', $studentId)
+            ->inCurrentGroupsOfStudent($studentId)
             ->whereNotNull('final_score')
             ->with(['exam', 'group'])
             ->withCount(['answers'])
@@ -203,6 +204,7 @@ class EloquentAttemptRepository implements AttemptRepositoryInterface
     {
         return StudentAttempt::query()
             ->where('student_id', $studentId)
+            ->inCurrentGroupsOfStudent($studentId)
             ->whereNotNull('final_score')
             ->with(['exam', 'group'])
             ->withCount(['answers'])
