@@ -92,6 +92,30 @@ el código se muestra directamente en la pantalla de verificación (para
 poder probar sin bandeja de correo real) y además se escribe en
 `storage/logs/laravel.log`.
 
+### Datos orgánicos (opcional, para volumen realista)
+
+Si se necesita una base con más gente y nombres reales en español (acentos,
+nombres compuestos, dos apellidos) se puede sembrar, **además** de lo anterior:
+
+```bash
+php artisan db:seed --class=OrganicDataSeeder
+```
+
+Crea 3 docentes (`@docentes.acode-solutions.test`), 6 grupos y 30 alumnos
+(`@alumnos.acode-solutions.test`) repartidos entre los grupos; todos con la
+contraseña **`Demo1234`**, aviso de privacidad aceptado y teléfono de 10
+dígitos cuando lo tienen. Es idempotente: puede ejecutarse varias veces sin
+duplicar registros. No forma parte de `DatabaseSeeder` a propósito.
+
+### Pruebas de validación de campos
+
+`tests/Feature/Validation/FormRequestRulesTest.php` prueba, con casos
+parametrizados (`#[DataProvider]`, el equivalente PHP de `pytest.mark.parametrize`),
+las reglas reales de los `FormRequest`: límites exactos (100/101 caracteres,
+9/10/11 dígitos de teléfono, código de 6 dígitos), campos ausentes, formatos
+inválidos y que los tipos de incidente que envía la app móvil sigan aceptados.
+Se ejecutan con `php artisan test --filter=FormRequestRulesTest`.
+
 ## Flujo sugerido para la demo
 
 1. Entra como docente (`docente.demo@...`) → Dashboard → Grupos / Reactivos
