@@ -1,35 +1,127 @@
 @extends('layouts.app')
 
-@section('title', 'Nuevo grupo')
+@section('title', 'Crear grupo')
 
 @section('content')
-    <h1 class="text-2xl font-bold text-acode-primary mb-6">Nuevo grupo</h1>
+    <div class="mx-auto w-full max-w-5xl">
 
-    <div class="bg-white rounded-lg border border-slate-200 p-6 max-w-lg">
-        <form method="POST" action="{{ route('groups.store') }}" class="space-y-4">
-            @csrf
+        {{-- Título de la pantalla --}}
+        <h1 class="mb-8 text-3xl font-bold tracking-tight text-acode-primary">
+            Crear grupo
+        </h1>
 
-            <div>
-                <label class="block text-[0.8125rem] font-medium text-slate-800 mb-1">Nombre del grupo</label>
-                <input type="text" name="name" value="{{ old('name') }}" required maxlength="120"
-                       placeholder="Ej. Ingeniería de Software 5A"
-                       class="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech">
-            </div>
+        {{-- Formulario --}}
+        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
 
-            <div>
-                <label class="block text-[0.8125rem] font-medium text-slate-800 mb-1">Materia (opcional)</label>
-                <input type="text" name="subject" value="{{ old('subject') }}" maxlength="120"
-                       placeholder="Ej. Auditoría de Sistemas"
-                       class="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech">
-            </div>
+            <h2 class="mb-7 text-xl font-bold text-acode-primary">
+                Información del grupo
+            </h2>
 
-            <p class="text-xs text-slate-500">
-                Al crear el grupo se genera automáticamente un folio de acceso corto para que tus alumnos se unan.
-            </p>
+            <form
+                id="create-group-form"
+                method="POST"
+                action="{{ route('groups.store') }}"
+                class="space-y-6"
+            >
+                @csrf
 
-            <button type="submit" class="h-10 px-4 rounded-md bg-acode-primary text-white text-sm font-semibold hover:bg-[#0e1f36]">
-                Crear grupo
-            </button>
-        </form>
+                {{-- Nombre del grupo --}}
+                <div>
+                    <label
+                        for="name"
+                        class="mb-2 block text-sm font-semibold text-acode-primary"
+                    >
+                        Nombre del grupo
+                    </label>
+
+                    <input
+                        id="name"
+                        type="text"
+                        name="name"
+                        value="{{ old('name') }}"
+                        required
+                        maxlength="120"
+                        placeholder="Ej. Ingeniería de Software 5A"
+                        aria-invalid="{{ $errors->has('name') ? 'true' : 'false' }}"
+                        class="h-12 w-full rounded-lg border border-slate-300 px-4 text-sm text-slate-800 outline-none transition focus:border-acode-tech focus:ring-2 focus:ring-acode-tech/20"
+                    >
+
+                    @error('name')
+                        <p class="mt-2 text-sm text-acode-danger">
+                            {{ $message }}
+                        </p>
+                    @enderror
+                </div>
+
+                {{-- Materia --}}
+                <div>
+                    <label
+                        for="subject"
+                        class="mb-2 block text-sm font-semibold text-acode-primary"
+                    >
+                        Materia
+                        <span class="font-normal text-slate-500">(opcional)</span>
+                    </label>
+
+                    <input
+                        id="subject"
+                        type="text"
+                        name="subject"
+                        value="{{ old('subject') }}"
+                        maxlength="120"
+                        placeholder="Ej. Auditoría de Sistemas"
+                        aria-invalid="{{ $errors->has('subject') ? 'true' : 'false' }}"
+                        class="h-12 w-full rounded-lg border border-slate-300 px-4 text-sm text-slate-800 outline-none transition focus:border-acode-tech focus:ring-2 focus:ring-acode-tech/20"
+                    >
+
+                    @error('subject')
+                        <p class="mt-2 text-sm text-acode-danger">
+                            {{ $message }}
+                        </p>
+                    @enderror
+                </div>
+
+                {{-- Información del folio --}}
+                <div class="flex items-start gap-3 rounded-lg bg-teal-50 px-5 py-4 text-acode-primary">
+
+                    <svg
+                        class="mt-0.5 h-5 w-5 shrink-0 text-acode-accent"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        aria-hidden="true"
+                    >
+                        <circle cx="12" cy="12" r="10"/>
+                        <path stroke-linecap="round" d="M12 11v5m0-8h.01"/>
+                    </svg>
+
+                    <p class="text-sm font-medium leading-relaxed">
+                        El código de incorporación se generará automáticamente
+                        al guardar el grupo.
+                    </p>
+                </div>
+
+                {{-- Acciones --}}
+                <div class="flex flex-wrap items-center justify-end gap-3 pt-4">
+
+                    <x-unsaved-changes
+                        form-id="create-group-form"
+                        :cancel-url="route('groups.index')"
+                    />
+
+                    <button
+                        type="submit"
+                        class="inline-flex min-h-11 items-center justify-center rounded-lg bg-acode-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acode-tech"
+                    >
+                        Crear grupo
+                    </button>
+
+                </div>
+
+            </form>
+        </div>
+
     </div>
 @endsection

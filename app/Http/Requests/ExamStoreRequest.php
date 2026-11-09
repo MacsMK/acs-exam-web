@@ -6,9 +6,6 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-/**
- * Datos base de un examen (RW-19, RW-20, RW-21, RW-25, RW-26, RW-27).
- */
 class ExamStoreRequest extends FormRequest
 {
     public function authorize(): bool
@@ -16,23 +13,73 @@ class ExamStoreRequest extends FormRequest
         return $this->user()?->role === 'teacher';
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    protected function prepareForValidation(): void
+    {
+        $zonaHoraria = 'America/Mexico_City';
+
+        $fechas = [];
+
+        foreach (['starts_at', 'ends_at'] as $campo) {
+            $valor = $this->input($campo);
+
+            if (!is_string($valor) || $valor === '') {
+                continue;
+            }
+
+            try {
+                $fecha = \Carbon\Carbon::createFromFormat(
+                    '!Y-m-d\TH:i',
+                    $valor,
+                    $zonaHoraria
+                );
+
+                if ($fecha->format('Y-m-d\TH:i') !== $valor) {
+                    continue;
+                }
+
+                $fechas[$campo] = $fecha
+                    ->utc()
+                    ->format('Y-m-d\TH:i');
+            } catch (\Exception $e) {
+                // La validación rechazará las fechas inválidas.
+            }
+        }
+
+        $this->merge($fechas);
+    }
     public function rules(): array
     {
         return [
             'title' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string'],
-            'grading_scale' => ['required', 'in:0-10,0-100'],
-            'randomize_question_order' => ['sometimes', 'boolean'],
-            'result_visibility_mode' => ['required', 'in:final_score,estimated_score,objective_only_pending,hidden'],
-            'require_webcam' => ['sometimes', 'boolean'],
-            'max_allowed_incidents' => ['required', 'integer', 'min:0'],
-            'starts_at' => ['required', 'date'],
-            'ends_at' => ['required', 'date', 'after:starts_at'],
-            'group_ids' => ['nullable', 'array'],
-            'group_ids.*' => ['integer', 'exists:acs_groups,id'],
+
+            'starts_at' => [
+                'required',
+                'date_format:Y-m-d\TH:i',
+                'after:now',
+            ],
+
+            'ends_at' => [
+                'required',
+                'date_format:Y-m-d\TH:i',
+                'after:starts_at',
+            ],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'title.required' => 'Escribe el título del examen.',
+            'title.max' => 'El título no puede superar los 150 caracteres.',
+
+            'starts_at.required' => 'Selecciona la fecha y hora de inicio del examen.',
+            'starts_at.date_format' => 'La fecha u hora de inicio no tiene un formato válido.',
+            'starts_at.after' => 'La fecha y hora de inicio deben ser posteriores al momento actual.',
+
+            'ends_at.required' => 'Selecciona la fecha y hora de término del examen.',
+            'ends_at.date_format' => 'La fecha u hora de término no tiene un formato válido.',
+            'ends_at.after' => 'La fecha y hora de término deben ser posteriores al inicio del examen.',
         ];
     }
 }

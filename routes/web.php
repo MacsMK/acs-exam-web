@@ -46,6 +46,7 @@ Route::middleware('auth')->group(function (): void {
     Route::middleware('role:teacher')->group(function (): void {
         Route::resource('groups', GroupController::class)->only(['index', 'create', 'store', 'show']);
         Route::post('groups/{group}/cerrar', [GroupController::class, 'close'])->name('groups.close');
+        Route::post('groups/{group}/reabrir', [GroupController::class, 'reopen'])->name('groups.reopen');
 
         Route::resource('questions', QuestionController::class)->only(['index', 'create', 'store']);
         Route::post('questions/{question}/parafrasis', [QuestionController::class, 'storeParaphrase'])->name('questions.paraphrase.store');
@@ -53,15 +54,34 @@ Route::middleware('auth')->group(function (): void {
         Route::resource('exams', ExamController::class)->only(['index', 'create', 'store']);
         Route::get('exams/{exam}/armar', [ExamController::class, 'assemble'])->name('exams.assemble');
         Route::post('exams/{exam}/apartados', [ExamController::class, 'storeSection'])->name('exams.sections.store');
+        Route::post('exams/{exam}/propuesta', [ExamController::class, 'generateSectionProposal'])->name('exams.proposals.generate');
+        Route::post('exams/{exam}/propuesta/aceptar', [ExamController::class, 'acceptSectionProposal'])->name('exams.proposals.accept');
+        Route::post('exams/{exam}/propuesta/descartar', [ExamController::class, 'discardSectionProposal'])->name('exams.proposals.discard');
         Route::post('exams/{exam}/reactivos/{examQuestion}/nuevo-sorteo', [ExamController::class, 'reshuffleQuestion'])->name('exams.questions.reshuffle');
         Route::post('exams/{exam}/publicar', [ExamController::class, 'publish'])->name('exams.publish');
+        Route::get('/exams/{exam}/configuracion', [ExamController::class, 'configuration'])->name('exams.configuration');
+        Route::put('/exams/{exam}/configuracion', [ExamController::class, 'updateConfiguration'])->name('exams.configuration.update');
+        Route::get('/exams/{exam}/revision', [ExamController::class, 'review'])->name('exams.review');
+        Route::get('docente/proximamente/{section}', function (string $section) {
+            $sections = [
+                'revision' => 'Revisión',
+                'calificaciones' => 'Calificaciones',
+                'suscripcion' => 'Suscripción',
+                'creditos-ia' => 'Créditos de IA',
+                'perfil' => 'Mi perfil',
+                'aviso-privacidad' => 'Aviso de privacidad',
+            ];
+            abort_unless(array_key_exists($section, $sections), 404);
+            return view('teacher.coming-soon', [
+                'title' => $sections[$section],
+            ]);
+        })->name('teacher.coming-soon');
     });
 
     Route::middleware('role:student')->group(function (): void {
         Route::get('grupos/unirse', [StudentExamController::class, 'joinForm'])->name('student.groups.join.form');
         Route::post('grupos/unirse', [StudentExamController::class, 'join'])->name('student.groups.join');
         Route::get('mis-examenes', [StudentExamController::class, 'index'])->name('student.exams.index');
-
         Route::post('examenes/{exam}/iniciar', [AttemptController::class, 'start'])->name('attempts.start');
     });
 

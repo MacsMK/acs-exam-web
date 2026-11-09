@@ -3,6 +3,13 @@
 @section('title', 'Mis exámenes')
 
 @section('content')
+
+<a href="{{ route('dashboard') }}"
+   class="mb-5 inline-flex items-center gap-2 text-sm font-medium text-acode-tech hover:underline">
+    <span aria-hidden="true">←</span>
+    Volver a Inicio
+</a>
+
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-acode-primary">Mis exámenes</h1>
         <a href="{{ route('exams.create') }}" class="h-10 px-4 inline-flex items-center rounded-md bg-acode-primary text-white text-sm font-semibold hover:bg-[#0e1f36]">
