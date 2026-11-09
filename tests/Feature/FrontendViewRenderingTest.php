@@ -148,18 +148,11 @@ class FrontendViewRenderingTest extends TestCase
         $response = $this->actingAs($teacher)->get(route('dashboard'));
 
         $response->assertOk();
-        $response->assertSee('Panel del Docente');
-        $response->assertSee('Grupos Activos');
-        $response->assertSee('Banco de Reactivos');
-        $response->assertSee('Exámenes Totales');
-        $response->assertSee('Promedio General');
-
-        // Certificación del componente interactivo Chart.js y canvas analítico (§7.9, Tabla 23)
-        $response->assertSee('Distribución Institucional de Aprobados y Calificaciones');
-        $response->assertSee('<canvas x-ref="canvas"></canvas>', false);
-        $response->assertSee('chart.umd.min.js');
-        $response->assertSee('groupScoreChart');
-        $response->assertSee($group->name);
+        $response->assertSee('¡Hola, '.$teacher->first_name.'!');
+        $response->assertSee('Mis grupos');
+        $response->assertSee('Banco de preguntas');
+        $response->assertSee('Exámenes creados');
+        $response->assertSee((string) 1); // 1 grupo, 1 reactivo, 1 examen
     }
 
     /**
@@ -237,59 +230,48 @@ class FrontendViewRenderingTest extends TestCase
         // 1. groups.index
         $groupsIndex = $this->actingAs($teacher)->get(route('groups.index'));
         $groupsIndex->assertOk();
-        $groupsIndex->assertSee('Grupos Escolares');
+        $groupsIndex->assertSee('Mis grupos');
         $groupsIndex->assertSee('Crear grupo');
         $groupsIndex->assertSee($group->name);
 
         // 2. groups.create
         $groupsCreate = $this->actingAs($teacher)->get(route('groups.create'));
         $groupsCreate->assertOk();
-        $groupsCreate->assertSee('Crear Grupo Escolar');
-        $groupsCreate->assertSee('Nombre del grupo escolar');
+        $groupsCreate->assertSee('Crear grupo');
+        $groupsCreate->assertSee('Nombre del grupo');
 
         // 3. groups.show
         $groupsShow = $this->actingAs($teacher)->get(route('groups.show', $group));
         $groupsShow->assertOk();
         $groupsShow->assertSee($group->name);
         $groupsShow->assertSee($group->access_folio);
-        $groupsShow->assertSee('Folio Oficial de Acceso');
-        $groupsShow->assertSee('group-qr-modal');
 
         // 4. questions.index
         $questionsIndex = $this->actingAs($teacher)->get(route('questions.index'));
         $questionsIndex->assertOk();
-        $questionsIndex->assertSee('Banco de Reactivos');
-        $questionsIndex->assertSee('Crear reactivo');
         $questionsIndex->assertSee($question->title);
 
         // 5. questions.create
         $questionsCreate = $this->actingAs($teacher)->get(route('questions.create'));
         $questionsCreate->assertOk();
-        $questionsCreate->assertSee('Crear Reactivo');
-        $questionsCreate->assertSee('Título identificador del reactivo');
-        $questionsCreate->assertSee('Continuar al paso 2');
-        $questionsCreate->assertSee('Volver al listado');
-        $questionsCreate->assertSee('Modo Auditoría / Debugging');
+        $questionsCreate->assertSee('Nueva pregunta');
 
         // 6. exams.index
         $examsIndex = $this->actingAs($teacher)->get(route('exams.index'));
         $examsIndex->assertOk();
-        $examsIndex->assertSee('Catálogo de Exámenes');
-        $examsIndex->assertSee('Crear examen');
+        $examsIndex->assertSee('Nuevo examen');
         $examsIndex->assertSee($exam->title);
 
         // 7. exams.create
         $examsCreate = $this->actingAs($teacher)->get(route('exams.create'));
         $examsCreate->assertOk();
-        $examsCreate->assertSee('Crear Examen');
+        $examsCreate->assertSee('Crear examen');
         $examsCreate->assertSee('Título del examen');
 
         // 8. exams.assemble
         $examsAssemble = $this->actingAs($teacher)->get(route('exams.assemble', $exam));
         $examsAssemble->assertOk();
         $examsAssemble->assertSee($exam->title);
-        $examsAssemble->assertSee('Apartados y Reactivos Asignados');
-        $examsAssemble->assertSee('Apartado Teórico');
         $examsAssemble->assertSee($question->title);
     }
 

@@ -50,6 +50,7 @@ Route::middleware('auth')->group(function (): void {
     Route::middleware('role:teacher')->group(function (): void {
         Route::resource('groups', GroupController::class)->only(['index', 'create', 'store', 'show']);
         Route::post('groups/{group}/cerrar', [GroupController::class, 'close'])->name('groups.close');
+        Route::post('groups/{group}/reabrir', [GroupController::class, 'reopen'])->name('groups.reopen');
         Route::get('groups/{group}/periodos', [EvaluationPeriodController::class, 'index'])->name('groups.periods.index');
         Route::post('groups/{group}/periodos', [EvaluationPeriodController::class, 'store'])->name('groups.periods.store');
         Route::get('groups/{group}/periodos/{period}/sabana', [EvaluationPeriodController::class, 'gradebook'])->name('groups.periods.gradebook');
@@ -66,12 +67,32 @@ Route::middleware('auth')->group(function (): void {
         Route::resource('exams', ExamController::class)->only(['index', 'create', 'store']);
         Route::get('exams/{exam}/armar', [ExamController::class, 'assemble'])->name('exams.assemble');
         Route::post('exams/{exam}/apartados', [ExamController::class, 'storeSection'])->name('exams.sections.store');
+        Route::post('exams/{exam}/propuesta', [ExamController::class, 'generateSectionProposal'])->name('exams.proposals.generate');
+        Route::post('exams/{exam}/propuesta/aceptar', [ExamController::class, 'acceptSectionProposal'])->name('exams.proposals.accept');
+        Route::post('exams/{exam}/propuesta/descartar', [ExamController::class, 'discardSectionProposal'])->name('exams.proposals.discard');
         Route::post('exams/{exam}/reactivos/{examQuestion}/nuevo-sorteo', [ExamController::class, 'reshuffleQuestion'])->name('exams.questions.reshuffle');
         Route::post('exams/{exam}/publicar', [ExamController::class, 'publish'])->name('exams.publish');
+        Route::get('exams/{exam}/configuracion', [ExamController::class, 'configuration'])->name('exams.configuration');
+        Route::put('exams/{exam}/configuracion', [ExamController::class, 'updateConfiguration'])->name('exams.configuration.update');
+        Route::get('exams/{exam}/revisar', [ExamController::class, 'review'])->name('exams.review');
         Route::get('exams/{exam}/monitoreo', [ExamMonitorController::class, 'show'])->name('exams.monitor');
         Route::get('exams/{exam}/revision', [TeacherReviewController::class, 'index'])->name('exams.revision.index');
         Route::get('exams/{exam}/revision/{attempt}', [TeacherReviewController::class, 'show'])->name('exams.revision.show');
         Route::post('exams/{exam}/revision/{attempt}', [TeacherReviewController::class, 'update'])->name('exams.revision.update');
+        Route::get('docente/proximamente/{section}', function (string $section) {
+            $sections = [
+                'revision' => 'Revisión',
+                'calificaciones' => 'Calificaciones',
+                'suscripcion' => 'Suscripción',
+                'creditos-ia' => 'Créditos de IA',
+                'perfil' => 'Mi perfil',
+                'aviso-privacidad' => 'Aviso de privacidad',
+            ];
+            abort_unless(array_key_exists($section, $sections), 404);
+            return view('teacher.coming-soon', [
+                'title' => $sections[$section],
+            ]);
+        })->name('teacher.coming-soon');
     });
 
     Route::middleware('role:student')->group(function (): void {

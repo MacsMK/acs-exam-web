@@ -83,6 +83,120 @@ class ExamAssemblyService
     }
 
     /**
+     * Genera una propuesta sin guardar apartados ni reactivos.
+     *
+     * @return array<int, int> IDs de preguntas propuestas.
+     */
+    public function generateProposal(
+        Exam $exam,
+        string $questionType,
+        int $quantity,
+        ?string $subjectTag = null
+    ): array {
+        $alreadyUsedIds = ExamQuestion::where('exam_id', $exam->id)
+            ->pluck('question_id');
+
+        $query = Question::where('teacher_id', $exam->teacher_id)
+            ->where('question_type', $questionType)
+            ->whereNotIn('id', $alreadyUsedIds);
+
+        if ($subjectTag !== null && $subjectTag !== '') {
+            $query->where('subject_tag', $subjectTag);
+        }
+
+        $candidates = $query
+            ->inRandomOrder()
+            ->limit($quantity)
+            ->pluck('id');
+
+        if ($candidates->count() < $quantity) {
+            throw ValidationException::withMessages([
+                'requested_quantity' => [
+                    "El banco solo tiene {$candidates->count()} reactivos disponibles para los filtros seleccionados; se solicitaron {$quantity}.",
+                ],
+            ]);
+        }
+
+        return $candidates->all();
+    }
+
+    /**
+     * Acepta una propuesta y guarda el apartado con sus reactivos.
+     *
+     * @param array<int, int> $questionIds
+     */
+    public function acceptProposal(
+        Exam $exam,
+        string $title,
+        string $questionType,
+        array $questionIds,
+        ?string $subjectTag = null
+    ): ExamSection {
+        if ($exam->is_published) {
+            throw ValidationException::withMessages([
+                'exam' => ['No se puede modificar un examen publicado.'],
+            ]);
+        }
+
+        if ($questionIds === [] || count($questionIds) !== count(array_unique($questionIds))) {
+            throw ValidationException::withMessages([
+                'question_ids' => ['La propuesta está vacía o contiene preguntas repetidas.'],
+            ]);
+        }
+
+        return DB::transaction(function () use (
+            $exam,
+            $title,
+            $questionType,
+            $questionIds,
+        ): ExamSection {
+            $questions = Question::where('teacher_id', $exam->teacher_id)
+                ->whereIn('id', $questionIds)
+                ->get()
+                ->keyBy('id');
+
+            if ($questions->count() !== count($questionIds)) {
+                throw ValidationException::withMessages([
+                    'question_ids' => ['Algunos reactivos ya no están disponibles en el banco.'],
+                ]);
+            }
+
+            $alreadyUsed = ExamQuestion::where('exam_id', $exam->id)
+                ->whereIn('question_id', $questionIds)
+                ->exists();
+
+            if ($alreadyUsed) {
+                throw ValidationException::withMessages([
+                    'question_ids' => ['Uno o más reactivos ya forman parte del examen.'],
+                ]);
+            }
+
+            $section = ExamSection::create([
+                'exam_id' => $exam->id,
+                'title' => $title,
+                'question_type' => $questionType,
+                'requested_quantity' => count($questionIds),
+                'sort_order' => $exam->sections()->count(),
+            ]);
+
+            foreach ($questionIds as $index => $questionId) {
+                $question = $questions->get($questionId);
+
+                ExamQuestion::create([
+                    'exam_id' => $exam->id,
+                    'exam_section_id' => $section->id,
+                    'question_id' => $question->id,
+                    'time_limit_seconds' => $question->default_time_seconds,
+                    'points_weight' => $question->default_points,
+                    'sort_order' => $index,
+                ]);
+            }
+
+            return $section;
+        });
+    }
+
+    /**
      * Sortea requested_quantity preguntas del tipo del apartado, del banco
      * del propio docente, evitando repetir reactivos ya usados en el
      * examen, y las acepta como acs_exam_question.

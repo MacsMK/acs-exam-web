@@ -19,12 +19,15 @@ use App\Http\Requests\ExamSectionStoreRequest;
 use App\Http\Requests\ExamStoreRequest;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
+use App\Models\Question;
 use App\Services\ExamAssemblyService;
 use App\Services\ExamNotificationService;
 use App\Services\SubscriptionLimitService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ExamController extends Controller
 {
@@ -63,7 +66,215 @@ class ExamController extends Controller
 
         $exam->load(['sections.examQuestions.question']);
 
-        return view('exams.assemble', ['exam' => $exam]);
+        $sessionKey = "exam_section_proposal_{$exam->id}";
+        $proposal = request()->session()->get($sessionKey);
+
+        $proposedQuestions = collect();
+
+        if (is_array($proposal) && ! empty($proposal['question_ids'])) {
+            $questions = Question::where('teacher_id', $exam->teacher_id)
+                ->whereIn('id', $proposal['question_ids'])
+                ->get()
+                ->keyBy('id');
+
+            $proposedQuestions = collect($proposal['question_ids'])
+                ->map(fn ($id) => $questions->get($id))
+                ->filter();
+        }
+
+        // Temas disponibles en el banco privado del docente.
+        $subjectTags = Question::where('teacher_id', $exam->teacher_id)
+            ->whereNotNull('subject_tag')
+            ->where('subject_tag', '!=', '')
+            ->distinct()
+            ->orderBy('subject_tag')
+            ->pluck('subject_tag');
+
+        return view('exams.assemble', [
+            'exam' => $exam,
+            'proposal' => $proposal,
+            'proposedQuestions' => $proposedQuestions,
+            'subjectTags' => $subjectTags,
+        ]);
+    }
+
+    public function generateSectionProposal(Request $request, Exam $exam): RedirectResponse
+    {
+        $this->authorizeExam($exam);
+
+        abort_if(
+            $exam->is_published,
+            403,
+            'No se puede modificar un examen publicado.'
+        );
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:100'],
+            'question_type' => ['required', 'in:multiple_choice,matching,open,code'],
+            'subject_tag' => ['nullable', 'string', 'max:255'],
+            'requested_quantity' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $sessionKey = "exam_section_proposal_{$exam->id}";
+        $request->session()->forget($sessionKey);
+
+        $questionIds = $this->assemblyService->generateProposal(
+            $exam,
+            $data['question_type'],
+            (int) $data['requested_quantity'],
+            $data['subject_tag'] ?? null
+        );
+
+        $request->session()->put($sessionKey, [
+            'title' => $data['title'],
+            'question_type' => $data['question_type'],
+            'subject_tag' => $data['subject_tag'] ?? null,
+            'requested_quantity' => (int) $data['requested_quantity'],
+            'question_ids' => $questionIds,
+        ]);
+
+        return redirect()
+            ->route('exams.assemble', $exam)
+            ->with('status', 'Propuesta generada. Revísala antes de aceptarla.');
+    }
+
+    public function acceptSectionProposal(Request $request, Exam $exam): RedirectResponse
+    {
+        $this->authorizeExam($exam);
+
+        abort_if(
+            $exam->is_published,
+            403,
+            'No se puede modificar un examen publicado.'
+        );
+
+        $sessionKey = "exam_section_proposal_{$exam->id}";
+        $proposal = $request->session()->get($sessionKey);
+
+        if (! is_array($proposal)) {
+            return redirect()
+                ->route('exams.assemble', $exam)
+                ->withErrors([
+                    'proposal' => 'No hay una propuesta pendiente de aceptación.',
+                ]);
+        }
+
+        $this->assemblyService->acceptProposal(
+            $exam,
+            $proposal['title'],
+            $proposal['question_type'],
+            $proposal['question_ids'],
+            $proposal['subject_tag'] ?? null
+        );
+
+        $request->session()->forget($sessionKey);
+
+        return redirect()
+            ->route('exams.assemble', $exam)
+            ->with('status', 'Apartado y reactivos guardados correctamente.');
+    }
+
+    public function discardSectionProposal(Request $request, Exam $exam): RedirectResponse
+    {
+        $this->authorizeExam($exam);
+
+        $request->session()->forget("exam_section_proposal_{$exam->id}");
+
+        return redirect()
+            ->route('exams.assemble', $exam)
+            ->with('status', 'Propuesta descartada.');
+    }
+
+    public function configuration(Exam $exam): View
+    {
+        $this->authorizeExam($exam);
+
+        $exam->load(['groups', 'sections.examQuestions.question']);
+
+        return view('exams.configuration', compact('exam'));
+    }
+
+    public function updateConfiguration(Request $request, Exam $exam): RedirectResponse
+    {
+        $this->authorizeExam($exam);
+
+        abort_if(
+            $exam->is_published,
+            403,
+            'No se puede modificar un examen publicado.'
+        );
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:150'],
+            'description' => ['nullable', 'string'],
+            'grading_scale' => ['required', 'in:0-10,0-100'],
+            'result_visibility_mode' => [
+                'required',
+                'in:final_score,estimated_score,objective_only_pending,hidden',
+            ],
+            'max_allowed_incidents' => ['required', 'integer', 'min:0'],
+            'randomize_question_order' => ['required', 'boolean'],
+            'require_webcam' => ['required', 'boolean'],
+            'group_ids' => ['nullable', 'array'],
+            'group_ids.*' => ['integer'],
+            'questions' => ['required', 'array'],
+            'questions.*.points_weight' => ['required', 'numeric', 'min:0', 'max:100'],
+            'questions.*.time_limit_seconds' => ['required', 'integer', 'min:1'],
+        ]);
+
+        DB::transaction(function () use ($exam, $data) {
+            $examQuestions = $exam->examQuestions()->lockForUpdate()->get()->keyBy('id');
+            $submitted = $data['questions'];
+
+            $expectedIds = $examQuestions->keys()->map(fn ($id) => (string) $id)->sort()->values()->all();
+            $receivedIds = collect(array_keys($submitted))->map(fn ($id) => (string) $id)->sort()->values()->all();
+
+            if ($expectedIds !== $receivedIds) {
+                throw ValidationException::withMessages([
+                    'questions' => 'La lista de preguntas cambió. Recarga la página y vuelve a intentarlo.',
+                ]);
+            }
+
+            $totalCents = 0;
+            foreach ($submitted as $values) {
+                $totalCents += (int) round((float) $values['points_weight'] * 100);
+            }
+
+            if ($totalCents !== 10000) {
+                throw ValidationException::withMessages([
+                    'questions' => 'La suma de las ponderaciones debe ser exactamente 100 puntos.',
+                ]);
+            }
+
+            $exam->update(collect($data)->except(['questions', 'group_ids'])->all());
+
+            if (isset($data['group_ids'])) {
+                $exam->groups()->sync($data['group_ids']);
+            }
+
+            foreach ($submitted as $id => $values) {
+                $examQuestions->get((int) $id)->update([
+                    'points_weight' => $values['points_weight'],
+                    'time_limit_seconds' => $values['time_limit_seconds'],
+                ]);
+            }
+        });
+
+        return redirect()
+            ->route('exams.review', $exam)
+            ->with('status', 'Configuración guardada correctamente.');
+    }
+
+    public function review(Exam $exam): View
+    {
+        $this->authorizeExam($exam);
+
+        $exam->load([
+            'groups',
+            'sections.examQuestions.question',
+        ]);
+
+        return view('exams.review', compact('exam'));
     }
 
     public function storeSection(ExamSectionStoreRequest $request, Exam $exam): RedirectResponse

@@ -1,698 +1,231 @@
-{{--
- * ============================================================================
- * A-CODE SOLUTIONS - ANALIZAMOS, DISEÑAMOS, TRANSFORMAMOS
- * ============================================================================
- * Archivo:     create.blade.php
- * Ubicación:   resources/views/questions/create.blade.php
- * Módulo:      Módulo 5 - Banco de Preguntas (MPW-V2 §6.3, §6.4, §7.3, §7.8, §8.5)
- * Descripción: Asistente guiado por pasos (Wizard/Stepper) para la autoría
- *              de reactivos polimórficos. Cumple con la paleta de MC-V2,
- *              los 18 verbos de MPW-V2 Tabla 10, y elimina toda sobrecarga
- *              de texto distractora y colisiones cruzadas en el DOM.
- * Organización: A-Code Solutions
- * ============================================================================
---}}
 @extends('layouts.app')
 
-@section('title', 'Crear Reactivo')
+@section('title', 'Nueva pregunta')
 
 @section('content')
-    <div
-        class="max-w-4xl mx-auto py-2"
-        x-data="{
-            step: {{ $errors->any() ? 3 : 1 }},
-            type: '{{ old('question_type', 'multiple_choice') }}',
-            isFindError: {{ old('is_find_error') ? 'true' : 'false' }},
-            title: {{ json_encode((string) old('title', '')) }},
-            stem: {{ json_encode((string) old('stem', '')) }},
-            subjectTag: {{ json_encode((string) old('subject_tag', '')) }},
-            defaultPoints: '{{ old('default_points', '1.00') }}',
-            defaultTime: {{ (int) old('default_time_seconds', 60) }},
-            userModifiedTime: {{ old('default_time_seconds') ? 'true' : 'false' }},
-            options: {{ json_encode(collect(old('options', ['', '', '']))->values()->all()) }},
-            correctOption: {{ (int) old('correct_option_index', 0) }},
-            pairs: {{ json_encode(
-                old('concepts') && old('definitions')
-                    ? collect(old('concepts'))->values()->map(fn($c, $i) => ['concept' => $c, 'definition' => old('definitions')[$i] ?? ''])->values()->all()
-                    : [['concept' => '', 'definition' => ''], ['concept' => '', 'definition' => '']]
-            ) }},
-            setType(newType) {
-                this.type = newType;
-                if (!this.userModifiedTime) {
-                    if (newType === 'multiple_choice') this.defaultTime = 60;
-                    else if (newType === 'matching') this.defaultTime = 120;
-                    else if (newType === 'open') this.defaultTime = 180;
-                    else if (newType === 'code') this.defaultTime = 600;
-                }
-            },
-            setTime(s) {
-                this.defaultTime = s;
-                this.userModifiedTime = true;
-            },
-            addOption() {
-                if (this.options.length < 6) this.options.push('');
-            },
-            removeOption(i) {
-                if (this.options.length > 2) {
-                    this.options.splice(i, 1);
-                    if (this.correctOption >= this.options.length) this.correctOption = this.options.length - 1;
-                }
-            },
-            addPair() {
-                if (this.pairs.length < 8) this.pairs.push({ concept: '', definition: '' });
-            },
-            removePair(i) {
-                if (this.pairs.length > 2) this.pairs.splice(i, 1);
-            },
-            canAdvanceStep1() {
-                return this.title.trim().length > 0 && this.stem.trim().length > 0;
-            },
-            goToStep(target) {
-                if (target === 2 && !this.canAdvanceStep1()) {
-                    alert('Por favor completa el título y el planteamiento principal antes de continuar.');
-                    return;
-                }
-                this.step = target;
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            }
-        }"
-    >
-        {{-- Encabezado Principal --}}
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-                <h1 class="text-2xl font-bold text-acode-primary tracking-tight">Crear Reactivo</h1>
-                <p class="text-xs text-slate-500 mt-0.5">Asistente por etapas para el alta de preguntas en el banco institucional.</p>
-            </div>
-            <div class="text-xs text-slate-500 font-medium bg-acode-surface px-3 py-1.5 rounded-lg border border-slate-200 self-start sm:self-auto">
-                Etapa <span x-text="step" class="font-bold text-acode-tech"></span> de 3
-            </div>
+<div class="mx-auto max-w-6xl space-y-6" x-data="questionCreator()">
+    <a href="{{ route('questions.index') }}" class="inline-flex items-center gap-2 text-sm font-semibold text-acode-tech hover:underline">
+        <span aria-hidden="true">←</span> Volver al banco de preguntas
+    </a>
+
+    <header>
+        <h1 class="mt-1 text-2xl font-bold text-acode-primary">Nueva pregunta</h1>
+        <p class="mt-2 text-sm text-slate-500">Completa los datos y revisa cómo se presentará la pregunta al estudiante.</p>
+    </header>
+
+    @if ($errors->any())
+        <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-[#DC2626]" role="alert">
+            <p class="font-semibold">Revisa los siguientes datos:</p>
+            <ul class="mt-2 list-disc space-y-1 pl-5">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
         </div>
+    @endif
 
-        {{-- Barra de Progreso del Asistente (Stepper) --}}
-        <div class="mb-6 bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-            <div class="flex items-center justify-between max-w-2xl mx-auto">
-                {{-- Paso 1 --}}
-                <div class="flex items-center gap-2.5 cursor-pointer select-none" @click="goToStep(1)">
-                    <div
-                        class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition"
-                        :class="step === 1
-                            ? 'bg-acode-primary text-white ring-4 ring-acode-primary/20 shadow-xs'
-                            : (step > 1 ? 'bg-acode-accent text-white' : 'bg-acode-surface text-slate-500')"
-                    >
-                        <span x-show="step <= 1">1</span>
-                        <x-icon name="check" class="w-4 h-4" x-show="step > 1" x-cloak />
-                    </div>
-                    <div class="hidden sm:block text-left">
-                        <p class="text-xs font-bold text-slate-800 leading-none">Planteamiento</p>
-                        <p class="text-[10px] text-slate-400 mt-0.5">Título y tipo</p>
-                    </div>
-                </div>
-
-                {{-- Línea conectora 1 -> 2 --}}
-                <div class="flex-1 h-0.5 mx-3 bg-slate-200 transition" :class="step > 1 ? 'bg-acode-accent' : 'bg-slate-200'"></div>
-
-                {{-- Paso 2 --}}
-                <div class="flex items-center gap-2.5 cursor-pointer select-none" @click="step > 2 ? goToStep(2) : null">
-                    <div
-                        class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition"
-                        :class="step === 2
-                            ? 'bg-acode-primary text-white ring-4 ring-acode-primary/20 shadow-xs'
-                            : (step > 2 ? 'bg-acode-accent text-white' : 'bg-acode-surface text-slate-500')"
-                    >
-                        <span x-show="step <= 2">2</span>
-                        <x-icon name="check" class="w-4 h-4" x-show="step > 2" x-cloak />
-                    </div>
-                    <div class="hidden sm:block text-left">
-                        <p class="text-xs font-bold text-slate-800 leading-none">Contenido</p>
-                        <p class="text-[10px] text-slate-400 mt-0.5">Respuestas</p>
-                    </div>
-                </div>
-
-                {{-- Línea conectora 2 -> 3 --}}
-                <div class="flex-1 h-0.5 mx-3 bg-slate-200 transition" :class="step > 2 ? 'bg-acode-accent' : 'bg-slate-200'"></div>
-
-                {{-- Paso 3 --}}
-                <div class="flex items-center gap-2.5 select-none">
-                    <div
-                        class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition"
-                        :class="step === 3
-                            ? 'bg-acode-primary text-white ring-4 ring-acode-primary/20 shadow-xs'
-                            : 'bg-acode-surface text-slate-500'"
-                    >
-                        3
-                    </div>
-                    <div class="hidden sm:block text-left">
-                        <p class="text-xs font-bold text-slate-800 leading-none">Evaluación</p>
-                        <p class="text-[10px] text-slate-400 mt-0.5">Puntos y tiempo</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {{-- Formulario Principal con Bloqueo de Enter --}}
-        <form
-            method="POST"
-            action="{{ route('questions.store') }}"
-            @keydown.enter="$event.target.tagName === 'TEXTAREA' ? null : $event.preventDefault()"
-        >
-            @csrf
-            <input type="hidden" name="question_type" :value="type">
-
-            {{-- ============================================================ --}}
-            {{-- ETAPA 1: Identificación, Enunciado y Selección de Tipo      --}}
-            {{-- ============================================================ --}}
-            <div x-show="step === 1" x-cloak class="space-y-6">
-                <x-card>
-                    <div class="space-y-5">
-                        <div class="pb-3 border-b border-slate-100 flex items-center justify-between">
+    <form id="create-question-form" method="POST" action="{{ route('questions.store') }}" class="space-y-6">
+        @csrf
+        <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div class="min-w-0 space-y-6">
+                <section class="rounded-xl border border-slate-200 bg-white p-6">
+                    <h2 class="text-lg font-semibold text-acode-primary">Datos generales</h2>
+                    <div class="mt-5 space-y-4">
+                        <div>
+                            <label for="question-title" class="mb-2 block text-sm font-medium text-slate-800">Título interno</label>
+                            <input id="question-title" type="text" name="title" x-model="title" required maxlength="150" placeholder="Identificador de la pregunta en tu banco" class="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:ring-2 focus:ring-acode-tech">
+                            <p class="mt-1 text-xs text-slate-500">Este título es para el docente; no se muestra al estudiante.</p>
+                        </div>
+                        <div>
+                            <label for="question-stem" class="mb-2 block text-sm font-medium text-slate-800">Enunciado</label>
+                            <textarea id="question-stem" name="stem" x-model="stem" required rows="4" placeholder="Escribe la pregunta que verá el estudiante" class="w-full rounded-lg border border-slate-300 p-3 text-sm focus:ring-2 focus:ring-acode-tech"></textarea>
+                        </div>
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                             <div>
-                                <h2 class="text-base font-bold text-acode-primary">Paso 1: Planteamiento y Tipo de Reactivo</h2>
-                                <p class="text-xs text-slate-500">Define los datos de identificación y la modalidad de pregunta.</p>
+                                <label for="subject-tag" class="mb-2 block text-sm font-medium text-slate-800">Materia (opcional)</label>
+                                <input id="subject-tag" type="text" name="subject_tag" value="{{ old('subject_tag') }}" maxlength="100" class="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:ring-2 focus:ring-acode-tech">
+                            </div>
+                            <div>
+                                <label for="default-points" class="mb-2 block text-sm font-medium text-slate-800">Puntos</label>
+                                <input id="default-points" type="number" name="default_points" value="{{ old('default_points', 1) }}" step="0.01" min="0" required class="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:ring-2 focus:ring-acode-tech">
+                            </div>
+                            <div>
+                                <label for="default-time" class="mb-2 block text-sm font-medium text-slate-800">Tiempo (seg.)</label>
+                                <input id="default-time" type="number" name="default_time_seconds" value="{{ old('default_time_seconds', 60) }}" min="1" step="1" required class="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:ring-2 focus:ring-acode-tech">
                             </div>
                         </div>
+                        <div>
+                            <label for="question-type" class="mb-2 block text-sm font-medium text-slate-800">Tipo de pregunta</label>
+                            <select id="question-type" name="question_type" x-model="type" required class="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:ring-2 focus:ring-acode-tech">
+                                <option value="multiple_choice">Opción múltiple</option>
+                                <option value="matching">Relación de columnas</option>
+                                <option value="open">Pregunta abierta</option>
+                                <option value="code">Programación / Código</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
+                            <button type="button" disabled class="cursor-not-allowed rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 opacity-75">Adjuntar imagen o PDF</button>
+                            <span class="text-xs text-slate-500">Próximamente · Función aún no disponible</span>
+                        </div>
+                    </div>
+                </section>
 
-                        {{-- Título identificador del reactivo --}}
-                        <x-form.group
-                            name="title"
-                            label="Título identificador del reactivo"
-                            helpText="Nombre breve para localizarlo en tu banco docente."
-                            required
-                        >
-                            <x-form.input
-                                type="text"
-                                name="title"
-                                x-model="title"
-                                required
-                                maxlength="150"
-                                placeholder="Ej. Principios SOLID: Responsabilidad Única"
-                                prefixIcon="edit"
-                            />
-                        </x-form.group>
+                <section class="rounded-xl border border-slate-200 bg-white p-6">
+                    <h2 class="text-lg font-semibold text-acode-primary">Contenido del pregunta</h2>
+                    <p class="mt-2 text-sm text-slate-500">Los campos cambian según el tipo de pregunta seleccionado.</p>
 
-                        {{-- Materia / Categoría temática --}}
-                        <x-form.group
-                            name="subject_tag"
-                            label="Materia / Categoría temática"
-                            helpText="Opcional. Etiqueta para clasificar y filtrar en apartados de examen."
-                        >
-                            <x-form.input
-                                type="text"
-                                name="subject_tag"
-                                x-model="subjectTag"
-                                maxlength="100"
-                                placeholder="Ej. Auditoría de Sistemas, Programación Web"
-                                prefixIcon="shield"
-                            />
-                        </x-form.group>
+                    <fieldset x-show="type === 'multiple_choice'" :disabled="type !== 'multiple_choice'" class="mt-5 space-y-3">
+                        <legend class="mb-3 text-sm font-semibold text-slate-800">Opciones de respuesta · Selecciona la correcta</legend>
+                        <template x-for="(option, i) in options" :key="option.id">
+                            <div class="flex items-center gap-3 rounded-lg border border-slate-200 p-3">
+                                <input type="radio" name="correct_option_index" :value="i" x-model.number="correctIndex" class="shrink-0 text-acode-tech focus:ring-acode-tech" :aria-label="'Marcar opción ' + (i + 1) + ' como correcta'">
+                                <input type="text" :name="'options[' + i + ']'" x-model="option.text" :placeholder="'Opción ' + (i + 1)" class="h-10 min-w-0 flex-1 rounded-lg border border-slate-300 px-3 text-sm focus:ring-2 focus:ring-acode-tech">
+                                <button type="button" @click="removeOption(i)" :disabled="options.length <= 2" class="text-xs font-semibold text-[#DC2626] disabled:cursor-not-allowed disabled:opacity-40">Quitar</button>
+                            </div>
+                        </template>
+                        <button type="button" @click="addOption()" class="text-sm font-semibold text-acode-tech hover:underline">+ Agregar opción</button>
+                    </fieldset>
 
-                        {{-- Enunciado o planteamiento principal --}}
-                        <x-form.group
-                            name="stem"
-                            label="Enunciado o planteamiento principal"
-                            helpText="Texto que visualizará el alumno al resolver la pregunta."
-                            required
-                        >
-                            <x-form.textarea
-                                name="stem"
-                                rows="3"
-                                x-model="stem"
-                                required
-                                placeholder="Escribe el planteamiento formal de la pregunta o caso de estudio…"
-                            >{{ old('stem') }}</x-form.textarea>
-                        </x-form.group>
+                    <fieldset x-show="type === 'matching'" :disabled="type !== 'matching'" class="mt-5 space-y-3">
+                        <legend class="mb-3 text-sm font-semibold text-slate-800">Pares de concepto y definición</legend>
+                        <template x-for="(pair, i) in pairs" :key="pair.id">
+                            <div class="grid grid-cols-1 items-center gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-[1fr_1fr_auto]">
+                                <input type="text" :name="'concepts[' + i + ']'" x-model="pair.concept" placeholder="Concepto" class="h-10 min-w-0 rounded-lg border border-slate-300 px-3 text-sm focus:ring-2 focus:ring-acode-tech">
+                                <input type="text" :name="'definitions[' + i + ']'" x-model="pair.definition" placeholder="Definición" class="h-10 min-w-0 rounded-lg border border-slate-300 px-3 text-sm focus:ring-2 focus:ring-acode-tech">
+                                <button type="button" @click="removePair(i)" :disabled="pairs.length <= 2" class="text-xs font-semibold text-[#DC2626] disabled:opacity-40">Quitar</button>
+                            </div>
+                        </template>
+                        <button type="button" @click="addPair()" class="text-sm font-semibold text-acode-tech hover:underline">+ Agregar par</button>
+                        <p class="text-xs text-slate-500">Las definiciones se mostrarán mezcladas al estudiante durante el examen.</p>
+                    </fieldset>
 
-                        {{-- Selector Visual de 4 Reactivos --}}
-                        <div class="pt-2">
-                            <label class="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-                                Modalidad Pedagógica del Reactivo
+                    <fieldset x-show="type === 'open'" :disabled="type !== 'open'" class="mt-5 space-y-4">
+                        <legend class="mb-3 text-sm font-semibold text-slate-800">Criterios de respuesta</legend>
+                        <div>
+                            <label for="reference-answer" class="mb-2 block text-sm font-medium text-slate-800">Respuesta de referencia</label>
+                            <textarea id="reference-answer" name="reference_answer" rows="4" class="w-full rounded-lg border border-slate-300 p-3 text-sm focus:ring-2 focus:ring-acode-tech">{{ old('reference_answer') }}</textarea>
+                        </div>
+                        <div>
+                            <label for="evaluation-rubric" class="mb-2 block text-sm font-medium text-slate-800">Rúbrica (opcional)</label>
+                            <textarea id="evaluation-rubric" name="evaluation_rubric" rows="3" class="w-full rounded-lg border border-slate-300 p-3 text-sm focus:ring-2 focus:ring-acode-tech">{{ old('evaluation_rubric') }}</textarea>
+                        </div>
+                    </fieldset>
+
+                    <fieldset x-show="type === 'code'" :disabled="type !== 'code'" class="mt-5 space-y-4">
+                        <legend class="mb-3 text-sm font-semibold text-slate-800">Configuración de programación</legend>
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                                <label for="programming-language" class="mb-2 block text-sm font-medium text-slate-800">Lenguaje</label>
+                                <input id="programming-language" type="text" name="programming_language" x-model="language" maxlength="40" class="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:ring-2 focus:ring-acode-tech">
+                            </div>
+                            <label class="flex items-center gap-2 pt-0 text-sm text-slate-700 sm:pt-7">
+                                <input type="checkbox" name="is_find_error" value="1" {{ old('is_find_error') ? 'checked' : '' }} class="rounded border-slate-300 text-acode-tech">
+                                Es de «encontrar el error»
                             </label>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup">
-                                {{-- 1. Opción Múltiple --}}
-                                <div
-                                    @click="setType('multiple_choice')"
-                                    class="p-3.5 rounded-xl border cursor-pointer transition flex items-center justify-between select-none"
-                                    :class="type === 'multiple_choice'
-                                        ? 'border-acode-tech bg-acode-surface/80 ring-2 ring-acode-tech/50 shadow-xs'
-                                        : 'border-slate-200 bg-white hover:border-slate-300'"
-                                >
-                                    <div class="flex items-center gap-3">
-                                        <span class="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-100 text-acode-tech">
-                                            <x-icon name="check" class="w-4 h-4" />
-                                        </span>
-                                        <div>
-                                            <p class="font-bold text-xs text-slate-800">Opción múltiple</p>
-                                            <p class="text-[11px] text-slate-500">Alternativas cerradas (respuesta única)</p>
-                                        </div>
-                                    </div>
-                                    <x-badge variant="info">Objetivo</x-badge>
-                                </div>
-
-                                {{-- 2. Relación de Columnas --}}
-                                <div
-                                    @click="setType('matching')"
-                                    class="p-3.5 rounded-xl border cursor-pointer transition flex items-center justify-between select-none"
-                                    :class="type === 'matching'
-                                        ? 'border-acode-tech bg-acode-surface/80 ring-2 ring-acode-tech/50 shadow-xs'
-                                        : 'border-slate-200 bg-white hover:border-slate-300'"
-                                >
-                                    <div class="flex items-center gap-3">
-                                        <span class="w-8 h-8 rounded-lg flex items-center justify-center bg-teal-100 text-acode-accent">
-                                            <x-icon name="userGroup" class="w-4 h-4" />
-                                        </span>
-                                        <div>
-                                            <p class="font-bold text-xs text-slate-800">Relación de columnas</p>
-                                            <p class="text-[11px] text-slate-500">Pares concepto ↔ definición</p>
-                                        </div>
-                                    </div>
-                                    <x-badge variant="accent">Emparejamiento</x-badge>
-                                </div>
-
-                                {{-- 3. Pregunta Abierta --}}
-                                <div
-                                    @click="setType('open')"
-                                    class="p-3.5 rounded-xl border cursor-pointer transition flex items-center justify-between select-none"
-                                    :class="type === 'open'
-                                        ? 'border-acode-tech bg-acode-surface/80 ring-2 ring-acode-tech/50 shadow-xs'
-                                        : 'border-slate-200 bg-white hover:border-slate-300'"
-                                >
-                                    <div class="flex items-center gap-3">
-                                        <span class="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-100 text-amber-700">
-                                            <x-icon name="edit" class="w-4 h-4" />
-                                        </span>
-                                        <div>
-                                            <p class="font-bold text-xs text-slate-800">Pregunta abierta</p>
-                                            <p class="text-[11px] text-slate-500">Evaluada por vector de similitud IA</p>
-                                        </div>
-                                    </div>
-                                    <x-badge variant="warning">Evaluación IA</x-badge>
-                                </div>
-
-                                {{-- 4. Código Fuente --}}
-                                <div
-                                    @click="setType('code')"
-                                    class="p-3.5 rounded-xl border cursor-pointer transition flex items-center justify-between select-none"
-                                    :class="type === 'code'
-                                        ? 'border-acode-tech bg-acode-surface/80 ring-2 ring-acode-tech/50 shadow-xs'
-                                        : 'border-slate-200 bg-white hover:border-slate-300'"
-                                >
-                                    <div class="flex items-center gap-3">
-                                        <span class="w-8 h-8 rounded-lg flex items-center justify-center bg-indigo-100 text-indigo-700">
-                                            <x-icon name="code" class="w-4 h-4" />
-                                        </span>
-                                        <div>
-                                            <p class="font-bold text-xs text-slate-800">Código de programación</p>
-                                            <p class="text-[11px] text-slate-500">Desarrollo o depuración supervisada</p>
-                                        </div>
-                                    </div>
-                                    <x-badge variant="primary">Supervisado</x-badge>
-                                </div>
-                            </div>
                         </div>
-
-                        {{-- Botones de Navegación del Paso 1 --}}
-                        <div class="flex items-center justify-between pt-4 border-t border-slate-100">
-                            <x-button :href="route('questions.index')" variant="neutral" size="md">
-                                Volver al listado
-                            </x-button>
-
-                            <x-button type="button" variant="primary" size="md" @click="goToStep(2)">
-                                Continuar al paso 2 →
-                            </x-button>
+                        <div>
+                            <label for="starter-code" class="mb-2 block text-sm font-medium text-slate-800">Código inicial (opcional)</label>
+                            <textarea id="starter-code" name="starter_code" x-model="starterCode" rows="5" spellcheck="false" class="w-full rounded-lg border border-slate-300 bg-slate-50 p-3 font-mono text-sm focus:ring-2 focus:ring-acode-tech"></textarea>
                         </div>
-                    </div>
-                </x-card>
+                        <div>
+                            <label for="code-instructions" class="mb-2 block text-sm font-medium text-slate-800">Instrucciones</label>
+                            <textarea id="code-instructions" name="instructions" x-model="instructions" rows="3" class="w-full rounded-lg border border-slate-300 p-3 text-sm focus:ring-2 focus:ring-acode-tech"></textarea>
+                        </div>
+                        <div>
+                            <label for="reference-solution" class="mb-2 block text-sm font-medium text-slate-800">Solución de referencia</label>
+                            <textarea id="reference-solution" name="reference_solution" rows="5" spellcheck="false" class="w-full rounded-lg border border-slate-300 bg-slate-50 p-3 font-mono text-sm focus:ring-2 focus:ring-acode-tech">{{ old('reference_solution') }}</textarea>
+                            <p class="mt-1 text-xs text-slate-500">La solución no aparece en la vista del estudiante.</p>
+                        </div>
+                    </fieldset>
+                </section>
             </div>
 
-            {{-- ============================================================ --}}
-            {{-- ETAPA 2: Configuración del Contenido (Exclusivo por Tipo)    --}}
-            {{-- ============================================================ --}}
-            <div x-show="step === 2" x-cloak class="space-y-6">
-                <x-card>
-                    <div class="space-y-5">
-                        <div class="pb-3 border-b border-slate-100 flex items-center justify-between">
-                            <div>
-                                <h2 class="text-base font-bold text-acode-primary">Paso 2: Contenido y Solución del Reactivo</h2>
-                                <p class="text-xs text-slate-500">Configura las respuestas y criterios según el tipo seleccionado.</p>
+            <aside class="min-w-0 rounded-xl border border-slate-200 bg-white p-5 lg:sticky lg:top-6">
+                <div class="flex items-center justify-between gap-2">
+                    <h2 class="text-lg font-semibold text-acode-primary">Vista previa del estudiante</h2>
+                    <span class="rounded-full bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-700">Simulación</span>
+                </div>
+                <p class="mt-2 text-xs text-slate-500">Así se presentaría la pregunta. No guarda respuestas.</p>
+                <div class="mt-5 space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-acode-tech" x-text="typeLabel()"></p>
+                    <p class="whitespace-pre-wrap break-words text-sm font-semibold text-acode-primary" x-text="stem.trim() || 'Aquí aparecerá el enunciado de la pregunta.'"></p>
+                    <div x-show="type === 'multiple_choice'" class="space-y-2">
+                        <template x-for="(option, i) in options" :key="option.id">
+                            <div class="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                                <span class="mt-0.5 inline-block h-4 w-4 shrink-0 rounded-full border border-slate-400"></span>
+                                <span class="break-words" x-text="option.text.trim() || 'Opción ' + (i + 1)"></span>
                             </div>
-                            <x-badge variant="primary" x-text="type === 'multiple_choice' ? 'Opción múltiple' : (type === 'matching' ? 'Relación de columnas' : (type === 'open' ? 'Pregunta abierta' : 'Código'))"></x-badge>
-                        </div>
-
-                        {{-- 2.1. Configuración de Opción Múltiple --}}
-                        <div x-show="type === 'multiple_choice'" x-cloak class="space-y-4">
-                            <div class="flex items-center justify-between">
-                                <label class="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                                    Alternativas (<span x-text="options.length"></span> de 6) — Marca la respuesta correcta
-                                </label>
-                                <x-button
-                                    type="button"
-                                    variant="secondary"
-                                    size="sm"
-                                    @click="addOption()"
-                                    x-bind:disabled="options.length >= 6"
-                                >
-                                    <x-icon name="add" class="w-3.5 h-3.5 mr-1" />
-                                    Crear opción
-                                </x-button>
+                        </template>
+                    </div>
+                    <div x-show="type === 'matching'" class="space-y-3">
+                        <p class="text-xs text-slate-500">Relaciona cada concepto con su definición.</p>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="space-y-2">
+                                <template x-for="(pair, i) in pairs" :key="pair.id"><div class="min-h-12 rounded-lg border border-slate-200 bg-white p-2 break-words" x-text="pair.concept.trim() || 'Concepto ' + (i + 1)"></div></template>
                             </div>
-
-                            <div class="space-y-2.5">
-                                <template x-for="(option, i) in options" :key="i">
-                                    <div
-                                        class="flex items-center gap-2.5 p-2.5 rounded-xl border transition"
-                                        :class="correctOption === i
-                                            ? 'bg-emerald-50/60 border-emerald-300 ring-1 ring-emerald-300/40'
-                                            : 'bg-acode-surface/50 border-slate-200'"
-                                    >
-                                        <label class="flex items-center gap-1.5 cursor-pointer shrink-0" :title="'Marcar opción ' + (i + 1) + ' como correcta'">
-                                            <input
-                                                type="radio"
-                                                name="correct_option_index"
-                                                :value="i"
-                                                x-model.number="correctOption"
-                                                :disabled="type !== 'multiple_choice'"
-                                                class="text-emerald-600 focus:ring-emerald-500 h-4 w-4"
-                                            />
-                                            <span
-                                                class="text-[11px] font-bold px-2 py-0.5 rounded"
-                                                :class="correctOption === i ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'"
-                                                x-text="correctOption === i ? 'Correcta' : 'Opción ' + (i + 1)"
-                                            ></span>
-                                        </label>
-
-                                        <input
-                                            type="text"
-                                            :name="'options[' + i + ']'"
-                                            x-model="options[i]"
-                                            :disabled="type !== 'multiple_choice'"
-                                            class="flex-1 h-9 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech bg-white"
-                                            :placeholder="'Texto de la opción ' + (i + 1) + '…'"
-                                        />
-
-                                        <button
-                                            type="button"
-                                            @click="removeOption(i)"
-                                            x-show="options.length > 2"
-                                            class="p-1.5 text-slate-400 hover:text-acode-danger hover:bg-red-50 rounded-lg transition"
-                                            title="Eliminar opción"
-                                        >
-                                            <x-icon name="delete" class="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </template>
+                            <div class="space-y-2">
+                                <template x-for="(pair, i) in previewDefinitions()" :key="pair.id"><div class="min-h-12 rounded-lg border border-slate-200 bg-white p-2 break-words" x-text="pair.definition.trim() || 'Definición ' + (i + 1)"></div></template>
                             </div>
-                        </div>
-
-                        {{-- 2.2. Configuración de Relación de Columnas --}}
-                        <div x-show="type === 'matching'" x-cloak class="space-y-4">
-                            <div class="flex items-center justify-between">
-                                <label class="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                                    Pares Concepto ↔ Definición (<span x-text="pairs.length"></span> de 8)
-                                </label>
-                                <x-button
-                                    type="button"
-                                    variant="secondary"
-                                    size="sm"
-                                    @click="addPair()"
-                                    x-bind:disabled="pairs.length >= 8"
-                                >
-                                    <x-icon name="add" class="w-3.5 h-3.5 mr-1" />
-                                    Crear par
-                                </x-button>
-                            </div>
-
-                            <div class="space-y-2.5">
-                                <template x-for="(pair, i) in pairs" :key="i">
-                                    <div class="flex items-center gap-2 p-2.5 bg-acode-surface/50 rounded-xl border border-slate-200">
-                                        <span class="w-5 text-center text-xs font-bold text-slate-400" x-text="(i + 1) + '.'"></span>
-                                        <input
-                                            type="text"
-                                            :name="'concepts[' + i + ']'"
-                                            x-model="pair.concept"
-                                            :disabled="type !== 'matching'"
-                                            placeholder="Concepto (Columna izquierda)"
-                                            class="flex-1 h-9 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech bg-white"
-                                        />
-                                        <span class="text-acode-accent font-bold px-1 select-none">↔</span>
-                                        <input
-                                            type="text"
-                                            :name="'definitions[' + i + ']'"
-                                            x-model="pair.definition"
-                                            :disabled="type !== 'matching'"
-                                            placeholder="Definición (Columna derecha)"
-                                            class="flex-1 h-9 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech bg-white"
-                                        />
-                                        <button
-                                            type="button"
-                                            @click="removePair(i)"
-                                            x-show="pairs.length > 2"
-                                            class="p-1.5 text-slate-400 hover:text-acode-danger hover:bg-red-50 rounded-lg transition"
-                                            title="Eliminar par"
-                                        >
-                                            <x-icon name="delete" class="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </template>
-                            </div>
-                            <p class="text-[11px] text-slate-400 italic">La columna de definiciones se desordena automáticamente en el examen para cada alumno.</p>
-                        </div>
-
-                        {{-- 2.3. Configuración de Pregunta Abierta --}}
-                        <div x-show="type === 'open'" x-cloak class="space-y-4">
-                            <x-form.group
-                                name="reference_answer"
-                                label="Respuesta esperada o modelo de referencia"
-                                helpText="Patrón de comparación semántica analizado por el evaluador asistido."
-                                required
-                            >
-                                <x-form.textarea
-                                    name="reference_answer"
-                                    rows="4"
-                                    ::disabled="type !== 'open'"
-                                    placeholder="Redacta la solución canónica o los puntos clave que debe contener la respuesta del alumno…"
-                                >{{ old('reference_answer') }}</x-form.textarea>
-                            </x-form.group>
-
-                            <x-form.group
-                                name="evaluation_rubric"
-                                label="Rúbrica de evaluación complementaria (opcional)"
-                                helpText="Ponderaciones, criterios de penalización o términos obligatorios."
-                            >
-                                <x-form.textarea
-                                    name="evaluation_rubric"
-                                    rows="2"
-                                    ::disabled="type !== 'open'"
-                                    placeholder="Criterios cualitativos adicionales para recotejo…"
-                                >{{ old('evaluation_rubric') }}</x-form.textarea>
-                            </x-form.group>
-                        </div>
-
-                        {{-- 2.4. Configuración de Código de Programación --}}
-                        <div x-show="type === 'code'" x-cloak class="space-y-4">
-                            {{-- Selector de Modalidad (Desarrollo vs Debugging) --}}
-                            <div>
-                                <label class="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1.5">
-                                    Modalidad de Código
-                                </label>
-                                <input type="hidden" name="is_find_error" :value="isFindError ? '1' : '0'" :disabled="type !== 'code'">
-
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div
-                                        @click="isFindError = false"
-                                        class="p-3 rounded-xl border cursor-pointer transition select-none flex items-center justify-between"
-                                        :class="!isFindError
-                                            ? 'border-acode-tech bg-acode-surface/80 ring-2 ring-acode-tech/50'
-                                            : 'border-slate-200 bg-white hover:border-slate-300'"
-                                    >
-                                        <div>
-                                            <p class="font-bold text-xs text-slate-800">Modo Desarrollo</p>
-                                            <p class="text-[11px] text-slate-500">Escribir solución desde cero</p>
-                                        </div>
-                                        <x-badge variant="info">Estándar</x-badge>
-                                    </div>
-
-                                    <div
-                                        @click="isFindError = true"
-                                        class="p-3 rounded-xl border cursor-pointer transition select-none flex items-center justify-between"
-                                        :class="isFindError
-                                            ? 'border-amber-400 bg-amber-50/70 ring-2 ring-amber-400/50'
-                                            : 'border-slate-200 bg-white hover:border-slate-300'"
-                                    >
-                                        <div>
-                                            <p class="font-bold text-xs text-slate-800">Modo Auditoría / Debugging</p>
-                                            <p class="text-[11px] text-slate-500">Encontrar y corregir el error</p>
-                                        </div>
-                                        <x-badge variant="warning">Corregir bug</x-badge>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <x-form.group name="programming_language" label="Lenguaje de programación" required>
-                                    <x-form.input
-                                        type="text"
-                                        name="programming_language"
-                                        value="{{ old('programming_language', 'PHP') }}"
-                                        maxlength="40"
-                                        ::disabled="type !== 'code'"
-                                        placeholder="PHP"
-                                    />
-                                </x-form.group>
-
-                                <x-form.group name="instructions" label="Instrucciones técnicas de desarrollo" required>
-                                    <x-form.input
-                                        type="text"
-                                        name="instructions"
-                                        value="{{ old('instructions') }}"
-                                        ::disabled="type !== 'code'"
-                                        placeholder="Ej. Resuelve sin librerías externas…"
-                                    />
-                                </x-form.group>
-                            </div>
-
-                            {{-- Editor 1: Plantilla base o Código con error --}}
-                            <div class="space-y-1">
-                                <div class="flex items-center justify-between">
-                                    <label class="block text-xs font-bold text-slate-800">
-                                        <span x-show="!isFindError">Código inicial o plantilla base (opcional)</span>
-                                        <span x-show="isFindError" class="text-amber-800">Código defectuoso para auditoría del alumno (obligatorio)</span>
-                                    </label>
-                                    <span class="text-[10px] font-mono text-slate-400">Fira Code</span>
-                                </div>
-                                <div class="rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
-                                    <div class="bg-slate-800 px-3 py-1 border-b border-slate-700 text-[11px] font-mono text-slate-300 flex items-center justify-between">
-                                        <span x-text="isFindError ? 'codigo_con_error.php' : 'plantilla_inicial.php'"></span>
-                                        <span class="text-[9px] text-slate-400 uppercase">Editor Alumno</span>
-                                    </div>
-                                    <textarea
-                                        name="starter_code"
-                                        rows="4"
-                                        :disabled="type !== 'code'"
-                                        placeholder="// Escribe aquí el código base o defectuoso…"
-                                        class="w-full bg-slate-900 text-slate-100 font-mono text-xs p-3 focus:outline-none focus:ring-1 focus:ring-acode-tech border-0"
-                                    >{{ old('starter_code') }}</textarea>
-                                </div>
-                            </div>
-
-                            {{-- Editor 2: Solución de Referencia --}}
-                            <div class="space-y-1">
-                                <div class="flex items-center justify-between">
-                                    <label class="block text-xs font-bold text-slate-800">
-                                        Solución canónica de referencia (código funcional)
-                                    </label>
-                                    <span class="text-[10px] font-mono text-emerald-400">Solución Correcta</span>
-                                </div>
-                                <div class="rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
-                                    <div class="bg-slate-800 px-3 py-1 border-b border-slate-700 text-[11px] font-mono text-slate-300 flex items-center justify-between">
-                                        <span>solucion_referencia.php</span>
-                                        <span class="text-[9px] text-emerald-400 uppercase">Patrón Evaluación</span>
-                                    </div>
-                                    <textarea
-                                        name="reference_solution"
-                                        rows="4"
-                                        :disabled="type !== 'code'"
-                                        placeholder="// Código funcional de referencia…"
-                                        class="w-full bg-slate-900 text-slate-100 font-mono text-xs p-3 focus:outline-none focus:ring-1 focus:ring-acode-tech border-0"
-                                    >{{ old('reference_solution') }}</textarea>
-                                </div>
-                            </div>
-                        </div>
-
-                        {{-- Botones de Navegación del Paso 2 --}}
-                        <div class="flex items-center justify-between pt-4 border-t border-slate-100">
-                            <x-button type="button" variant="neutral" size="md" @click="step = 1">
-                                ← Volver al paso 1
-                            </x-button>
-
-                            <x-button type="button" variant="primary" size="md" @click="goToStep(3)">
-                                Continuar al paso 3 →
-                            </x-button>
                         </div>
                     </div>
-                </x-card>
-            </div>
-
-            {{-- ============================================================ --}}
-            {{-- ETAPA 3: Ponderación, Cronómetro y Guardado Final            --}}
-            {{-- ============================================================ --}}
-            <div x-show="step === 3" x-cloak class="space-y-6">
-                <x-card>
-                    <div class="space-y-5">
-                        <div class="pb-3 border-b border-slate-100 flex items-center justify-between">
-                            <div>
-                                <h2 class="text-base font-bold text-acode-primary">Paso 3: Ponderación y Guardado</h2>
-                                <p class="text-xs text-slate-500">Asigna el puntaje, el tiempo asignado y confirma el reactivo.</p>
-                            </div>
-                        </div>
-
-                        {{-- Resumen Compacto del Reactivo --}}
-                        <div class="p-3.5 bg-acode-surface/60 border border-slate-200 rounded-xl space-y-1.5">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-bold text-slate-800" x-text="title"></span>
-                                <x-badge variant="info" x-text="type === 'multiple_choice' ? 'Opción múltiple' : (type === 'matching' ? 'Relación' : (type === 'open' ? 'Abierta' : 'Código'))"></x-badge>
-                            </div>
-                            <p class="text-xs text-slate-600 line-clamp-2" x-text="stem"></p>
-                        </div>
-
-                        {{-- Puntos y Tiempo --}}
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <x-form.group
-                                name="default_points"
-                                label="Puntos nominales"
-                                helpText="Ponderación que aporta a la calificación del examen."
-                                required
-                            >
-                                <x-form.input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    name="default_points"
-                                    x-model="defaultPoints"
-                                    required
-                                    prefixIcon="reportBar"
-                                />
-                            </x-form.group>
-
-                            <x-form.group
-                                name="default_time_seconds"
-                                label="Tiempo límite (segundos)"
-                                helpText="Cronómetro individual asignado para este reactivo."
-                                required
-                            >
-                                <x-form.input
-                                    type="number"
-                                    min="1"
-                                    name="default_time_seconds"
-                                    x-model.number="defaultTime"
-                                    @input="setTime($event.target.value)"
-                                    required
-                                    prefixIcon="clock"
-                                />
-                            </x-form.group>
-                        </div>
-
-                        {{-- Presets rápidos de tiempo --}}
-                        <div class="flex items-center gap-2 pt-1 text-xs text-slate-500">
-                            <span class="font-medium">Presets recomendados:</span>
-                            <button type="button" @click="setTime(60)" class="px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-100 transition" :class="defaultTime === 60 ? 'bg-acode-primary text-white border-acode-primary' : 'bg-white'">60 s</button>
-                            <button type="button" @click="setTime(120)" class="px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-100 transition" :class="defaultTime === 120 ? 'bg-acode-primary text-white border-acode-primary' : 'bg-white'">120 s</button>
-                            <button type="button" @click="setTime(180)" class="px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-100 transition" :class="defaultTime === 180 ? 'bg-acode-primary text-white border-acode-primary' : 'bg-white'">180 s</button>
-                            <button type="button" @click="setTime(600)" class="px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-100 transition" :class="defaultTime === 600 ? 'bg-acode-primary text-white border-acode-primary' : 'bg-white'">600 s (10 min)</button>
-                        </div>
-
-                        {{-- Botones de Navegación del Paso 3 --}}
-                        <div class="flex items-center justify-between pt-4 border-t border-slate-100">
-                            <x-button type="button" variant="neutral" size="md" @click="step = 2">
-                                ← Volver al paso 2
-                            </x-button>
-
-                            <x-button type="submit" variant="primary" size="md">
-                                <x-icon name="save" class="w-4 h-4 mr-1.5" />
-                                Guardar reactivo
-                            </x-button>
-                        </div>
+                    <div x-show="type === 'open'">
+                        <p class="mb-2 text-xs text-slate-500">Tu respuesta</p>
+                        <div class="min-h-28 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-400">Escribe aquí tu respuesta...</div>
                     </div>
-                </x-card>
-            </div>
-        </form>
-    </div>
+                    <div x-show="type === 'code'" class="space-y-3">
+                        <p class="text-xs font-medium text-slate-600" x-text="language || 'Lenguaje de programación'"></p>
+                        <p class="whitespace-pre-wrap break-words text-sm text-slate-700" x-text="instructions.trim() || 'Aquí aparecerán las instrucciones.'"></p>
+                        <pre x-show="starterCode.trim()" class="overflow-x-auto rounded-lg bg-slate-900 p-3 text-xs text-slate-100"><code x-text="starterCode"></code></pre>
+                        <div class="min-h-28 rounded-lg border border-slate-200 bg-white p-3 font-mono text-xs text-slate-400">// Espacio para escribir código</div>
+                    </div>
+                </div>
+                <p class="mt-4 text-xs text-slate-500">La presentación final puede variar según la interfaz móvil y web de aplicación.</p>
+            </aside>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-5">
+            <x-unsaved-changes form-id="create-question-form" :cancel-url="route('questions.index')" />
+            <button type="submit" class="rounded-lg bg-acode-primary px-5 py-3 text-sm font-semibold text-white hover:opacity-90">Guardar pregunta</button>
+        </div>
+    </form>
+</div>
+
+<script>
+function questionCreator() {
+    let nextId = 0;
+    const uniqueId = () => ++nextId;
+    const initialOptions = {{ \Illuminate\Support\Js::from(old('options', ['', ''])) }};
+    const initialConcepts = {{ \Illuminate\Support\Js::from(old('concepts', ['', ''])) }};
+    const initialDefinitions = {{ \Illuminate\Support\Js::from(old('definitions', ['', ''])) }};
+    const optionTexts = Array.isArray(initialOptions) ? initialOptions : Object.values(initialOptions);
+    const conceptTexts = Array.isArray(initialConcepts) ? initialConcepts : Object.values(initialConcepts);
+    const definitionTexts = Array.isArray(initialDefinitions) ? initialDefinitions : Object.values(initialDefinitions);
+    return {
+        type: {{ \Illuminate\Support\Js::from(old('question_type', 'multiple_choice')) }},
+        title: {{ \Illuminate\Support\Js::from(old('title', '')) }},
+        stem: {{ \Illuminate\Support\Js::from(old('stem', '')) }},
+        language: {{ \Illuminate\Support\Js::from(old('programming_language', 'Java')) }},
+        starterCode: {{ \Illuminate\Support\Js::from(old('starter_code', '')) }},
+        instructions: {{ \Illuminate\Support\Js::from(old('instructions', '')) }},
+        options: (optionTexts.length >= 2 ? optionTexts : ['', '']).map(text => ({ id: uniqueId(), text })),
+        pairs: Array.from({ length: Math.max(2, conceptTexts.length, definitionTexts.length) }, (_, i) => ({
+            id: uniqueId(), concept: conceptTexts[i] || '', definition: definitionTexts[i] || ''
+        })),
+        correctIndex: Number({{ \Illuminate\Support\Js::from(old('correct_option_index', 0)) }}),
+        addOption() { this.options.push({ id: uniqueId(), text: '' }); },
+        removeOption(i) {
+            if (this.options.length <= 2) return;
+            this.options.splice(i, 1);
+            if (this.correctIndex === i) this.correctIndex = 0;
+            else if (this.correctIndex > i) this.correctIndex--;
+        },
+        addPair() { this.pairs.push({ id: uniqueId(), concept: '', definition: '' }); },
+        removePair(i) { if (this.pairs.length > 2) this.pairs.splice(i, 1); },
+        previewDefinitions() { return [...this.pairs].reverse(); },
+        typeLabel() {
+            return { multiple_choice: 'Opción múltiple', matching: 'Relación de columnas', open: 'Pregunta abierta', code: 'Programación / Código' }[this.type] || '';
+        }
+    };
+}
+</script>
 @endsection
