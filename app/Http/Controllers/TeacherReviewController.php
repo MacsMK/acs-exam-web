@@ -33,6 +33,26 @@ use Illuminate\Validation\ValidationException;
 class TeacherReviewController extends Controller
 {
     /**
+     * Panel concentrador de revisiones de exámenes para el docente.
+     */
+    public function globalIndex(Request $request): View
+    {
+        $teacher = $request->user();
+
+        $exams = Exam::where('teacher_id', $teacher->id)
+            ->withCount([
+                'studentAttempts',
+                'studentAttempts as pending_reviews_count' => function ($query): void {
+                    $query->where('pending_ai_count', '>', 0);
+                },
+            ])
+            ->latest()
+            ->paginate(12);
+
+        return view('teacher.reviews.index', compact('exams'));
+    }
+
+    /**
      * Lista de intentos de examen presentados por los alumnos para revisión.
      */
     public function index(Request $request, Exam $exam): View
@@ -73,12 +93,20 @@ class TeacherReviewController extends Controller
         $reviews = $request->validated('reviews');
 
         DB::transaction(function () use ($attempt, $reviews): void {
+            $answerIds = array_column($reviews, 'answer_id');
+            $answers = $attempt->answers()
+                ->with('examQuestion')
+                ->whereIn('id', $answerIds)
+                ->get()
+                ->keyBy('id');
+
             foreach ($reviews as $review) {
-                /** @var StudentAnswer $answer */
-                $answer = $attempt->answers()
-                    ->with('examQuestion')
-                    ->whereKey($review['answer_id'])
-                    ->firstOrFail();
+                /** @var StudentAnswer|null $answer */
+                $answer = $answers->get($review['answer_id']);
+
+                if ($answer === null) {
+                    abort(404, 'La respuesta seleccionada no pertenece al intento evaluado.');
+                }
 
                 $maxPoints = (float) $answer->examQuestion->points_weight;
                 $assignedScore = (float) $review['score'];

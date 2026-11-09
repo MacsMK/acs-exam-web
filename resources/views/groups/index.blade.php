@@ -46,13 +46,6 @@
     class="space-y-6"
 >
 
-    {{-- Regresar --}}
-    <a href="{{ route('dashboard') }}"
-       class="inline-flex items-center gap-2 text-sm font-medium text-acode-tech hover:underline">
-        <span aria-hidden="true">←</span>
-        Volver a Inicio
-    </a>
-
     {{-- Encabezado --}}
     <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
 

@@ -23,14 +23,14 @@
     </div>
 
     {{-- Indicador de etapas --}}
-    <div class="rounded-xl border border-slate-200 bg-white p-5">
-        <div class="grid grid-cols-4 gap-2">
-            @foreach ([['Datos', true], ['Preguntas', false], ['Configuración', false], ['Revisión', false]] as $index => [$label, $completed])
-                <div class="flex flex-col items-center gap-2 text-center">
-                    <div class="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold {{ $index === 1 ? 'bg-acode-primary text-white' : ($completed ? 'bg-acode-accent text-white' : 'bg-slate-100 text-slate-500') }}">
+    <div class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+        <div class="grid grid-cols-4 gap-1 sm:gap-2">
+            @foreach ([['Datos', true], ['Preguntas', false], ['Config.', false], ['Revisión', false]] as $index => [$label, $completed])
+                <div class="flex flex-col items-center gap-1.5 text-center">
+                    <div class="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full text-xs sm:text-sm font-bold {{ $index === 1 ? 'bg-acode-primary text-white shadow-sm' : ($completed ? 'bg-acode-accent text-white' : 'bg-slate-100 text-slate-500') }}">
                         {{ $completed ? '✓' : $index + 1 }}
                     </div>
-                    <span class="text-xs {{ $index === 1 ? 'font-semibold text-acode-primary' : 'text-slate-500' }}">{{ $label }}</span>
+                    <span class="text-[11px] sm:text-xs truncate {{ $index === 1 ? 'font-bold text-acode-primary' : 'text-slate-500' }}">{{ $label }}</span>
                 </div>
             @endforeach
         </div>
@@ -159,13 +159,13 @@
                             </div>
                         </li>
                     @empty
-                        <li class="px-4 py-4 text-sm text-[#DC2626]">Las preguntas de esta propuesta ya no están disponibles. Descártala y genera otra.</li>
+                        <li class="px-4 py-4 text-sm text-acode-danger">Las preguntas de esta propuesta ya no están disponibles. Cancela la propuesta y genera otra.</li>
                     @endforelse
                 </ol>
-                <div class="mt-5 flex flex-wrap gap-3">
+                <div class="mt-5 flex flex-wrap items-center gap-3">
                     <form method="POST" action="{{ route('exams.proposals.accept', $exam) }}">
                         @csrf
-                        <button type="submit" class="rounded-lg bg-acode-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90">Aceptar propuesta</button>
+                        <x-button variant="primary" type="submit">Aceptar propuesta</x-button>
                     </form>
                     <form method="POST" action="{{ route('exams.proposals.generate', $exam) }}">
                         @csrf
@@ -173,14 +173,14 @@
                         <input type="hidden" name="question_type" value="{{ $proposal['question_type'] ?? '' }}">
                         <input type="hidden" name="subject_tag" value="{{ $proposal['subject_tag'] ?? '' }}">
                         <input type="hidden" name="requested_quantity" value="{{ $proposal['requested_quantity'] ?? count($proposal['question_ids']) }}">
-                        <button type="submit" class="rounded-lg border border-acode-tech px-5 py-3 text-sm font-semibold text-acode-tech transition hover:bg-slate-50">Volver a sortear</button>
+                        <x-button variant="secondary" type="submit">Reintentar sorteo</x-button>
                     </form>
                     <form method="POST" action="{{ route('exams.proposals.discard', $exam) }}">
                         @csrf
-                        <button type="submit" class="rounded-lg border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Descartar propuesta</button>
+                        <x-button variant="neutral" type="submit">Cancelar propuesta</x-button>
                     </form>
                 </div>
-                <p class="mt-3 text-xs text-slate-500">Al volver a sortear se genera otra selección aleatoria con los mismos filtros. Algunas preguntas podrían coincidir.</p>
+                <p class="mt-3 text-xs text-slate-500">Al reintentar sorteo se genera otra selección aleatoria con los mismos filtros. Algunas preguntas podrían coincidir.</p>
             </section>
         @else
             {{-- Formulario de generación --}}

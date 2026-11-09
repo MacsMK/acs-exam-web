@@ -41,14 +41,6 @@
         </div>
     </div>
 
-    {{-- Alerta de Notificaciones --}}
-    @if (session('status'))
-        <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-sm font-medium flex items-center gap-2">
-            <x-icon name="checkCircle" class="w-5 h-5 text-emerald-600 shrink-0" />
-            <span>{{ session('status') }}</span>
-        </div>
-    @endif
-
     @if ($errors->any())
         <div class="p-4 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-sm font-medium">
             <p class="font-bold mb-1">Por favor corrige los siguientes errores:</p>
@@ -103,7 +95,7 @@
 
             <x-table>
                 <x-slot:header>
-                    <x-table.th>Alumno</x-table.th>
+                    <x-table.th class="sticky left-0 bg-acode-primary z-20">Alumno</x-table.th>
                     <x-table.th align="center">Exámenes ({{ $weights['exams'] }}%)</x-table.th>
                     <x-table.th align="center">Tareas ({{ $weights['homework'] }}%)</x-table.th>
                     <x-table.th align="center">Proyectos ({{ $weights['project'] }}%)</x-table.th>
@@ -117,7 +109,7 @@
                         $examAvg = $examAverages->get($student->id);
                     @endphp
                     <tr>
-                        <x-table.td>
+                        <x-table.td class="sticky left-0 bg-white z-10 border-r border-slate-200 shadow-sm">
                             <input type="hidden" name="grades[{{ $index }}][student_id]" value="{{ $student->id }}" />
                             <div class="flex items-center gap-2.5">
                                 <div class="w-8 h-8 rounded-full bg-acode-surface flex items-center justify-center font-bold text-xs text-acode-tech shrink-0">

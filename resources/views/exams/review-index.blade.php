@@ -35,12 +35,6 @@ Fecha Creación: 08/11/2026
         </a>
     </div>
 
-    @if (session('status'))
-        <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium flex items-center justify-between">
-            <span>{{ session('status') }}</span>
-        </div>
-    @endif
-
     {{-- Tabla de Intentos --}}
     <x-card padding="p-0" class="overflow-hidden">
         <div class="overflow-x-auto">

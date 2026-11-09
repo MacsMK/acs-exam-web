@@ -88,4 +88,14 @@ class TeacherSubscription extends Model
     {
         return $this->belongsTo(SubscriptionPackage::class);
     }
+
+    /**
+     * Alias de conveniencia para la relación con SubscriptionPackage.
+     *
+     * @return BelongsTo<SubscriptionPackage, TeacherSubscription>
+     */
+    public function package(): BelongsTo
+    {
+        return $this->subscriptionPackage();
+    }
 }

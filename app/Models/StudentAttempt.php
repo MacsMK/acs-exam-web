@@ -98,4 +98,14 @@ class StudentAttempt extends Model
             $sub->select('group_id')->from('acs_group_student')->where('student_id', $studentId);
         });
     }
+
+    /**
+     * Calificación a desplegar en vista (final_score o objective_score si no hay final).
+     */
+    public function getDisplayScoreAttribute(): ?float
+    {
+        return $this->final_score !== null
+            ? (float) $this->final_score
+            : ($this->objective_score !== null ? (float) $this->objective_score : null);
+    }
 }

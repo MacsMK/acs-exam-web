@@ -61,64 +61,20 @@
         {{-- Columna institucional (Izquierda) --}}
         <section class="relative isolate flex min-h-[400px] flex-col overflow-hidden bg-acode-primary px-7 py-8 text-white sm:px-12 lg:min-h-screen lg:px-14 lg:py-12">
 
-            {{-- Elementos decorativos (Fondos circulares degradados) --}}
+            {{-- Elementos decorativos (Fondos circulares degradados con tokens A-Code) --}}
             <div
                 aria-hidden="true"
-                class="pointer-events-none absolute -bottom-48 -left-48 -z-10 h-[450px] w-[450px] rounded-full"
-                style="
-                    background: linear-gradient(
-                        135deg,
-                        rgba(55, 125, 200, 0.40) 0%,
-                        rgba(37, 99, 166, 0.25) 45%,
-                        rgba(20, 43, 74, 0.04) 100%
-                    );
-                    -webkit-mask: radial-gradient(
-                        farthest-side,
-                        transparent calc(100% - 135px),
-                        #000 calc(100% - 100px)
-                    );
-                    mask: radial-gradient(
-                        farthest-side,
-                        transparent calc(100% - 135px),
-                        #000 calc(100% - 100px)
-                    );
-                "
+                class="pointer-events-none absolute -bottom-48 -left-48 -z-10 h-[450px] w-[450px] rounded-full border border-acode-tech/20 bg-acode-tech/15 blur-2xl"
             ></div>
 
             <div
                 aria-hidden="true"
-                class="pointer-events-none absolute -bottom-44 -right-44 -z-10 h-80 w-80 rounded-full"
-                style="
-                    background: linear-gradient(
-                        145deg,
-                        rgba(55, 125, 200, 0.28) 0%,
-                        rgba(37, 99, 166, 0.14) 55%,
-                        rgba(20, 43, 74, 0.02) 100%
-                    );
-                    -webkit-mask: radial-gradient(
-                        farthest-side,
-                        transparent calc(100% - 45px),
-                        #000 calc(100% - 40px)
-                    );
-                    mask: radial-gradient(
-                        farthest-side,
-                        transparent calc(100% - 45px),
-                        #000 calc(100% - 40px)
-                    );
-                "
+                class="pointer-events-none absolute -bottom-44 -right-44 -z-10 h-80 w-80 rounded-full border border-acode-accent/20 bg-acode-accent/10 blur-xl"
             ></div>
 
             <div
                 aria-hidden="true"
-                class="pointer-events-none absolute bottom-0 left-0 -z-10 h-72 w-96"
-                style="
-                    background: radial-gradient(
-                        ellipse at 35% 80%,
-                        rgba(37, 99, 166, 0.18) 0%,
-                        rgba(37, 99, 166, 0.07) 45%,
-                        transparent 75%
-                    );
-                "
+                class="pointer-events-none absolute bottom-0 left-0 -z-10 h-72 w-96 acode-auth-radial-bg"
             ></div>
 
             <div aria-hidden="true" class="pointer-events-none absolute -right-32 top-1/4 -z-10 h-80 w-80 rounded-full bg-acode-tech/10 blur-3xl"></div>

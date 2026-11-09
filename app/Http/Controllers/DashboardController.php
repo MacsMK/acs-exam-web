@@ -22,10 +22,14 @@ use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request): View
+    public function __invoke(Request $request): \Illuminate\Http\Response|\Illuminate\Http\RedirectResponse|View
     {
         /** @var User $user */
         $user = $request->user();
+
+        if ($user->role === 'super_admin') {
+            return redirect()->route('admin.teachers.index');
+        }
 
         if ($user->role === 'teacher') {
             return $this->teacherDashboard($user);
@@ -86,12 +90,13 @@ class DashboardController extends Controller
     private function studentDashboard(User $student): View
     {
         $enrolledGroups = $student->groupsAsStudent()
+            ->where('acs_groups.is_closed', false)
             ->with(['teacher'])
             ->get();
 
         $pendingExams = Exam::query()
             ->where('is_published', true)
-            ->whereHas('groups.students', static fn ($query) => $query->where('acs_users.id', $student->id))
+            ->whereHas('groups', static fn ($query) => $query->where('is_closed', false)->whereHas('students', static fn ($q) => $q->where('acs_users.id', $student->id)))
             ->whereDoesntHave('studentAttempts', static fn ($query) => $query->where('student_id', $student->id)->where('status', 'submitted'))
             ->with(['groups', 'teacher'])
             ->withCount('examQuestions')
@@ -100,13 +105,14 @@ class DashboardController extends Controller
 
         $recentAttempts = StudentAttempt::query()
             ->where('student_id', $student->id)
+            ->whereHas('group', static fn ($query) => $query->where('is_closed', false))
             ->with(['exam.teacher', 'group'])
             ->latest()
             ->limit(5)
             ->get();
 
         return view('dashboard.student', [
-            'groupsCount' => $student->groupsAsStudent()->count(),
+            'groupsCount' => $enrolledGroups->count(),
             'enrolledGroups' => $enrolledGroups,
             'pendingExams' => $pendingExams,
             'recentAttempts' => $recentAttempts,

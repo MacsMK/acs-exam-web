@@ -13,6 +13,7 @@ declare(strict_types=1);
  * ============================================================================
  */
 
+use App\Http\Controllers\AdminTeacherController;
 use App\Http\Controllers\AttemptController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
@@ -24,10 +25,17 @@ use App\Http\Controllers\GroupController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\StudentExamController;
+use App\Http\Controllers\StudentGradeController;
+use App\Http\Controllers\StudentGroupController;
+use App\Http\Controllers\TeacherAiCreditsController;
+use App\Http\Controllers\TeacherProfileController;
 use App\Http\Controllers\TeacherReviewController;
+use App\Http\Controllers\TeacherSubscriptionController;
+use App\Http\Controllers\WebPrivacyController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [LandingController::class, 'index'])->name('landing');
+Route::get('aviso-privacidad', [WebPrivacyController::class, 'show'])->name('privacy.show.public');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('register/docente', [RegisterController::class, 'showTeacherForm'])->name('auth.register.teacher.show');
@@ -79,28 +87,36 @@ Route::middleware('auth')->group(function (): void {
         Route::get('exams/{exam}/revision', [TeacherReviewController::class, 'index'])->name('exams.revision.index');
         Route::get('exams/{exam}/revision/{attempt}', [TeacherReviewController::class, 'show'])->name('exams.revision.show');
         Route::post('exams/{exam}/revision/{attempt}', [TeacherReviewController::class, 'update'])->name('exams.revision.update');
-        Route::get('docente/proximamente/{section}', function (string $section) {
-            $sections = [
-                'revision' => 'Revisión',
-                'calificaciones' => 'Calificaciones',
-                'suscripcion' => 'Suscripción',
-                'creditos-ia' => 'Créditos de IA',
-                'perfil' => 'Mi perfil',
-                'aviso-privacidad' => 'Aviso de privacidad',
-            ];
-            abort_unless(array_key_exists($section, $sections), 404);
-            return view('teacher.coming-soon', [
-                'title' => $sections[$section],
-            ]);
-        })->name('teacher.coming-soon');
+
+        // Módulos funcionales docentes (sustituyen coming-soon)
+        Route::get('docente/revision', [TeacherReviewController::class, 'globalIndex'])->name('teacher.reviews.index');
+        Route::get('docente/calificaciones', [EvaluationPeriodController::class, 'hub'])->name('teacher.gradebook.hub');
+        Route::get('docente/suscripcion', [TeacherSubscriptionController::class, 'index'])->name('teacher.subscription.index');
+        Route::get('docente/creditos-ia', [TeacherAiCreditsController::class, 'index'])->name('teacher.ai-credits.index');
+        Route::get('perfil', [TeacherProfileController::class, 'show'])->name('teacher.profile.index');
+        Route::put('perfil', [TeacherProfileController::class, 'update'])->name('teacher.profile.update');
+    });
+
+    Route::middleware('role:super_admin')->prefix('admin')->name('admin.')->group(function (): void {
+        Route::get('docentes', [AdminTeacherController::class, 'index'])->name('teachers.index');
+        Route::post('docentes/{teacher}/toggle', [AdminTeacherController::class, 'toggleStatus'])->name('teachers.toggle');
+        Route::post('docentes/{teacher}/assign', [AdminTeacherController::class, 'assignPackage'])->name('teachers.assign');
     });
 
     Route::middleware('role:student')->group(function (): void {
+        Route::get('mis-grupos', [StudentGroupController::class, 'index'])->name('student.groups.index');
+        Route::delete('mis-grupos/{group}/abandonar', [StudentGroupController::class, 'leave'])->name('student.groups.leave');
         Route::get('grupos/unirse', [StudentExamController::class, 'joinForm'])->name('student.groups.join.form');
         Route::post('grupos/unirse', [StudentExamController::class, 'join'])->name('student.groups.join');
-        Route::get('mis-examenes', [StudentExamController::class, 'index'])->name('student.exams.index');
 
+        Route::get('mis-examenes', [StudentExamController::class, 'index'])->name('student.exams.index');
+        Route::get('examenes/{exam}/instrucciones', [StudentExamController::class, 'instructions'])->name('student.exams.instructions');
         Route::post('examenes/{exam}/iniciar', [AttemptController::class, 'start'])->name('attempts.start');
+
+        Route::get('mis-calificaciones', [StudentGradeController::class, 'index'])->name('student.grades.index');
+        Route::get('mis-calificaciones/{group}', [StudentGradeController::class, 'show'])->name('student.grades.show');
+
+        Route::get('intentos/{attempt}/revision', [AttemptController::class, 'review'])->name('attempts.review');
     });
 
     Route::get('intentos/{attempt}', [AttemptController::class, 'show'])->name('attempts.show');

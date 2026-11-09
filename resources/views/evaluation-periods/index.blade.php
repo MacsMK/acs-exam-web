@@ -44,14 +44,6 @@
         </div>
     </div>
 
-    {{-- Alerta de Notificaciones --}}
-    @if (session('status'))
-        <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-sm font-medium flex items-center gap-2">
-            <x-icon name="checkCircle" class="w-5 h-5 text-emerald-600 shrink-0" />
-            <span>{{ session('status') }}</span>
-        </div>
-    @endif
-
     {{-- Formulario Desplegable de Creación de Periodo (RF-CAL-001, RF-CAL-004, RF-CAL-005) --}}
     <div x-show="openCreate" x-cloak class="transition-all">
         <x-card class="border-2 border-acode-tech/30 shadow-md">

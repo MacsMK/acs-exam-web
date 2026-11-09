@@ -110,7 +110,7 @@ class User extends Authenticatable
      */
     public function subscription(): HasOne
     {
-        return $this->hasOne(TeacherSubscription::class, 'teacher_id');
+        return $this->hasOne(TeacherSubscription::class, 'teacher_id')->latestOfMany();
     }
 
     /**
@@ -194,6 +194,16 @@ class User extends Authenticatable
     public function devices(): HasMany
     {
         return $this->hasMany(UserDevice::class);
+    }
+
+    /**
+     * Suscripciones SaaS contratadas o asignadas a este docente.
+     *
+     * @return HasMany<TeacherSubscription>
+     */
+    public function teacherSubscriptions(): HasMany
+    {
+        return $this->hasMany(TeacherSubscription::class, 'teacher_id')->latest('id');
     }
 
     /**

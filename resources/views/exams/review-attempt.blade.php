@@ -35,12 +35,6 @@ Fecha Creación: 08/11/2026
         </a>
     </div>
 
-    @if (session('status'))
-        <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium">
-            {{ session('status') }}
-        </div>
-    @endif
-
     @if ($errors->any())
         <div class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm">
             <p class="font-bold mb-1">Por favor corrige los siguientes errores:</p>

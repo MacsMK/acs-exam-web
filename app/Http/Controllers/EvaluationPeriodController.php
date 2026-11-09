@@ -38,6 +38,26 @@ class EvaluationPeriodController extends Controller
     }
 
     /**
+     * Hub concentrador de periodos y sábanas de calificaciones por grupo.
+     */
+    public function hub(\Illuminate\Http\Request $request): View
+    {
+        $teacher = $request->user();
+
+        $groups = Group::where('teacher_id', $teacher->id)
+            ->withCount(['students', 'evaluationPeriods', 'exams'])
+            ->with(['evaluationPeriods' => function ($query): void {
+                $query->orderBy('starts_at');
+            }])
+            ->latest()
+            ->paginate(12);
+
+        return view('teacher.gradebook.hub', [
+            'groups' => $groups,
+        ]);
+    }
+
+    /**
      * Lista los periodos de evaluación configurados para un grupo escolar.
      */
     public function index(Group $group): View

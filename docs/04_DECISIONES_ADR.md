@@ -428,6 +428,16 @@ A partir del Sprint 2 y Sprint 3, las decisiones de arquitectura se gestionan me
   - [ADR-041](adrs/ADR-041_Integracion_Gemini_15_Flash_y_Evaluacion_Semantica_IA.md): Integración de Google Gemini 1.5 Flash para Evaluación Semántica con Privacidad LFPDPPP y Fallback Resiliente (`RF-EVA-004`, `RF-EVA-005`, `RF-IAR-002`, `RNF-PRI-001`, `RNF-CON-002`).
   - [ADR-042](adrs/ADR-042_Monitoreo_En_Vivo_WebSockets_Laravel_Reverb_y_Eventos_Examen.md): Monitoreo Docente en Vivo con WebSockets (Laravel Reverb), Canales Privados y Detección de Incidentes Anti-Trampa (`RW-12`, `RW-16`, `RNF-CON-001`, `RNF-CON-002`, `RNF-SEG-004`).
 
+- **Bloque V (Sprint 5 — Modernización UI/UX, Transiciones Alpine, SaaS y Gobernanza Normativa):**
+  - [ADR-043](adrs/ADR-043_Proctoring_Pasivo_y_Sensores_Anti_Trampa_frente_a_Biometria_Camara_LFPDPPP.md): Proctoring Pasivo y Sensores Anti-Trampa frente a Biometría de Cámara (LFPDPPP).
+  - [ADR-044](adrs/ADR-044_Centralizacion_de_Navegacion_Docente_Hubs_de_Revision_y_Calificaciones.md): Centralización de Navegación Docente: Hubs de Revisión y Calificaciones.
+  - [ADR-045](adrs/ADR-045_Arquitectura_SaaS_Flujo_WhatsApp_y_Panel_Superadministrador_RW05.md): Arquitectura SaaS: Flujo WhatsApp y Panel de Superadministrador (`RW-05`).
+  - [ADR-046](adrs/ADR-046_Homologacion_Integral_Contratos_API_v1_Flutter_y_Mapeo_HTTP_409.md): Homologación Integral de Contratos API v1 en Flutter y Mapeo de Excepciones HTTP 409 (`ConflictException`).
+  - [ADR-047](adrs/ADR-047_Estandarizacion_UI_Kit_A_Code_Microinteracciones_y_Transiciones_Alpine.md): Estandarización UI Kit A-Code: Microinteracciones y Transiciones Suaves con Alpine.js (`x-transition`).
+  - [ADR-048](adrs/ADR-048_Arquitectura_del_Hub_Web_del_Estudiante_y_Paridad_Movil.md): Arquitectura del Hub Web del Estudiante y Paridad 1:1 con Móvil (`P-17..23`, `P-81..84`, `P-174..181`).
+  - [ADR-049](adrs/ADR-049_Avatares_Vectoriales_y_Privacidad_LFPDPPP.md): Avatares Vectoriales Basados en Iniciales y Protección LFPDPPP (`P-08`, `P-09`).
+  - [ADR-050](adrs/ADR-050_Candados_Visualizacion_Resultados_y_Blindaje_IA.md): Candados de Visualización de Resultados, Blindaje Anti-Fuga de IA y Revisión Post-Examen (`P-136`, `P-171..173`).
+
 Consulta el [Catálogo Maestro de ADRs en `docs/adrs/README.md`](adrs/README.md) para el detalle técnico completo de cada decisión.
 
 ---

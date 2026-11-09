@@ -15,6 +15,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ExamConfigurationUpdateRequest;
 use App\Http\Requests\ExamSectionStoreRequest;
 use App\Http\Requests\ExamStoreRequest;
 use App\Models\Exam;
@@ -98,7 +99,7 @@ class ExamController extends Controller
         ]);
     }
 
-    public function generateSectionProposal(Request $request, Exam $exam): RedirectResponse
+    public function generateSectionProposal(ExamSectionStoreRequest $request, Exam $exam): RedirectResponse
     {
         $this->authorizeExam($exam);
 
@@ -108,12 +109,7 @@ class ExamController extends Controller
             'No se puede modificar un examen publicado.'
         );
 
-        $data = $request->validate([
-            'title' => ['required', 'string', 'max:100'],
-            'question_type' => ['required', 'in:multiple_choice,matching,open,code'],
-            'subject_tag' => ['nullable', 'string', 'max:255'],
-            'requested_quantity' => ['required', 'integer', 'min:1'],
-        ]);
+        $data = $request->validated();
 
         $sessionKey = "exam_section_proposal_{$exam->id}";
         $request->session()->forget($sessionKey);
@@ -194,7 +190,7 @@ class ExamController extends Controller
         return view('exams.configuration', compact('exam'));
     }
 
-    public function updateConfiguration(Request $request, Exam $exam): RedirectResponse
+    public function updateConfiguration(ExamConfigurationUpdateRequest $request, Exam $exam): RedirectResponse
     {
         $this->authorizeExam($exam);
 
@@ -204,23 +200,7 @@ class ExamController extends Controller
             'No se puede modificar un examen publicado.'
         );
 
-        $data = $request->validate([
-            'title' => ['required', 'string', 'max:150'],
-            'description' => ['nullable', 'string'],
-            'grading_scale' => ['required', 'in:0-10,0-100'],
-            'result_visibility_mode' => [
-                'required',
-                'in:final_score,estimated_score,objective_only_pending,hidden',
-            ],
-            'max_allowed_incidents' => ['required', 'integer', 'min:0'],
-            'randomize_question_order' => ['required', 'boolean'],
-            'require_webcam' => ['required', 'boolean'],
-            'group_ids' => ['nullable', 'array'],
-            'group_ids.*' => ['integer'],
-            'questions' => ['required', 'array'],
-            'questions.*.points_weight' => ['required', 'numeric', 'min:0', 'max:100'],
-            'questions.*.time_limit_seconds' => ['required', 'integer', 'min:1'],
-        ]);
+        $data = $request->validated();
 
         DB::transaction(function () use ($exam, $data) {
             $examQuestions = $exam->examQuestions()->lockForUpdate()->get()->keyBy('id');

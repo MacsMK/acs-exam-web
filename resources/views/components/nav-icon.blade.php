@@ -50,6 +50,11 @@
             '<path d="M4 2v4"/>',
             '<path d="M2 4h4"/>',
         ],
+        'add' => [
+            '<circle cx="12" cy="12" r="9"/>',
+            '<path d="M12 8v8"/>',
+            '<path d="M8 12h8"/>',
+        ],
     ];
 @endphp
 

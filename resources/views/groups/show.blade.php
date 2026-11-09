@@ -25,18 +25,34 @@
     </div>
 
     <div x-data="groupAccess(@js($group->join_code ?? $group->access_code ?? $group->access_folio ?? $group->folio ?? $group->code ?? ''))" @open-group-qr.window="openQr()">
-        <div x-show="showQr" x-cloak @keydown.escape.window="showQr = false" class="fixed inset-0 z-[100] flex items-center justify-center bg-acode-primary/60 p-4" role="dialog" aria-modal="true" aria-label="Código QR de incorporación">
+        <div x-show="showQr"
+             x-cloak
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             @keydown.escape.window="showQr = false"
+             class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+             role="dialog" aria-modal="true" aria-label="Código QR de incorporación">
             <div class="absolute inset-0" @click="showQr = false"></div>
-            <div class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl transform transition-all duration-200"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95">
                 <div class="flex items-start justify-between gap-3"><div><h2 class="text-xl font-bold text-acode-primary">Código de incorporación</h2><p class="mt-1 text-sm text-slate-500">Comparte el QR o el folio con tus estudiantes.</p></div><button type="button" @click="showQr = false" class="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100" aria-label="Cerrar">✕</button></div>
                 <p class="mt-5 text-center font-mono text-2xl font-bold tracking-widest text-acode-primary" x-text="folio"></p>
                 <div x-ref="qrContainer" class="mx-auto mt-4 flex min-h-[224px] w-[224px] items-center justify-center"></div>
                 <p x-show="qrError" x-text="qrError" class="mt-3 text-center text-sm text-acode-danger"></p>
                 <div class="mt-6 flex flex-wrap justify-end gap-3">
-                    <button type="button" @click="copyFolio()" class="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-acode-primary">Copiar folio</button>
-                    <button type="button" @click="downloadQr()" :disabled="!qrReady" class="min-h-11 rounded-lg bg-acode-primary px-4 text-sm font-semibold text-white disabled:opacity-50">Descargar QR</button>
+                    <button type="button" @click="copyFolio()" class="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-acode-primary hover:bg-slate-50 transition">Copiar folio</button>
+                    <button type="button" @click="downloadQr()" :disabled="!qrReady" class="min-h-11 rounded-lg bg-acode-primary px-4 text-sm font-semibold text-white disabled:opacity-50 hover:bg-acode-primary-dark transition">Descargar QR</button>
                 </div>
-                <p x-show="copied" class="mt-2 text-xs text-acode-accent">Folio copiado.</p>
+                <p x-show="copied" class="mt-2 text-xs text-acode-accent font-semibold">Folio copiado.</p>
                 <p x-show="copyError" class="mt-2 text-xs text-acode-danger">No se pudo copiar el folio.</p>
             </div>
         </div>
@@ -51,7 +67,11 @@
         </div>
 
         {{-- Pestaña: Estudiantes --}}
-        <section x-show="activeTab === 'students'" x-data="{ search: '' }">
+        <section x-show="activeTab === 'students'"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 translate-y-1.5"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 x-data="{ search: '' }">
             <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                 <div class="mb-6 flex flex-wrap items-center justify-between gap-5">
                     <div class="flex items-center gap-3">
@@ -78,7 +98,11 @@
         </section>
 
     {{-- Pestaña: Exámenes --}}
-        <section x-show="activeTab === 'exams'" x-cloak>
+        <section x-show="activeTab === 'exams'"
+                 x-cloak
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 translate-y-1.5"
+                 x-transition:enter-end="opacity-100 translate-y-0">
             <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div class="flex flex-wrap items-center justify-between gap-4">
                     <div>
@@ -176,6 +200,9 @@
         {{-- Pestaña: Calificaciones --}}
         <section x-show="activeTab === 'grades'"
                 x-cloak
+                x-transition:enter="transition ease-out duration-200"
+                x-transition:enter-start="opacity-0 translate-y-1.5"
+                x-transition:enter-end="opacity-100 translate-y-0"
                 x-data="{ search: '', statusFilter: 'all' }">
 
             <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -388,7 +415,11 @@
         </section>
 
         {{-- Pestaña: Configuración de evaluación --}}
-        <section x-show="activeTab === 'evaluation'" x-cloak>
+        <section x-show="activeTab === 'evaluation'"
+                 x-cloak
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 translate-y-1.5"
+                 x-transition:enter-end="opacity-100 translate-y-0">
 
             <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 
@@ -646,8 +677,14 @@
 
         <div x-show="showConfirm"
              x-cloak
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
              @keydown.escape.window="showConfirm = false"
-             class="fixed inset-0 z-[100] flex items-center justify-center bg-acode-primary/60 p-4"
+             class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
              role="dialog"
              aria-modal="true"
              aria-labelledby="group-confirm-title">
@@ -656,7 +693,13 @@
                  @click="showConfirm = false"
                  aria-hidden="true"></div>
 
-            <div class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+            <div class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl transform transition-all duration-200"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
                  @click.stop>
 
                 <div class="flex items-start gap-3">

@@ -88,6 +88,12 @@ class GroupEnrollmentService
             ]);
         }
 
+        if ($group->students()->where('acs_users.id', $student->id)->exists()) {
+            throw ValidationException::withMessages([
+                $errorField => ['Ya te encuentras inscrito en este grupo escolar.'],
+            ]);
+        }
+
         $this->subscriptionLimitService?->ensureCanEnrollStudent($group);
 
         DB::transaction(static function () use ($group, $student): void {
@@ -180,8 +186,8 @@ class GroupEnrollmentService
     }
 
     /**
-     * Lista los exámenes publicados asignados a los grupos activos del alumno,
-     * con carga ansiosa de apartados y reactivos para evitar lazy loading.
+     * Lista los exámenes publicados asignados a los grupos activos (no cerrados) del alumno,
+     * con carga ansiosa y conteo de reactivos para optimizar rendimiento.
      *
      * @return Collection<int, Exam>
      */
@@ -189,8 +195,12 @@ class GroupEnrollmentService
     {
         return Exam::withoutGlobalScopes()
             ->where('is_published', true)
-            ->whereHas('groups.students', fn ($q) => $q->where('acs_users.id', $student->id))
-            ->with(['sections.examQuestions'])
+            ->whereHas('groups', static function ($query) use ($student): void {
+                $query->where('is_closed', false)
+                    ->whereHas('students', static fn ($q) => $q->where('acs_users.id', $student->id));
+            })
+            ->with(['teacher', 'groups'])
+            ->withCount('examQuestions')
             ->get();
     }
 

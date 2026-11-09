@@ -113,23 +113,25 @@
                                         @else
                                             <x-badge variant="danger">Incorrecto</x-badge>
                                         @endif
-                                    @elseif ($answer->teacher_recoteje_score === null && !$answer->ai_evaluated_at)
-                                        <x-badge variant="warning">Pendiente de evaluación</x-badge>
-                                    @elseif ($answer->ai_evaluated_at)
-                                        <x-badge :variant="$answer->ai_meets_goal ? 'accent' : 'danger'">
-                                            IA: {{ $answer->ai_meets_goal ? 'Cumple objetivo' : 'No cumple' }}
-                                        </x-badge>
+                                    @elseif ($answer->teacher_recoteje_score !== null)
+                                        <x-badge variant="accent">Revisado por docente</x-badge>
                                     @else
-                                        <x-badge variant="warning">Pendiente</x-badge>
+                                        {{-- Blindaje normativo P-136 (RF-EVA-009): no revelar score/feedback preliminar de IA --}}
+                                        <x-badge variant="warning">Pendiente de evaluación docente</x-badge>
                                     @endif
                                 </div>
                             </div>
 
-                            <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
-                                <span>Puntos asignados: <strong class="font-mono text-slate-800">{{ number_format((float) $answer->points_awarded, 2) }}</strong></span>
-                                @if ($answer->ai_feedback)
-                                    <span class="text-slate-500 italic max-w-xs truncate" title="{{ $answer->ai_feedback }}">
-                                        Feedback: "{{ $answer->ai_feedback }}"
+                            <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+                                @if ($answer->is_correct !== null || $answer->teacher_recoteje_score !== null)
+                                    <span>Puntos asignados: <strong class="font-mono text-slate-800">{{ number_format((float) $answer->points_awarded, 2) }}</strong></span>
+                                @else
+                                    <span class="text-slate-400 italic">Puntos: Pendiente de validación</span>
+                                @endif
+
+                                @if ($answer->teacher_recoteje_notes)
+                                    <span class="text-slate-700 italic max-w-md" title="{{ $answer->teacher_recoteje_notes }}">
+                                        Observación docente: "{{ $answer->teacher_recoteje_notes }}"
                                     </span>
                                 @endif
                             </div>
@@ -145,12 +147,19 @@
             </div>
         @endif
 
-        {{-- Botón de Regreso Normativo --}}
-        <div class="pt-2 text-center sm:text-left">
+        {{-- Acciones Normativas: Regreso y Revisión de Soluciones (P-172) --}}
+        <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
             <x-button :href="route('student.exams.index')" variant="neutral" size="md">
                 <x-icon name="chevronDown" class="w-4 h-4 rotate-90 mr-1.5" />
                 Volver al listado
             </x-button>
+
+            @if (!empty($reviewAvailable))
+                <x-button :href="route('attempts.review', $attempt)" variant="primary" size="md">
+                    <x-icon name="eye" class="w-4 h-4 mr-1.5" />
+                    Consultar soluciones y retroalimentación
+                </x-button>
+            @endif
         </div>
     </div>
 @endsection

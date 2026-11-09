@@ -116,11 +116,6 @@ Descripción:    Landing page pública institucional del SaaS. Presenta el ecosi
                 
                 {{-- Columna Izquierda: Copywriting y CTA --}}
                 <div class="lg:col-span-7 space-y-6 text-center lg:text-left">
-                <div class="inline-flex items-center gap-2 rounded-full border border-acode-accent/30 bg-acode-accent/10 px-4 py-2 text-sm font-bold tracking-wide text-acode-navy">
-                    <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-acode-accent"></span>
-                    Evaluador de Exámenes
-                </div>
-
                     <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-acode-navy tracking-tight leading-[1.15]">
                         Exámenes Contrarreloj <span class="text-acode-tech">Blindados</span> contra Trampas de IA.
                     </h1>
@@ -164,11 +159,7 @@ Descripción:    Landing page pública institucional del SaaS. Presenta el ecosi
                                 <span class="w-3 h-3 rounded-full bg-acode-danger inline-block"></span>
                                 <span class="w-3 h-3 rounded-full bg-acode-warning inline-block"></span>
                                 <span class="w-3 h-3 rounded-full bg-acode-accent inline-block"></span>
-                                <span class="text-xs font-mono font-bold text-slate-400 ml-2">EXAM-RUNNER v1.0</span>
-                            </div>
-                            <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                Cámara Activa
-                            </span>
+                            </div>>
                         </div>
 
                         {{-- Temporizador reactivo --}}
@@ -196,7 +187,7 @@ Descripción:    Landing page pública institucional del SaaS. Presenta el ecosi
 
                         <div class="pt-2">
                             <button type="button" class="w-full bg-acode-navy hover:bg-acode-primary-dark text-white text-sm font-bold py-2.5 rounded-lg shadow-sm">
-                                Enviar Respuesta Contrarreloj
+                                Enviar Respuesta
                             </button>
                         </div>
                     </div>
@@ -210,57 +201,161 @@ Descripción:    Landing page pública institucional del SaaS. Presenta el ecosi
     <section id="capacidades" class="border-b border-slate-200 bg-gradient-to-b from-white to-slate-50 py-20">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center max-w-3xl mx-auto mb-16 space-y-3">
-                <h2 class="text-xs font-bold uppercase tracking-widest text-acode-tech">Ingeniería A-Code Solutions</h2>
-                <p class="text-3xl sm:text-4xl font-extrabold text-acode-navy">Todo lo que necesitas para evaluar con certeza técnica.</p>
-                <p class="text-slate-600 text-base">Desarrollado bajo estándares estrictos de programación limpia, arquitectura desacoplada y seguridad contra fraudes.</p>
+                <h2 class="text-xs font-bold uppercase tracking-widest text-acode-tech">Evaluación Inteligente y Confiable</h2>
+                <p class="text-3xl sm:text-4xl font-extrabold text-acode-navy">Todo lo que necesitas para evaluar con certeza y tranquilidad.</p>
+                <p class="text-slate-600 text-base">Herramientas diseñadas para que docentes y estudiantes vivan una experiencia de evaluación justa, rápida y sin complicaciones.</p>
             </div>
 
             <div class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
                 
                 {{-- Tarjeta 1 --}}
-                <div class="group flex h-full flex-col space-y-4 rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-acode-tech/30 hover:shadow-xl hover:shadow-acode-navy/10">
-                    <div class="w-12 h-12 rounded-xl bg-acode-navy text-white flex items-center justify-center font-bold">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                <div class="group flex h-full flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-acode-tech/30 hover:shadow-xl hover:shadow-acode-navy/10">
+                    <div>
+                        <div class="flex items-center gap-3.5 mb-4">
+                            <div class="w-12 h-12 shrink-0 rounded-2xl bg-acode-navy text-white flex items-center justify-center font-bold shadow-sm">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                            </div>
+                            <h3 class="text-lg font-extrabold leading-snug tracking-tight text-acode-navy">Preguntas Variadas y Flexibles</h3>
+                        </div>
+                        <p class="text-sm text-slate-600 leading-relaxed">
+                            Combina opción múltiple, relación de columnas, preguntas abiertas y ejercicios de código. Tu banco personal de reactivos se guarda de forma segura para reutilizarlo en cualquier ciclo escolar.
+                        </p>
                     </div>
-                    <h3 class="text-lg font-extrabold leading-snug tracking-tight text-acode-navy">Reactivos Polimórficos</h3>
-                    <p class="text-sm text-slate-600 leading-relaxed">
-                        Crea reactivos de Opción Múltiple, Relación de Columnas, Abiertas y Programación con Copy-On-Write para proteger exámenes históricos.
-                    </p>
                 </div>
 
                 {{-- Tarjeta 2 --}}
-                <div class="group flex h-full flex-col space-y-4 rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-acode-tech/30 hover:shadow-xl hover:shadow-acode-navy/10">
-                    <div class="w-12 h-12 rounded-xl bg-acode-tech text-white flex items-center justify-center font-bold">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <div class="group flex h-full flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-acode-tech/30 hover:shadow-xl hover:shadow-acode-navy/10">
+                    <div>
+                        <div class="flex items-center gap-3.5 mb-4">
+                            <div class="w-12 h-12 shrink-0 rounded-2xl bg-acode-tech text-white flex items-center justify-center font-bold shadow-sm">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </div>
+                            <h3 class="text-lg font-extrabold leading-snug tracking-tight text-acode-navy">Cronómetro Justo y Blindado</h3>
+                        </div>
+                        <p class="text-sm text-slate-600 leading-relaxed">
+                            El tiempo de cada examen se calcula de manera centralizada. Ningún alumno puede alterar su reloj local ni pausar el cronómetro, garantizando igualdad de condiciones para todos.
+                        </p>
                     </div>
-                    <h3 class="text-lg font-extrabold leading-snug tracking-tight text-acode-navy">Reloj en el Servidor</h3>
-                    <p class="text-sm text-slate-600 leading-relaxed">
-                        El tiempo nunca corre del lado del cliente. PostgreSQL y el backend validan cada segundo con 3 segundos de tolerancia máxima.
-                    </p>
                 </div>
 
                 {{-- Tarjeta 3 --}}
-                <div class="group flex h-full flex-col space-y-4 rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-acode-tech/30 hover:shadow-xl hover:shadow-acode-navy/10">
-                    <div class="w-12 h-12 rounded-xl bg-acode-accent text-white flex items-center justify-center font-bold">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                <div class="group flex h-full flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-acode-tech/30 hover:shadow-xl hover:shadow-acode-navy/10">
+                    <div>
+                        <div class="flex items-center gap-3.5 mb-4">
+                            <div class="w-12 h-12 shrink-0 rounded-2xl bg-acode-accent text-white flex items-center justify-center font-bold shadow-sm">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                            </div>
+                            <h3 class="text-lg font-extrabold leading-snug tracking-tight text-acode-navy">Supervisión y Honestidad</h3>
+                        </div>
+                        <p class="text-sm text-slate-600 leading-relaxed">
+                            Detección inteligente de cambio de pestaña o ventana, bloqueo de copiar/pegar y verificación visual por cámara para certificar que el examen lo responde quien corresponde.
+                        </p>
                     </div>
-                    <h3 class="text-lg font-extrabold leading-snug tracking-tight text-acode-navy">Supervisión Anti-Trampa</h3>
-                    <p class="text-sm text-slate-600 leading-relaxed">
-                        Supervisión por cámara web, bloqueo de portapapeles y detección de cambio de pestaña para asegurar que el alumno mantenga el foco.
-                    </p>
                 </div>
 
                 {{-- Tarjeta 4 --}}
-                <div class="group flex h-full flex-col space-y-4 rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-acode-tech/30 hover:shadow-xl hover:shadow-acode-navy/10">
-                    <div class="w-12 h-12 rounded-xl bg-acode-warning text-slate-900 flex items-center justify-center font-bold">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                <div class="group flex h-full flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-acode-tech/30 hover:shadow-xl hover:shadow-acode-navy/10">
+                    <div>
+                        <div class="flex items-center gap-3.5 mb-4">
+                            <div class="w-12 h-12 shrink-0 rounded-2xl bg-acode-warning text-slate-900 flex items-center justify-center font-bold shadow-sm">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                            </div>
+                            <h3 class="text-lg font-extrabold leading-snug tracking-tight text-acode-navy">Calificaciones al Instante</h3>
+                        </div>
+                        <p class="text-sm text-slate-600 leading-relaxed">
+                            Ahorra horas de revisión manual: las preguntas objetivas se califican automáticamente y el sistema genera sábanas de notas y promedios listos para entregar en tus actas.
+                        </p>
                     </div>
-                    <h3 class="text-lg font-extrabold leading-snug tracking-tight text-acode-navy">Analítica con Chart.js</h3>
-                    <p class="text-sm text-slate-600 leading-relaxed">
-                        Métricas de desempeño en tiempo real, tasas de aprobación por grupo y ponderación de calificaciones por periodos de evaluación.
-                    </p>
                 </div>
 
+            </div>
+        </div>
+    </section>
+
+    {{-- 3.5. Sección ¿Cómo funciona? --}}
+    <section id="como-funciona" class="border-b border-slate-200 bg-white py-20 lg:py-24">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center max-w-3xl mx-auto mb-16 space-y-3">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-acode-surface text-acode-tech border border-acode-tech/20">
+                    Paso a Paso
+                </span>
+                <h2 class="text-3xl sm:text-4xl font-extrabold text-acode-navy tracking-tight">
+                    ¿Cómo funciona la plataforma?
+                </h2>
+                <p class="text-slate-600 text-base leading-relaxed">
+                    Evaluar a tus estudiantes y calificar con precisión es más sencillo que nunca. Todo el proceso en 4 sencillos pasos:
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                {{-- Paso 1 --}}
+                <div class="group flex h-full flex-col justify-between rounded-3xl border border-slate-200 bg-slate-50/60 p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-acode-tech/30">
+                    <div>
+                        <div class="flex items-center gap-3.5 mb-4">
+                            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-acode-navy text-white text-lg font-extrabold shadow-sm">
+                                01
+                            </span>
+                            <h3 class="text-lg font-bold text-acode-navy leading-snug">Crea tu grupo escolar</h3>
+                        </div>
+                        <p class="text-sm text-slate-600 leading-relaxed">
+                            Genera tu aula en segundos. Proyecta el código QR o comparte un código de 8 dígitos para que tus alumnos se inscriban al instante desde su app móvil o web.
+                        </p>
+                    </div>
+                </div>
+
+                {{-- Paso 2 --}}
+                <div class="group flex h-full flex-col justify-between rounded-3xl border border-slate-200 bg-slate-50/60 p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-acode-tech/30">
+                    <div>
+                        <div class="flex items-center gap-3.5 mb-4">
+                            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-acode-tech text-white text-lg font-extrabold shadow-sm">
+                                02
+                            </span>
+                            <h3 class="text-lg font-bold text-acode-navy leading-snug">Arma tu evaluación</h3>
+                        </div>
+                        <p class="text-sm text-slate-600 leading-relaxed">
+                            Selecciona preguntas de tu banco propio o deja que el asistente sortee reactivos automáticamente. Configura tiempos por pregunta, escala de notas y fecha de aplicación.
+                        </p>
+                    </div>
+                </div>
+
+                {{-- Paso 3 --}}
+                <div class="group flex h-full flex-col justify-between rounded-3xl border border-slate-200 bg-slate-50/60 p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-acode-accent/40">
+                    <div>
+                        <div class="flex items-center gap-3.5 mb-4">
+                            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-acode-accent text-white text-lg font-extrabold shadow-sm">
+                                03
+                            </span>
+                            <h3 class="text-lg font-bold text-acode-navy leading-snug">Aplica con tranquilidad</h3>
+                        </div>
+                        <p class="text-sm text-slate-600 leading-relaxed">
+                            Tus alumnos responden con cronómetro sincronizado desde el servidor, cámara activa y candados que bloquean trampas e intentos de copiar respuestas.
+                        </p>
+                    </div>
+                </div>
+
+                {{-- Paso 4 --}}
+                <div class="group flex h-full flex-col justify-between rounded-3xl border border-slate-200 bg-slate-50/60 p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-amber-300">
+                    <div>
+                        <div class="flex items-center gap-3.5 mb-4">
+                            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-acode-warning text-slate-900 text-lg font-extrabold shadow-sm">
+                                04
+                            </span>
+                            <h3 class="text-lg font-bold text-acode-navy leading-snug">Obtén calificaciones</h3>
+                        </div>
+                        <p class="text-sm text-slate-600 leading-relaxed">
+                            Calificación automática al momento. Los estudiantes reciben sus notas y retroalimentación en su celular, y tú descargas la sábana completa de calificaciones.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {{-- CTA interno --}}
+            <div class="mt-12 text-center">
+                <a href="{{ route('auth.register.teacher.show') }}"
+                   class="inline-flex items-center gap-2 rounded-xl bg-acode-navy px-7 py-3.5 text-sm font-bold text-white shadow-md transition hover:bg-acode-primary-dark hover:shadow-lg">
+                    <span>Comenzar a evaluar gratis</span>
+                    <span aria-hidden="true">→</span>
+                </a>
             </div>
         </div>
     </section>
@@ -353,7 +448,7 @@ Descripción:    Landing page pública institucional del SaaS. Presenta el ecosi
             <div class="mt-12 bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
                 <div class="space-y-1 text-center md:text-left">
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800">
-                        Prueba Gratuita Freemium
+                        Prueba Gratuita Freemium (RF-SUS-008)
                     </span>
                     <p class="text-sm font-semibold text-slate-800">
                         ¿Quieres probar antes de contratar? Crea 1 grupo y aplica 1 examen completo sin tarjeta de crédito.
@@ -382,38 +477,34 @@ Descripción:    Landing page pública institucional del SaaS. Presenta el ecosi
                 <div class="relative z-10 grid grid-cols-1 items-center gap-10 lg:grid-cols-12">
                     
                     <div class="lg:col-span-7 space-y-6">
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 text-acode-accent border border-white/10">
-                            App Gratuita para Estudiantes
-                        </span>
-
                         <h2 class="max-w-2xl text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
-                            Tus alumnos se incorporan en segundos con Código QR.
+                            Tus alumnos presentan exámenes directo desde su celular.
                         </h2>
 
                         <p class="text-slate-300 text-base leading-relaxed">
-                            Diseñada en Flutter con arquitectura Clean Architecture. Los estudiantes se unen escaneando el código QR proyectado en el aula o ingresando un folio único de 8 caracteres.
+                            Una aplicación ágil y cómoda pensada para que tus estudiantes nunca se queden sin presentar una evaluación. Se incorporan a tu clase en segundos escaneando el código QR proyectado en el aula o ingresando un código único.
                         </p>
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-200 pt-2">
-                            <div class="flex items-center space-x-2">
-                                <svg class="w-5 h-5 text-acode-accent" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                                <span>Multi-Grupo y Multi-Docente (RM-08)</span>
+                            <div class="flex items-start space-x-3">
+                                <svg class="w-5 h-5 text-acode-accent shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                                <span><strong>Inscripción en segundos:</strong> Acceso instantáneo con la cámara del celular o mediante folio de 8 caracteres.</span>
                             </div>
-                            <div class="flex items-center space-x-2">
-                                <svg class="w-5 h-5 text-acode-accent" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                                <span>Consulta de Calificaciones (RM-10)</span>
+                            <div class="flex items-start space-x-3">
+                                <svg class="w-5 h-5 text-acode-accent shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                                <span><strong>Exámenes en vivo:</strong> Respuestas fluidas con cronómetro visible y guardado automático.</span>
                             </div>
-                            <div class="flex items-center space-x-2">
-                                <svg class="w-5 h-5 text-acode-accent" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                                <span>100% Gratuita para el Alumno</span>
+                            <div class="flex items-start space-x-3">
+                                <svg class="w-5 h-5 text-acode-accent shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                                <span><strong>Avisos al instante:</strong> Notificaciones directas en el teléfono cuando hay un examen activo o calificado.</span>
                             </div>
-                            <div class="flex items-center space-x-2">
-                                <svg class="w-5 h-5 text-acode-accent" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                                <span>Notificaciones Push FCM (RM-12)</span>
+                            <div class="flex items-start space-x-3">
+                                <svg class="w-5 h-5 text-acode-accent shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                                <span><strong>100% gratuita para el alumno:</strong> Sin compras ocultas ni suscripciones para los estudiantes.</span>
                             </div>
                         </div>
 
-                        <div class="pt-4">
+                        <div class="pt-4 flex flex-wrap items-center gap-4">
                             <a href="{{ route('auth.register.student.show') }}" class="inline-flex min-h-12 items-center justify-center rounded-xl bg-acode-tech px-6 py-3 text-center text-sm font-bold text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-acode-tech-dark">
                                 Registrar Alumno en Web
                             </a>
@@ -424,9 +515,11 @@ Descripción:    Landing page pública institucional del SaaS. Presenta el ecosi
                          <div class="relative w-64 space-y-4 rounded-[2.5rem] border-[5px] border-slate-700 bg-slate-900 p-4 text-slate-800 shadow-2xl shadow-black/30 transition-transform duration-300 hover:-translate-y-1">
                             <div class="h-4 w-28 bg-slate-700 rounded-full mx-auto"></div>
                             <div class="bg-white rounded-2xl p-4 space-y-3">
-                                <div class="text-xs font-bold text-acode-navy flex justify-between items-center">
+                                <div class="text-xs font-bold text-acode-navy flex justify-between items-center border-b border-slate-100 pb-2">
                                     <span>Mis Grupos</span>
-                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    <span class="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-semibold">
+                                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Conectado
+                                    </span>
                                 </div>
                                 <div class="p-3 bg-acode-surface rounded-xl border border-slate-200 text-xs space-y-1">
                                     <div class="font-bold text-acode-navy">Auditoría de Sistemas</div>
@@ -436,7 +529,10 @@ Descripción:    Landing page pública institucional del SaaS. Presenta el ecosi
                                 <div class="p-3 bg-acode-surface rounded-xl border border-slate-200 text-xs space-y-1">
                                     <div class="font-bold text-acode-navy">Programación Web</div>
                                     <div class="text-slate-500">A-Code Solutions</div>
-                                    <div class="text-slate-600 font-semibold pt-1">Examen activo hoy</div>
+                                    <div class="text-acode-tech font-semibold pt-1 flex items-center justify-between">
+                                        <span>Examen activo hoy</span>
+                                        <span class="bg-acode-tech text-white text-[10px] px-2 py-0.5 rounded">Presentar →</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -533,9 +629,21 @@ Descripción:    Landing page pública institucional del SaaS. Presenta el ecosi
     {{-- Modal de Aviso de Privacidad Normativo (LFPDPPP) --}}
     <div x-show="showPrivacyModal"
          x-cloak
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
          class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
          @keydown.escape.window="showPrivacyModal = false">
-        <div class="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-8 space-y-6 shadow-2xl border border-slate-200"
+        <div class="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-8 space-y-6 shadow-2xl border border-slate-200 transform transition-all duration-200"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
              @click.away="showPrivacyModal = false">
             <div class="flex items-center justify-between border-b border-slate-100 pb-4">
                 <h3 class="text-xl font-bold text-acode-navy">Aviso de Privacidad Integral</h3>

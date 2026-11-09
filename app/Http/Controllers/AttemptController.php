@@ -21,14 +21,17 @@ use App\Http\Requests\AttemptTakeRequest;
 use App\Models\Exam;
 use App\Models\StudentAttempt;
 use App\Services\AttemptService;
+use App\Services\StudentResultService;
 use DomainException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 
 class AttemptController extends Controller
 {
-    public function __construct(private readonly AttemptService $attemptService)
-    {
+    public function __construct(
+        private readonly AttemptService $attemptService,
+        private readonly StudentResultService $studentResultService,
+    ) {
     }
 
     public function start(AttemptTakeRequest $request, Exam $exam): RedirectResponse
@@ -122,7 +125,25 @@ class AttemptController extends Controller
     {
         $this->authorizeOwnership($attempt);
 
-        return view('exams.result-summary', ['attempt' => $attempt->load('exam', 'answers.examQuestion.question')]);
+        return view('exams.result-summary', [
+            'attempt' => $attempt->load('exam', 'answers.examQuestion.question', 'group.teacher'),
+            'reviewAvailable' => $this->studentResultService->reviewIsAvailable($attempt),
+        ]);
+    }
+
+    /**
+     * Consulta autorizada de respuestas y soluciones modelo (RF-REP-005 / P-172).
+     */
+    public function review(StudentAttempt $attempt): View
+    {
+        $this->authorizeOwnership($attempt);
+
+        $reviewData = $this->studentResultService->review($attempt);
+
+        return view('student.exams.review', [
+            'attempt' => $attempt->loadMissing('exam', 'group.teacher'),
+            'reviewData' => $reviewData,
+        ]);
     }
 
     private function authorizeOwnership(StudentAttempt $attempt): void

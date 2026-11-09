@@ -50,6 +50,7 @@ class ExamSectionStoreRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'max:150'],
             'question_type' => ['required', 'string', 'in:multiple_choice,matching,open,code'],
+            'subject_tag' => ['nullable', 'string', 'max:255'],
             'requested_quantity' => ['required', 'integer', 'min:1', 'max:100'],
         ];
     }

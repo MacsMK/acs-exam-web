@@ -1,11 +1,21 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: dashboard/student.blade.php (MPW-V2 §7.3, §7.8.2, §8.3, Tabla 20) --}}
+{{--
+    ============================================================================
+    A-CODE SOLUTIONS - ANALIZAMOS, DISEÑAMOS, TRANSFORMAMOS
+    ============================================================================
+    Archivo:     resources/views/dashboard/student.blade.php
+    Descripción: Panel de control del estudiante con hero institucional, tarjetas
+                 métricas elevadas, asignaturas inscritas, exámenes disponibles
+                 e historial de intentos (MPW-V2 §7.3, §7.8.2, §8.3, Tabla 20).
+    ============================================================================
+--}}
 @extends('layouts.app')
 
 @section('title', 'Panel del Estudiante')
 
 @section('content')
+<div class="space-y-8">
     {{-- Hero H1 institucional --}}
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
             <h1 class="text-2xl lg:text-3xl font-bold text-acode-primary tracking-tight">
                 Hola, {{ auth()->user()->first_name ?? auth()->user()->full_name }}
@@ -23,50 +33,129 @@
         </div>
     </div>
 
-    {{-- Tarjetas métricas elevadas --}}
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <x-card class="border-slate-200">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Grupos Inscritos</p>
-                    <p class="text-3xl font-extrabold text-acode-primary mt-1">{{ $groupsCount }}</p>
+    {{-- Tarjetas métricas interactivas homogéneas al panel docente --}}
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        {{-- Tarjeta 1: Grupos --}}
+        <a href="{{ route('student.groups.index') }}"
+           class="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-acode-tech hover:shadow-md">
+            <div class="flex items-start justify-between">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
+                    <x-nav-icon name="groups" class="h-6 w-6" />
                 </div>
-                <div class="w-12 h-12 rounded-xl bg-acode-surface flex items-center justify-center text-acode-tech">
-                    <x-icon name="userGroup" class="w-6 h-6" />
-                </div>
+                <span class="text-sm text-slate-400 transition group-hover:text-acode-tech">
+                    ↗
+                </span>
             </div>
-        </x-card>
 
-        <x-card class="border-slate-200">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Exámenes Pendientes</p>
-                    <p class="text-3xl font-extrabold text-acode-primary mt-1">{{ $pendingExams->count() }}</p>
-                </div>
-                <div class="w-12 h-12 rounded-xl bg-acode-surface flex items-center justify-center text-acode-warning">
-                    <x-icon name="clock" class="w-6 h-6" />
-                </div>
-            </div>
-        </x-card>
+            <p class="mt-4 text-3xl font-extrabold text-acode-primary">
+                {{ $groupsCount }}
+            </p>
 
-        <x-card class="border-slate-200">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Evaluaciones Presentadas</p>
-                    <p class="text-3xl font-extrabold text-acode-primary mt-1">{{ $recentAttempts->count() }}</p>
+            <p class="mt-1 text-sm font-semibold text-slate-700">
+                Grupos Inscritos
+            </p>
+
+            <p class="mt-1 text-xs text-slate-500">
+                Materias y grupos escolares en los que participas.
+            </p>
+        </a>
+
+        {{-- Tarjeta 2: Exámenes Pendientes --}}
+        <a href="{{ route('student.exams.index') }}"
+           class="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-acode-warning hover:shadow-md">
+            <div class="flex items-start justify-between">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                    <x-nav-icon name="exams" class="h-6 w-6" />
                 </div>
-                <div class="w-12 h-12 rounded-xl bg-acode-surface flex items-center justify-center text-acode-accent">
-                    <x-icon name="reportBar" class="w-6 h-6" />
-                </div>
+                <span class="text-sm text-slate-400 transition group-hover:text-amber-600">
+                    ↗
+                </span>
             </div>
-        </x-card>
+
+            <p class="mt-4 text-3xl font-extrabold text-acode-primary">
+                {{ $pendingExams->count() }}
+            </p>
+
+            <p class="mt-1 text-sm font-semibold text-slate-700">
+                Exámenes Pendientes
+            </p>
+
+            <p class="mt-1 text-xs text-slate-500">
+                Evaluaciones listas para resolver en tus asignaturas.
+            </p>
+        </a>
+
+        {{-- Tarjeta 3: Evaluaciones Presentadas --}}
+        <a href="{{ route('student.grades.index') }}"
+           class="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-acode-accent hover:shadow-md">
+            <div class="flex items-start justify-between">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                    <x-nav-icon name="grades" class="h-6 w-6" />
+                </div>
+                <span class="text-sm text-slate-400 transition group-hover:text-emerald-600">
+                    ↗
+                </span>
+            </div>
+
+            <p class="mt-4 text-3xl font-extrabold text-acode-primary">
+                {{ $recentAttempts->count() }}
+            </p>
+
+            <p class="mt-1 text-sm font-semibold text-slate-700">
+                Evaluaciones Presentadas
+            </p>
+
+            <p class="mt-1 text-xs text-slate-500">
+                Intentos y calificaciones en tu historial académico.
+            </p>
+        </a>
     </div>
 
+    {{-- Asignaturas y Grupos Matriculados --}}
+    @if (isset($enrolledGroups) && $enrolledGroups->isNotEmpty())
+        <div class="space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-base font-bold text-acode-primary tracking-tight">
+                    Mis Asignaturas Matriculadas
+                </h2>
+                <a href="{{ Route::has('student.groups.index') ? route('student.groups.index') : '#' }}"
+                   class="text-xs font-semibold text-acode-tech hover:underline">
+                    Ver todos los grupos →
+                </a>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                @foreach ($enrolledGroups->take(3) as $group)
+                    <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow transition">
+                        <div>
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-xs font-bold text-acode-tech uppercase tracking-wider">
+                                    {{ $group->subject ?? 'Materia General' }}
+                                </span>
+                                <x-badge variant="accent">Activo</x-badge>
+                            </div>
+                            <h3 class="mt-2 text-base font-bold text-acode-primary">
+                                {{ $group->name }}
+                            </h3>
+                            <p class="mt-1 text-xs text-slate-500">
+                                Profesor: {{ $group->teacher?->full_name ?? 'Docente titular' }}
+                            </p>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
     {{-- Tabla de Exámenes Disponibles --}}
-    <div class="space-y-3 mb-8">
+    <div class="space-y-3">
         <div class="flex items-center justify-between">
-            <h2 class="text-base font-bold text-acode-primary tracking-tight">Exámenes Disponibles</h2>
-            <a href="{{ route('student.exams.index') }}" class="text-xs font-semibold text-acode-tech hover:underline">Ver catálogo completo</a>
+            <h2 class="text-base font-bold text-acode-primary tracking-tight">
+                Exámenes Disponibles
+            </h2>
+            <a href="{{ route('student.exams.index') }}" class="text-xs font-semibold text-acode-tech hover:underline">
+                Ver catálogo completo
+            </a>
         </div>
 
         <x-table>
@@ -94,12 +183,9 @@
                         <span class="text-xs font-mono text-slate-600">{{ $exam->total_duration_minutes ?? $exam->duration_minutes ?? 60 }} min</span>
                     </x-table.td>
                     <x-table.td align="right">
-                        <form method="POST" action="{{ route('attempts.start', $exam) }}" class="inline">
-                            @csrf
-                            <x-button type="submit" variant="primary" size="sm">
-                                Abrir examen
-                            </x-button>
-                        </form>
+                        <x-button :href="route('student.exams.instructions', $exam)" variant="primary" size="sm">
+                            Abrir examen
+                        </x-button>
                     </x-table.td>
                 </tr>
             @empty
@@ -119,7 +205,9 @@
 
     {{-- Historial de Intentos Recientes --}}
     <div class="space-y-3">
-        <h2 class="text-base font-bold text-acode-primary tracking-tight">Historial de Intentos Recientes</h2>
+        <h2 class="text-base font-bold text-acode-primary tracking-tight">
+            Historial de Intentos Recientes
+        </h2>
 
         <x-table>
             <x-slot:header>
@@ -140,12 +228,9 @@
                         <span class="text-xs text-slate-600">{{ $attempt->group?->name ?? 'Sin grupo' }}</span>
                     </x-table.td>
                     <x-table.td align="center">
-                        @php
-                            $score = $attempt->final_score ?? $attempt->objective_score;
-                        @endphp
-                        @if ($score !== null)
-                            <span class="font-bold font-mono text-sm {{ $score >= 6.0 ? 'text-acode-accent' : 'text-acode-danger' }}">
-                                {{ number_format((float) $score, 1) }}
+                        @if ($attempt->display_score !== null)
+                            <span class="font-bold font-mono text-sm {{ $attempt->display_score >= 6.0 ? 'text-teal-600' : 'text-acode-danger' }}">
+                                {{ number_format((float) $attempt->display_score, 1) }}
                             </span>
                         @else
                             <span class="text-xs text-slate-400">Pendiente</span>
@@ -186,4 +271,5 @@
             @endforelse
         </x-table>
     </div>
+</div>
 @endsection
