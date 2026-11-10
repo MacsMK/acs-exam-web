@@ -32,11 +32,24 @@
 
     <div class="relative h-64 w-full">
         <canvas x-ref="canvas"></canvas>
+
+        @if ((int) $passedCount + (int) $failedCount === 0)
+            <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center rounded-lg bg-slate-50/75 backdrop-blur-[1px] px-4 text-center">
+                <x-icon name="reportBar" class="w-8 h-8 text-slate-300 mb-2" />
+                <p class="text-xs font-semibold text-slate-600">
+                    Aún no hay entregas finalizadas para graficar
+                </p>
+                <p class="text-[11px] text-slate-400 mt-0.5 max-w-xs">
+                    La distribución de aprobados y reprobados se mostrará cuando los alumnos concluyan sus exámenes.
+                </p>
+            </div>
+        @endif
     </div>
 </div>
 
 @once
     @push('scripts')
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
         <script>
             function groupScoreChart({ passed, failed, averages }) {
                 return {

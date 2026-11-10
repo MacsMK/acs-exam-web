@@ -82,6 +82,8 @@ class EvaluationPeriodController extends Controller
     {
         $this->authorizeTeacher($group);
 
+        abort_if($group->is_closed, 403, 'No es posible registrar periodos de evaluación en un grupo escolar cerrado.');
+
         $wExams = round(((float) $request->input('exams_weight')) / 100, 4);
         $wHw = round(((float) $request->input('homework_weight')) / 100, 4);
         $wProj = round(((float) $request->input('project_weight')) / 100, 4);

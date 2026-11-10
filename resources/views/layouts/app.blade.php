@@ -406,6 +406,8 @@
     </main>
 @endauth
 
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="{{ asset('js/alerts.js') }}"></script>
 @stack('scripts')
 </body>
 </html>

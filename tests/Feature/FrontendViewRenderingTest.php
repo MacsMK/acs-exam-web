@@ -24,6 +24,7 @@ use App\Models\ExamSection;
 use App\Models\Group;
 use App\Models\MultipleChoiceItem;
 use App\Models\Question;
+use App\Models\StudentAttempt;
 use App\Models\User;
 use App\Services\AttemptService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -152,7 +153,104 @@ class FrontendViewRenderingTest extends TestCase
         $response->assertSee('Mis grupos');
         $response->assertSee('Banco de preguntas');
         $response->assertSee('Exámenes creados');
+        $response->assertSee('Promedio general');
         $response->assertSee((string) 1); // 1 grupo, 1 reactivo, 1 examen
+        $response->assertSee('groupScoreChart');
+        $response->assertSee('Grupo Métricas A');
+        $response->assertSee('METR001');
+        $response->assertSee('Examen Métricas 1');
+    }
+
+    /**
+     * b.1) El panel docente normaliza intentos enviados ('submitted') en escala 0-100
+     *      a escala 0-10 para passedCount (>= 6.0), failedCount (< 6.0) y averageScore,
+     *      ignorando intentos en progreso o de otros docentes.
+     */
+    public function test_teacher_dashboard_normalizes_submitted_attempts_across_grading_scales(): void
+    {
+        $teacher = $this->createUser('teacher');
+        $otherTeacher = $this->createUser('teacher');
+        $studentA = $this->createUser('student');
+        $studentB = $this->createUser('student');
+
+        $group = Group::create([
+            'teacher_id' => $teacher->id,
+            'name' => 'Grupo Normalización 100',
+            'access_folio' => 'NORM100',
+            'is_closed' => false,
+        ]);
+
+        $examScale100 = Exam::create([
+            'teacher_id' => $teacher->id,
+            'title' => 'Examen Escala 0-100',
+            'grading_scale' => '0-100',
+            'randomize_question_order' => false,
+            'result_visibility_mode' => 'final_score',
+            'require_webcam' => false,
+            'max_allowed_incidents' => 2,
+            'starts_at' => now()->subHours(2),
+            'ends_at' => now()->subHour(),
+            'share_token' => bin2hex(random_bytes(8)),
+            'is_published' => true,
+        ]);
+
+        // Intento enviado con calificación 40 en escala 0-100 -> normaliza a 4.0 (< 6.0 reprobado)
+        StudentAttempt::create([
+            'exam_id' => $examScale100->id,
+            'student_id' => $studentA->id,
+            'group_id' => $group->id,
+            'question_sequence_payload' => [],
+            'current_question_index' => 0,
+            'started_at' => now()->subMinutes(90),
+            'submitted_at' => now()->subMinutes(65),
+            'status' => 'submitted',
+            'objective_score' => 40.00,
+            'final_score' => 40.00,
+        ]);
+
+        // Intento en curso con 100 puntos -> debe ser ignorado por no estar 'submitted'
+        StudentAttempt::create([
+            'exam_id' => $examScale100->id,
+            'student_id' => $studentB->id,
+            'group_id' => $group->id,
+            'question_sequence_payload' => [],
+            'current_question_index' => 0,
+            'started_at' => now()->subMinutes(30),
+            'status' => 'in_progress',
+            'objective_score' => 100.00,
+            'final_score' => 100.00,
+        ]);
+
+        // Intento de otro docente -> debe ser aislado (multi-docente)
+        $otherGroup = Group::create([
+            'teacher_id' => $otherTeacher->id,
+            'name' => 'Grupo Otro Docente',
+            'access_folio' => 'OTRO100',
+            'is_closed' => false,
+        ]);
+        $otherExam = $this->createDraftExam($otherTeacher, 'Examen Ajeno');
+        StudentAttempt::create([
+            'exam_id' => $otherExam->id,
+            'student_id' => $studentA->id,
+            'group_id' => $otherGroup->id,
+            'question_sequence_payload' => [],
+            'current_question_index' => 0,
+            'started_at' => now()->subMinutes(90),
+            'submitted_at' => now()->subMinutes(65),
+            'status' => 'submitted',
+            'objective_score' => 10.00,
+            'final_score' => 10.00,
+        ]);
+
+        $response = $this->actingAs($teacher)->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertViewHas('passedCount', 0);
+        $response->assertViewHas('failedCount', 1);
+        $response->assertViewHas('averageScore', 4.0);
+        $response->assertSee('4.0');
+        $response->assertSee('0 aprobados');
+        $response->assertSee('1 reprobados');
     }
 
     /**

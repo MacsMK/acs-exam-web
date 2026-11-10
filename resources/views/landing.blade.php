@@ -263,7 +263,7 @@ Descripción:    Landing page pública institucional del SaaS. Presenta el ecosi
                             <h3 class="text-lg font-extrabold leading-snug tracking-tight text-acode-navy">Calificaciones al Instante</h3>
                         </div>
                         <p class="text-sm text-slate-600 leading-relaxed">
-                            Ahorra horas de revisión manual: las preguntas objetivas se califican automáticamente y el sistema genera sábanas de notas y promedios listos para entregar en tus actas.
+                            Ahorra horas de revisión manual: las preguntas objetivas se califican automáticamente y el sistema genera el control de notas y promedios listos para entregar en tus actas.
                         </p>
                     </div>
                 </div>
@@ -343,7 +343,7 @@ Descripción:    Landing page pública institucional del SaaS. Presenta el ecosi
                             <h3 class="text-lg font-bold text-acode-navy leading-snug">Obtén calificaciones</h3>
                         </div>
                         <p class="text-sm text-slate-600 leading-relaxed">
-                            Calificación automática al momento. Los estudiantes reciben sus notas y retroalimentación en su celular, y tú descargas la sábana completa de calificaciones.
+                            Calificación automática al momento. Los estudiantes reciben sus notas y retroalimentación en su celular, y tú descargas el control completo de calificaciones.
                         </p>
                     </div>
                 </div>
@@ -448,7 +448,7 @@ Descripción:    Landing page pública institucional del SaaS. Presenta el ecosi
             <div class="mt-12 bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
                 <div class="space-y-1 text-center md:text-left">
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800">
-                        Prueba Gratuita Freemium (RF-SUS-008)
+                        Prueba Gratuita Freemium 
                     </span>
                     <p class="text-sm font-semibold text-slate-800">
                         ¿Quieres probar antes de contratar? Crea 1 grupo y aplica 1 examen completo sin tarjeta de crédito.

@@ -1,12 +1,12 @@
 @extends('layouts.app')
 
-@section('title', 'Sábanas de Calificaciones')
+@section('title', 'Control de Calificaciones')
 
 @section('content')
 <div class="space-y-6">
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-acode-primary">Sábanas y Periodos de Calificación</h1>
+            <h1 class="text-2xl font-bold text-acode-primary">Control de Calificaciones y Periodos</h1>
             <p class="text-sm text-slate-500 mt-1">
                 Consulte y capture calificaciones ponderadas por grupo, gestione parciales y exporte a Excel.
             </p>
@@ -69,7 +69,7 @@
                                 <div class="flex items-center justify-between text-xs py-1 px-2 rounded bg-white border border-slate-100 hover:border-acode-tech/40 transition">
                                     <span class="font-medium text-slate-700 truncate max-w-[140px]">{{ $period->name }}</span>
                                     <a href="{{ route('groups.periods.gradebook', [$group, $period]) }}" class="text-acode-tech hover:underline font-semibold shrink-0">
-                                        Abrir sábana →
+                                        Abrir calificaciones →
                                     </a>
                                 </div>
                             @empty

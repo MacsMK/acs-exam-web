@@ -1,7 +1,7 @@
 {{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: evaluation-periods/gradebook.blade.php (RF-CAL-009, RF-CAL-012, RF-CAL-017, RF-CAL-021, RF-CAL-027, RW-28..31) --}}
 @extends('layouts.app')
 
-@section('title', 'Sábana de Calificaciones - ' . $period->name . ' - ' . $group->name)
+@section('title', 'Control de Calificaciones - ' . $period->name . ' - ' . $group->name)
 
 @section('content')
 <div class="space-y-6">
@@ -16,9 +16,9 @@
                 <span>/</span>
                 <a href="{{ route('groups.periods.index', $group) }}" class="hover:text-acode-tech">Periodos</a>
                 <span>/</span>
-                <span class="text-acode-primary">Sábana: {{ $period->name }}</span>
+                <span class="text-acode-primary">Control: {{ $period->name }}</span>
             </div>
-            <h1 class="text-2xl lg:text-3xl font-bold text-acode-primary tracking-tight">Sábana de Calificaciones</h1>
+            <h1 class="text-2xl lg:text-3xl font-bold text-acode-primary tracking-tight">Control de Calificaciones</h1>
             <p class="text-sm text-slate-600 mt-1">
                 Periodo: <strong>{{ $period->name }}</strong> &bull; Grupo: <strong>{{ $group->name }}</strong>
                 ({{ $period->starts_at->format('d/m/Y') }} &mdash; {{ $period->ends_at->format('d/m/Y') }})
@@ -83,7 +83,7 @@
         </div>
     </x-card>
 
-    {{-- Formulario de Captura de Sábana de Calificaciones (RF-CAL-009, RF-CAL-027) --}}
+    {{-- Formulario de Captura de Control de Calificaciones (RF-CAL-009, RF-CAL-027) --}}
     <form id="gradebook-form" method="POST" action="{{ route('groups.periods.gradebook.save', [$group, $period]) }}">
         @csrf
 
@@ -223,7 +223,7 @@
                     </p>
                     <x-button type="submit" variant="primary" size="md">
                         <x-icon name="check" class="w-4 h-4 mr-1.5" />
-                        Guardar Sábana de Notas
+                        Guardar Calificaciones
                     </x-button>
                 </div>
             @endif

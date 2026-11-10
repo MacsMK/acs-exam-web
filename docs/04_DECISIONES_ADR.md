@@ -437,6 +437,8 @@ A partir del Sprint 2 y Sprint 3, las decisiones de arquitectura se gestionan me
   - [ADR-048](adrs/ADR-048_Arquitectura_del_Hub_Web_del_Estudiante_y_Paridad_Movil.md): Arquitectura del Hub Web del Estudiante y Paridad 1:1 con Móvil (`P-17..23`, `P-81..84`, `P-174..181`).
   - [ADR-049](adrs/ADR-049_Avatares_Vectoriales_y_Privacidad_LFPDPPP.md): Avatares Vectoriales Basados en Iniciales y Protección LFPDPPP (`P-08`, `P-09`).
   - [ADR-050](adrs/ADR-050_Candados_Visualizacion_Resultados_y_Blindaje_IA.md): Candados de Visualización de Resultados, Blindaje Anti-Fuga de IA y Revisión Post-Examen (`P-136`, `P-171..173`).
+  - [ADR-051](adrs/ADR-051_Renderizado_Reactivo_Cliente_Alpine_vs_Blade_Forelse.md): Renderizado Reactivo en Cliente con Alpine.js en Catálogos Docentes y Centralización de Cierre Semestral (`MPW-V2 §5.2.2`, `RF-GRU-001`, `RF-GRU-018`).
+  - [ADR-052](adrs/ADR-052_Normalizacion_UI_UX_Detalle_Grupo_Periodos_Evaluacion_y_SweetAlert2.md): Normalización UI/UX del Detalle de Grupo, Periodos de Evaluación y Adopción de SweetAlert2 (`MPW-V2 §5.2.2`, `§7`, `§8`, `RF-CAL-001..005`, `RW-28..36`).
 
 Consulta el [Catálogo Maestro de ADRs en `docs/adrs/README.md`](adrs/README.md) para el detalle técnico completo de cada decisión.
 

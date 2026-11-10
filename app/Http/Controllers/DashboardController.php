@@ -6,9 +6,15 @@ declare(strict_types=1);
  * ============================================================================
  * A-CODE SOLUTIONS - ANALIZAMOS, DISEÑAMOS, TRANSFORMAMOS
  * ============================================================================
- * Archivo:     DashboardController.php
- * Ubicación:   app/Http/Controllers/DashboardController.php
- * Descripción: Panel de resumen operativo post-login (Módulo 2, MPW-V2 §7.9).
+ * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
+ * Archivo:        DashboardController.php
+ * Ubicación:      app/Http/Controllers/DashboardController.php
+ * Requerimiento:  RF-AUT-002, RF-REP-001, RW-02 (Panel Operativo Post-Login, MPW-V2 §7.9)
+ * Autor:          Equipo 4 (A-Code Solutions)
+ * Versión:        1.0.0
+ * Fecha Creación: 08/11/2026
+ * Descripción:    Controlador del panel de resumen operativo post-login para
+ *                 docentes y alumnos con métricas agregadas normalizadas (MPW-V2 §7.9).
  * ============================================================================
  */
 
@@ -20,6 +26,11 @@ use App\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
+/**
+ * Controlador del panel de resumen operativo post-login (Módulo 2, MPW-V2 §7.9).
+ *
+ * @package App\Http\Controllers
+ */
 class DashboardController extends Controller
 {
     public function __invoke(Request $request): \Illuminate\Http\Response|\Illuminate\Http\RedirectResponse|View
@@ -43,15 +54,18 @@ class DashboardController extends Controller
      */
     private function teacherDashboard(User $teacher): View
     {
+        $normalizedScoreSql = "CASE WHEN acs_exams.grading_scale = '0-100' THEN COALESCE(acs_student_attempts.final_score, acs_student_attempts.objective_score, 0) / 10.0 ELSE COALESCE(acs_student_attempts.final_score, acs_student_attempts.objective_score, 0) END";
+
         $attemptStats = StudentAttempt::query()
-            ->where('status', 'submitted')
-            ->whereHas('exam', static fn ($query) => $query->where('teacher_id', $teacher->id))
-            ->selectRaw('
+            ->join('acs_exams', 'acs_student_attempts.exam_id', '=', 'acs_exams.id')
+            ->where('acs_student_attempts.status', 'submitted')
+            ->where('acs_exams.teacher_id', $teacher->id)
+            ->selectRaw("
                 COUNT(*) as total_count,
-                COUNT(CASE WHEN COALESCE(final_score, objective_score, 0) >= 6.0 THEN 1 END) as passed_count,
-                COUNT(CASE WHEN COALESCE(final_score, objective_score, 0) < 6.0 THEN 1 END) as failed_count,
-                AVG(COALESCE(final_score, objective_score, 0)) as avg_score
-            ')
+                COUNT(CASE WHEN ({$normalizedScoreSql}) >= 6.0 THEN 1 END) as passed_count,
+                COUNT(CASE WHEN ({$normalizedScoreSql}) < 6.0 THEN 1 END) as failed_count,
+                AVG({$normalizedScoreSql}) as avg_score
+            ")
             ->first();
 
         $totalAttempts = (int) ($attemptStats?->total_count ?? 0);

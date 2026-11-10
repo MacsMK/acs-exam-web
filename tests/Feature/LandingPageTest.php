@@ -67,7 +67,7 @@ class LandingPageTest extends TestCase
         $response->assertSee('Avanzado');
         $response->assertSee('$599.00');
         $response->assertSee('Prueba Gratuita Freemium');
-        $response->assertSee('RF-SUS-008');
+        $response->assertSee('Crea 1 grupo y aplica 1 examen completo sin tarjeta de crédito.');
         $response->assertSee(route('auth.register.teacher.show'));
     }
 }

@@ -138,7 +138,7 @@ class EvaluationPeriodGradebookTest extends TestCase
 
         $response->assertOk();
         $response->assertViewIs('evaluation-periods.gradebook');
-        $response->assertSee('Sábana de Calificaciones');
+        $response->assertSee('Control de Calificaciones');
         $response->assertSee($this->student->full_name);
         $response->assertSee('60 %'); // peso exámenes
     }
@@ -238,6 +238,26 @@ class EvaluationPeriodGradebookTest extends TestCase
 
         $response = $this->actingAs($this->otherTeacher)
             ->get(route('groups.periods.gradebook.export', [$this->group, $period]));
+
+        $response->assertForbidden();
+    }
+
+    public function test_cannot_create_period_if_group_is_closed(): void
+    {
+        $this->group->update(['is_closed' => true]);
+
+        $payload = [
+            'name' => 'Periodo en Grupo Cerrado',
+            'starts_at' => now()->format('Y-m-d'),
+            'ends_at' => now()->addMonth()->format('Y-m-d'),
+            'exams_weight' => 50,
+            'homework_weight' => 20,
+            'project_weight' => 20,
+            'other_weight' => 10,
+        ];
+
+        $response = $this->actingAs($this->teacher)
+            ->post(route('groups.periods.store', $this->group), $payload);
 
         $response->assertForbidden();
     }
