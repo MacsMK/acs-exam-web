@@ -196,19 +196,19 @@
     <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {{-- KPI 1: Estudiantes matriculados --}}
         <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
+            <div class="flex items-center gap-3">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
                     <x-icon name="userGroup" class="w-5 h-5 text-acode-tech" />
                 </div>
                 <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Estudiantes
                 </span>
             </div>
-            <div class="mt-3">
+            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p class="text-2xl lg:text-3xl font-extrabold text-acode-primary tracking-tight">
                     {{ $group->students->count() }}
                 </p>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="text-xs text-slate-500">
                     Alumnos matriculados
                 </p>
             </div>
@@ -216,19 +216,19 @@
 
         {{-- KPI 2: Exámenes asignados --}}
         <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
+            <div class="flex items-center gap-3">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
                     <x-icon name="document" class="w-5 h-5 text-acode-tech" />
                 </div>
                 <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Exámenes
                 </span>
             </div>
-            <div class="mt-3">
+            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p class="text-2xl lg:text-3xl font-extrabold text-acode-primary tracking-tight">
                     {{ $group->exams->count() }}
                 </p>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="text-xs text-slate-500">
                     Asignados a este salón
                 </p>
             </div>
@@ -239,19 +239,19 @@
             $submittedCount = $attempts->where('status', 'submitted')->count();
         @endphp
         <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-acode-accent/15 text-acode-accent">
+            <div class="flex items-center gap-3">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-acode-accent/15 text-acode-accent">
                     <x-icon name="reportBar" class="w-5 h-5 text-acode-accent" />
                 </div>
                 <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Entregas
                 </span>
             </div>
-            <div class="mt-3">
+            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p class="text-2xl lg:text-3xl font-extrabold text-acode-primary tracking-tight">
                     {{ $submittedCount }}
                 </p>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="text-xs text-slate-500">
                     De {{ $attempts->count() }} intentos totales
                 </p>
             </div>
@@ -259,19 +259,19 @@
 
         {{-- KPI 4: Periodos escolares --}}
         <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
+            <div class="flex items-center gap-3">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
                     <x-icon name="clock" class="w-5 h-5 text-acode-tech" />
                 </div>
                 <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Periodos
                 </span>
             </div>
-            <div class="mt-3">
+            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p class="text-2xl lg:text-3xl font-extrabold text-acode-primary tracking-tight">
                     {{ $group->evaluationPeriods->count() }}
                 </p>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="text-xs text-slate-500">
                     Parciales configurados
                 </p>
             </div>

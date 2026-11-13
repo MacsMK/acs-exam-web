@@ -84,19 +84,19 @@
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {{-- KPI 1: Periodos configurados --}}
         <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
+            <div class="flex items-center gap-3">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
                     <x-icon name="clock" class="w-5 h-5 text-acode-tech" />
                 </div>
                 <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Periodos registrados
                 </span>
             </div>
-            <div class="mt-3">
+            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p class="text-2xl lg:text-3xl font-extrabold text-acode-primary tracking-tight">
                     {{ $periods->count() }}
                 </p>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="text-xs text-slate-500">
                     Parciales configurados
                 </p>
             </div>
@@ -107,19 +107,19 @@
             $activePeriod = $periods->first(fn ($p) => $p->is_active_today);
         @endphp
         <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl {{ $activePeriod ? 'bg-acode-accent/15 text-acode-accent' : 'bg-slate-100 text-slate-500' }}">
+            <div class="flex items-center gap-3">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl {{ $activePeriod ? 'bg-acode-accent/15 text-acode-accent' : 'bg-slate-100 text-slate-500' }}">
                     <x-icon name="check" class="w-5 h-5" />
                 </div>
                 <x-badge :variant="$activePeriod ? 'accent' : 'neutral'">
                     {{ $activePeriod ? 'En curso hoy' : 'Sin periodo activo' }}
                 </x-badge>
             </div>
-            <div class="mt-3">
+            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p class="text-lg lg:text-xl font-bold text-acode-primary truncate">
                     {{ $activePeriod ? $activePeriod->name : 'Fuera de ventana' }}
                 </p>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="text-xs text-slate-500">
                     {{ $activePeriod ? $activePeriod->starts_at->format('d/m/Y') . ' al ' . $activePeriod->ends_at->format('d/m/Y') : 'Verifica las fechas del ciclo' }}
                 </p>
             </div>
@@ -127,19 +127,19 @@
 
         {{-- KPI 3: Alumnos evaluados en el grupo --}}
         <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
+            <div class="flex items-center gap-3">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
                     <x-icon name="userGroup" class="w-5 h-5 text-acode-tech" />
                 </div>
                 <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Matrícula evaluada
                 </span>
             </div>
-            <div class="mt-3">
+            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p class="text-2xl lg:text-3xl font-extrabold text-acode-primary tracking-tight">
                     {{ $periods->sum('student_grades_count') }}
                 </p>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="text-xs text-slate-500">
                     Calificaciones consolidadas
                 </p>
             </div>

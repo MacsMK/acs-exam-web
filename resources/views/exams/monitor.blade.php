@@ -180,68 +180,68 @@
     {{-- Tarjetas de Métricas en Tiempo Real (RW-12, RW-16) --}}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {{-- Total Matriculados --}}
-        <x-card class="bg-gradient-to-br from-slate-50 to-white">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Matriculados</p>
-                    <p class="text-2xl font-bold text-slate-900 mt-1">{{ $totalEnrolled }}</p>
-                    <p class="text-[11px] text-slate-400 mt-0.5">Alumnos en grupos asignados</p>
+        <x-card class="bg-gradient-to-br from-slate-50 to-white flex flex-col justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 shrink-0 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
+                    <x-icon name="userGroup" class="w-5 h-5 text-slate-600" />
                 </div>
-                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
-                    <x-icon name="userGroup" class="w-5 h-5" />
-                </div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Matriculados</p>
+            </div>
+            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <p class="text-2xl font-bold text-slate-900">{{ $totalEnrolled }}</p>
+                <p class="text-[11px] text-slate-400">En grupos asignados</p>
             </div>
         </x-card>
 
         {{-- En Curso (Activos en Vivo) --}}
-        <x-card class="bg-gradient-to-br from-emerald-50/60 to-white border border-emerald-200">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-xs font-semibold uppercase tracking-wider text-emerald-700">En Examen (En Vivo)</p>
-                    <div class="flex items-center gap-2 mt-1">
-                        <p class="text-2xl font-bold text-emerald-800" x-text="inProgress"></p>
-                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                    </div>
-                    <p class="text-[11px] text-emerald-600 mt-0.5">Respondiendo actualmente</p>
+        <x-card class="bg-gradient-to-br from-emerald-50/60 to-white border border-emerald-200 flex flex-col justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 shrink-0 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700">
+                    <x-icon name="clock" class="w-5 h-5 text-emerald-700" />
                 </div>
-                <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700">
-                    <x-icon name="clock" class="w-5 h-5" />
+                <div class="flex items-center gap-1.5">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-emerald-700">En Examen</p>
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
                 </div>
+            </div>
+            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <p class="text-2xl font-bold text-emerald-800" x-text="inProgress"></p>
+                <p class="text-[11px] text-emerald-600">Respondiendo en vivo</p>
             </div>
         </x-card>
 
         {{-- Entregados / Calificados --}}
-        <x-card class="bg-gradient-to-br from-blue-50/60 to-white border border-blue-200">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-xs font-semibold uppercase tracking-wider text-blue-700">Entregados</p>
-                    <p class="text-2xl font-bold text-blue-900 mt-1" x-text="submitted"></p>
-                    <p class="text-[11px] text-blue-600 mt-0.5">Finalizados o expirados</p>
+        <x-card class="bg-gradient-to-br from-blue-50/60 to-white border border-blue-200 flex flex-col justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 shrink-0 rounded-xl bg-blue-100 flex items-center justify-center text-blue-700">
+                    <x-icon name="checkCircle" class="w-5 h-5 text-blue-700" />
                 </div>
-                <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700">
-                    <x-icon name="checkCircle" class="w-5 h-5" />
-                </div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-blue-700">Entregados</p>
+            </div>
+            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <p class="text-2xl font-bold text-blue-900" x-text="submitted"></p>
+                <p class="text-[11px] text-blue-600">Finalizados o expirados</p>
             </div>
         </x-card>
 
         {{-- Incidentes Anti-Trampa Detectados --}}
         <div
-            class="rounded-2xl p-5 border shadow-sm transition-all"
+            class="rounded-2xl p-5 border shadow-sm transition-all flex flex-col justify-between"
             :class="incidents > 0 ? 'bg-rose-50/80 border-rose-300 ring-2 ring-rose-200' : 'bg-white border-slate-200'"
         >
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-xs font-semibold uppercase tracking-wider" :class="incidents > 0 ? 'text-rose-700' : 'text-slate-500'">
-                        Incidentes Anti-Fraude
-                    </p>
-                    <p class="text-2xl font-bold mt-1" :class="incidents > 0 ? 'text-rose-900' : 'text-slate-900'" x-text="incidents"></p>
-                    <p class="text-[11px] mt-0.5" :class="incidents > 0 ? 'text-rose-600' : 'text-slate-400'">
-                        Cambios de pestaña / salida app
-                    </p>
-                </div>
-                <div class="w-10 h-10 rounded-full flex items-center justify-center" :class="incidents > 0 ? 'bg-rose-200 text-rose-800' : 'bg-slate-200 text-slate-500'">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center" :class="incidents > 0 ? 'bg-rose-200 text-rose-800' : 'bg-slate-200 text-slate-500'">
                     <x-icon name="shield" class="w-5 h-5" />
                 </div>
+                <p class="text-xs font-semibold uppercase tracking-wider" :class="incidents > 0 ? 'text-rose-700' : 'text-slate-500'">
+                    Incidentes Anti-Fraude
+                </p>
+            </div>
+            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <p class="text-2xl font-bold" :class="incidents > 0 ? 'text-rose-900' : 'text-slate-900'" x-text="incidents"></p>
+                <p class="text-[11px]" :class="incidents > 0 ? 'text-rose-600' : 'text-slate-400'">
+                    Cambios de pestaña / app
+                </p>
             </div>
         </div>
     </div>

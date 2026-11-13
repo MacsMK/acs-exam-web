@@ -6,9 +6,15 @@ declare(strict_types=1);
  * ============================================================================
  * A-CODE SOLUTIONS - ANALIZAMOS, DISEÑAMOS, TRANSFORMAMOS
  * ============================================================================
- * Archivo:     StudentAttempt.php
- * Ubicación:   app/Models/StudentAttempt.php
- * Descripción: Modelo Eloquent de acs_student_attempts.
+ * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
+ * Archivo:        StudentAttempt.php
+ * Ubicación:      app/Models/StudentAttempt.php
+ * Requerimiento:  RF-EXA / RF-EVA (Intento de Examen y Snapshot Anti-Copia)
+ * Autor:          Equipo 4 (A-Code Solutions)
+ * Versión:        1.2.0
+ * Fecha Creación: 26/10/2026
+ * Descripción:    Modelo Eloquent de acs_student_attempts con secuencia de
+ *                 preguntas y snapshot inmutable de paráfrasis asignadas.
  * ============================================================================
  */
 
@@ -19,15 +25,31 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Intento de resolución de examen realizado por un estudiante.
+ *
+ * @package App\Models
+ */
 class StudentAttempt extends Model
 {
+    /**
+     * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4).
+     *
+     * @var string
+     */
     protected $table = 'acs_student_attempts';
 
+    /**
+     * Columnas asignables en masa (MPW-V2 §2.3.1).
+     *
+     * @var list<string>
+     */
     protected $fillable = [
         'exam_id',
         'student_id',
         'group_id',
         'question_sequence_payload',
+        'paraphrase_snapshot_payload',
         'current_question_index',
         'started_at',
         'submitted_at',
@@ -39,19 +61,9 @@ class StudentAttempt extends Model
         'incidents_count',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'question_sequence_payload' => 'array',
-            'started_at' => 'datetime',
-            'submitted_at' => 'datetime',
-            'objective_score' => 'decimal:2',
-            'ai_estimated_score' => 'decimal:2',
-            'final_score' => 'decimal:2',
-        ];
-    }
-
     /**
+     * Examen al que corresponde este intento.
+     *
      * @return BelongsTo<Exam, StudentAttempt>
      */
     public function exam(): BelongsTo
@@ -60,6 +72,8 @@ class StudentAttempt extends Model
     }
 
     /**
+     * Estudiante que presenta el examen.
+     *
      * @return BelongsTo<User, StudentAttempt>
      */
     public function student(): BelongsTo
@@ -68,6 +82,8 @@ class StudentAttempt extends Model
     }
 
     /**
+     * Grupo académico desde el cual se registró el intento.
+     *
      * @return BelongsTo<Group, StudentAttempt>
      */
     public function group(): BelongsTo
@@ -76,6 +92,8 @@ class StudentAttempt extends Model
     }
 
     /**
+     * Respuestas individuales emitidas durante este intento.
+     *
      * @return HasMany<StudentAnswer>
      */
     public function answers(): HasMany
@@ -89,7 +107,8 @@ class StudentAttempt extends Model
      * para él, pero se conservan como evidencia académica (ADR-036) y
      * reaparecen si vuelve a unirse.
      *
-     * @param Builder<StudentAttempt> $query
+     * @param Builder<StudentAttempt> $query     Constructor de la consulta Eloquent.
+     * @param int                     $studentId Identificador del estudiante.
      * @return Builder<StudentAttempt>
      */
     public function scopeInCurrentGroupsOfStudent(Builder $query, int $studentId): Builder
@@ -100,7 +119,27 @@ class StudentAttempt extends Model
     }
 
     /**
+     * Conversión de atributos (MPW-V2 Tabla 6 Bloque 16).
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'question_sequence_payload' => 'array',
+            'paraphrase_snapshot_payload' => 'array',
+            'started_at' => 'datetime',
+            'submitted_at' => 'datetime',
+            'objective_score' => 'decimal:2',
+            'ai_estimated_score' => 'decimal:2',
+            'final_score' => 'decimal:2',
+        ];
+    }
+
+    /**
      * Calificación a desplegar en vista (final_score o objective_score si no hay final).
+     *
+     * @return float|null
      */
     public function getDisplayScoreAttribute(): ?float
     {

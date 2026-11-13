@@ -13,7 +13,7 @@ guests → `/login`, usuarios autenticados sin ruta específica → `/dashboard`
 | --- | --- | --- |
 | Invitados | — | `auth/register-teacher`, `auth/register-student`, `login`, `verify-2fa` (GET+POST cada una) |
 | Autenticado (cualquier rol) | `auth` | `dashboard` (redirige según rol), `logout` |
-| Docente | `auth` + `role:teacher` | `grupos` (index/create/store/show), `reactivos` (index/create/store), `examenes` (index/create/store, `armar`/`assemble`) |
+| Docente | `auth` + `role:teacher` | `groups` (index/create/store/show, cerrar/reabrir, periodos/sabana), `questions` (CRUD + `template/csv`, `template/xlsx`, `import/preview`, `import`, `batch/create`, `batch`, `subjects/merge`, `subjects/suggestions`, `{question}/duplicate`, `{question}/parafrasis`), `exams` (index/create/store, `armar`, `apartados`, `propuesta`, `configuracion`, `revisar`, `publicar`, `monitoreo`) |
 | Alumno | `auth` + `role:student` | `grupos/unirse` (form + submit), `mis-examenes` |
 | Intentos (ambos lados pueden iniciarlos) | `auth` | `examenes/{exam}/iniciar`, `intentos/{attempt}` (show/responder/terminar/resultado) |
 
@@ -91,12 +91,24 @@ para el detalle de esa traducción.
 - `DashboardController` — arma los datos del dashboard según
   `auth()->user()->role`.
 - `GroupController`, `QuestionController`, `ExamController` —
-  CRUD del lado docente. `QuestionController::store()` es el que arma la
-  variante polimórfica correcta (`MultipleChoiceItem`/`MatchingItem`/
-  `OpenItem`/`CodeItem`) según `question_type` recibido, incluyendo el
-  método privado `buildMatchingItem()` que arma `left_column_payload`/
-  `right_column_payload`/`pairs_payload` a partir de los arrays paralelos
-  `concepts`/`definitions` del formulario.
+  controladores delgados (Skinny Controllers) del lado docente.
+  - `QuestionController` delega toda la lógica en `QuestionBankService` y
+    `SubscriptionLimitService`: listado con métricas KPI, estadísticas de
+    materias duplicadas y resumen de cuota (`index`), captura unitaria con
+    soporte `save_and_new` y hasta 3 paráfrasis iniciales (`create`/`store`),
+    captura rápida en lote hasta 30 reactivos (`batchCreate`/`batchStore`),
+    detalle con linaje COW (`show`), edición con estados precalculados sin
+    lógica `@php` en Blade e inmutabilidad de tipo (`edit`/`update`),
+    duplicación con control de cuota (`duplicate`), borrado lógico protegido
+    contra exámenes publicados/con intentos (`destroy`), gestión de paráfrasis
+    (`storeParaphrase`/`destroyParaphrase`), plantillas CSV/XLSX (`CWE-1236`),
+    preview dry-run JSON (`previewImport`), importación atómica CSV/TXT/XLSX
+    (`import`) y normalización/fusión de materias (`suggestSubjects`/`mergeSubjects`).
+  - `QuestionBankService` construye la variante polimórfica correcta
+    (`MultipleChoiceItem`/`MatchingItem`/`OpenItem`/`CodeItem`), incluyendo
+    `buildMatchingPayload()` con identificadores aleatorios opacos (`L_*`/`R_*`
+    sin correlación posicional), Copy-On-Write bajo bloqueo pesimista
+    (`lockForUpdate()`) y validación de cuota SaaS.
 - `StudentExamController` — lado alumno: unirse a grupo por folio
   (`join()`, valida `access_folio` + que el grupo no esté `is_closed`,
   usa `syncWithoutDetaching` para no duplicar inscripción) y listar
@@ -152,10 +164,19 @@ resources/views/
     show.blade.php      Detalle de grupo + su access_folio
     join.blade.php       Form del alumno para unirse por folio
   questions/
-    index.blade.php     Banco de reactivos del docente
+    index.blade.php      Banco de reactivos del docente (cuota SaaS, filtros
+                         tolerantes a acentos, materias, importación CSV/XLSX
+                         con previsualización)
     create.blade.php     Form dinámico por question_type (Alpine.js:
-                         cambia los campos según el tipo elegido, sin
-                         recargar la página)
+                         cambia los campos según el tipo elegido sin
+                         recargar; soporta paráfrasis iniciales y
+                         "Guardar y crear otro")
+    edit.blade.php       Edición Copy-On-Write cuando existe vínculo a examen
+                         y gestión de paráfrasis del reactivo
+    show.blade.php       Detalle completo del reactivo polimórfico, historial
+                         COW y listado de paráfrasis
+    batch-create.blade.php  Captura rápida en lote de hasta 30 reactivos con
+                         materia compartida (UI pendiente Anillo 2 Paso 3)
   exams/
     index.blade.php
     create.blade.php

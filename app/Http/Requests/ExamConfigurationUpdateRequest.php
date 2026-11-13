@@ -11,17 +11,20 @@ declare(strict_types=1);
  * Ubicación:      app/Http/Requests/ExamConfigurationUpdateRequest.php
  * Requerimiento:  RW-17..20, RW-25, MPW-V2 §6.3, Tabla 30
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Fecha Creación: 09/11/2026
  * Descripción:    Validación formal para la configuración de tiempos,
- *                 ponderaciones y candados de examen (ADR-017).
+ *                 ponderaciones y candados de examen con aislamiento multi-docente
+ *                 en group_ids [CRÍTICA-01] (ADR-017).
  * ============================================================================
  */
 
 namespace App\Http\Requests;
 
-use App\Models\Exam;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+use App\Models\Exam;
 
 class ExamConfigurationUpdateRequest extends FormRequest
 {
@@ -45,6 +48,8 @@ class ExamConfigurationUpdateRequest extends FormRequest
      */
     public function rules(): array
     {
+        $teacherId = $this->user()?->id;
+
         return [
             'title' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string'],
@@ -57,7 +62,11 @@ class ExamConfigurationUpdateRequest extends FormRequest
             'randomize_question_order' => ['required', 'boolean'],
             'require_webcam' => ['required', 'boolean'],
             'group_ids' => ['nullable', 'array'],
-            'group_ids.*' => ['integer'],
+            'group_ids.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('acs_groups', 'id')->where('teacher_id', $teacherId),
+            ],
             'questions' => ['required', 'array'],
             'questions.*.points_weight' => ['required', 'numeric', 'min:0', 'max:100'],
             'questions.*.time_limit_seconds' => ['required', 'integer', 'min:1'],
@@ -76,6 +85,10 @@ class ExamConfigurationUpdateRequest extends FormRequest
             'grading_scale.in' => 'La opción seleccionada en escala de calificación no es válida',
             'result_visibility_mode.required' => 'El campo visibilidad de resultados es obligatorio',
             'max_allowed_incidents.required' => 'El campo incidentes permitidos es obligatorio',
+            'group_ids.array' => 'Los grupos seleccionados deben enviarse como un arreglo',
+            'group_ids.*.integer' => 'El identificador de grupo debe ser un número entero',
+            'group_ids.*.distinct' => 'No puedes asignar el mismo grupo más de una vez',
+            'group_ids.*.exists' => 'Alguno de los grupos seleccionados no existe o no pertenece a tu catálogo docente',
             'questions.required' => 'El examen debe incluir al menos una pregunta para configurarse',
             'questions.*.points_weight.required' => 'La ponderación por pregunta es obligatoria',
             'questions.*.points_weight.numeric' => 'La ponderación debe ser un valor numérico',

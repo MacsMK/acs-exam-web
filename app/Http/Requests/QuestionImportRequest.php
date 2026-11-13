@@ -9,10 +9,12 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        QuestionImportRequest.php
  * Ubicación:      app/Http/Requests/QuestionImportRequest.php
- * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico - Importación CSV)
+ * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico - Importación CSV/XLSX)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
- * Descripción:    Validación del archivo CSV cargado para importación por lotes.
+ * Versión:        2.0.0
+ * Fecha Creación: 08/11/2026
+ * Descripción:    Validación del archivo CSV, TXT o Excel (.xlsx) cargado para
+ *                 previsualización dry-run e importación atómica por lotes.
  * ============================================================================
  */
 
@@ -33,7 +35,13 @@ class QuestionImportRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'csv_file' => ['required', 'file', 'mimes:csv,txt', 'max:5120'],
+            'csv_file' => [
+                'required',
+                'file',
+                'max:5120',
+                'mimes:csv,txt,xlsx',
+                'mimetypes:text/plain,text/csv,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ],
         ];
     }
 
@@ -43,10 +51,18 @@ class QuestionImportRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'csv_file.required' => 'El archivo CSV es obligatorio',
+            'csv_file.required' => 'El archivo de importación es obligatorio',
             'csv_file.file' => 'El archivo cargado debe ser válido',
-            'csv_file.mimes' => 'El archivo debe tener formato .csv o .txt',
-            'csv_file.max' => 'El archivo CSV no debe exceder los 5 MB',
+            'csv_file.max' => 'El archivo de importación no debe exceder los 5 MB',
+            'csv_file.mimes' => 'El archivo debe tener formato .csv, .txt o .xlsx',
+            'csv_file.mimetypes' => 'El tipo de contenido del archivo no corresponde a CSV, TXT o Excel (.xlsx)',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (! $this->hasFile('csv_file') && $this->hasFile('import_file')) {
+            $this->files->set('csv_file', $this->file('import_file'));
+        }
     }
 }

@@ -33,13 +33,21 @@ use App\Http\Requests\ExamStoreRequest;
 use App\Http\Requests\GroupJoinRequest;
 use App\Http\Requests\GroupStoreRequest;
 use App\Http\Requests\LoginRequest;
+use App\Http\Requests\QuestionBatchStoreRequest;
+use App\Http\Requests\QuestionParaphraseStoreRequest;
+use App\Http\Requests\QuestionStoreRequest;
+use App\Http\Requests\QuestionUpdateRequest;
 use App\Http\Requests\RegisterStudentRequest;
 use App\Http\Requests\RegisterTeacherRequest;
+use App\Http\Requests\SubjectMergeRequest;
 use App\Http\Requests\VerifyTwoFactorRequest;
 use App\Models\Group;
+use App\Models\MultipleChoiceItem;
+use App\Models\Question;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Validator as ValidatorInstance;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -587,5 +595,281 @@ class FormRequestRulesTest extends TestCase
             'Debes aceptar el aviso de privacidad para continuar',
             $validator->errors()->first('accepts_privacy_notice'),
         );
+    }
+
+    // ------------------------------------------------------------------
+    // Banco de Preguntas: MPW-V2 Tabla 17, Unicode, paridad e inmutabilidad
+    // ------------------------------------------------------------------
+
+    public function test_question_store_validation_messages_are_spanish_and_never_raw_translation_keys(): void
+    {
+        $teacher = User::factory()->teacher()->create();
+
+        // 1. multiple_choice sin options ni correct_option_index
+        $mcResponse = $this->actingAs($teacher)->postJson(route('questions.store'), [
+            'title' => 'MC Incompleto',
+            'stem' => 'Enunciado MC válido',
+            'question_type' => 'multiple_choice',
+            'default_points' => 2,
+            'default_time_seconds' => 60,
+        ]);
+        $mcResponse->assertStatus(422);
+        $mcResponse->assertJsonValidationErrors(['options', 'correct_option_index']);
+        $this->assertSame('El campo opciones de respuesta es obligatorio', $mcResponse->json('errors.options.0'));
+        $this->assertSame('El campo respuesta correcta es obligatorio', $mcResponse->json('errors.correct_option_index.0'));
+
+        // 2. matching sin concepts ni definitions
+        $matchingResponse = $this->actingAs($teacher)->postJson(route('questions.store'), [
+            'title' => 'Matching Incompleto',
+            'stem' => 'Enunciado matching válido',
+            'question_type' => 'matching',
+            'default_points' => 3,
+            'default_time_seconds' => 90,
+        ]);
+        $matchingResponse->assertStatus(422);
+        $matchingResponse->assertJsonValidationErrors(['concepts', 'definitions']);
+        $this->assertSame('El campo conceptos es obligatorio', $matchingResponse->json('errors.concepts.0'));
+        $this->assertSame('El campo definiciones es obligatorio', $matchingResponse->json('errors.definitions.0'));
+
+        // 3. open sin reference_answer
+        $openResponse = $this->actingAs($teacher)->postJson(route('questions.store'), [
+            'title' => 'Open Incompleto',
+            'stem' => 'Enunciado abierto válido',
+            'question_type' => 'open',
+            'default_points' => 4,
+            'default_time_seconds' => 120,
+        ]);
+        $openResponse->assertStatus(422);
+        $openResponse->assertJsonValidationErrors(['reference_answer']);
+        $this->assertSame('El campo respuesta de referencia es obligatorio', $openResponse->json('errors.reference_answer.0'));
+
+        // 4. code sin programming_language, reference_solution y sin starter_code con is_find_error=1
+        $codeResponse = $this->actingAs($teacher)->postJson(route('questions.store'), [
+            'title' => 'Code Incompleto',
+            'stem' => 'Enunciado de código válido',
+            'question_type' => 'code',
+            'default_points' => 5,
+            'default_time_seconds' => 180,
+            'is_find_error' => '1',
+        ]);
+        $codeResponse->assertStatus(422);
+        $codeResponse->assertJsonValidationErrors(['programming_language', 'reference_solution', 'starter_code']);
+        $this->assertSame('El campo lenguaje de programación es obligatorio', $codeResponse->json('errors.programming_language.0'));
+        $this->assertSame('El campo solución de referencia es obligatorio', $codeResponse->json('errors.reference_solution.0'));
+        $this->assertSame(
+            'En la modalidad de encontrar el error, el código inicial con defecto es obligatorio',
+            $codeResponse->json('errors.starter_code.0'),
+        );
+
+        // Ningún mensaje de error debe exponer claves sin traducir (.required_if / validation.*)
+        foreach ([$mcResponse, $matchingResponse, $openResponse, $codeResponse] as $resp) {
+            foreach ($resp->json('errors') as $fieldErrors) {
+                foreach ($fieldErrors as $msg) {
+                    $this->assertStringNotContainsString('validation.', $msg);
+                    $this->assertStringNotContainsString('required_if', $msg);
+                }
+            }
+        }
+    }
+
+    public function test_question_store_rejects_parity_mismatch_duplicates_and_invisible_unicode_spaces(): void
+    {
+        $teacher = User::factory()->teacher()->create();
+
+        // 1. Paridad count(concepts) !== count(definitions)
+        $parityResponse = $this->actingAs($teacher)->postJson(route('questions.store'), [
+            'title' => 'Matching Desbalanceado',
+            'stem' => 'Relacione los pares correctamente',
+            'question_type' => 'matching',
+            'default_points' => 3,
+            'default_time_seconds' => 90,
+            'concepts' => ['Concepto 1', 'Concepto 2', 'Concepto 3'],
+            'definitions' => ['Definición 1', 'Definición 2'],
+        ]);
+        $parityResponse->assertStatus(422);
+        $parityResponse->assertJsonValidationErrors(['definitions']);
+        $this->assertSame(
+            'La cantidad de conceptos y definiciones debe ser exactamente igual.',
+            $parityResponse->json('errors.definitions.0'),
+        );
+
+        // 2. Duplicados en options
+        $dupOptionsResponse = $this->actingAs($teacher)->postJson(route('questions.store'), [
+            'title' => 'Opciones Duplicadas',
+            'stem' => 'Seleccione una alternativa',
+            'question_type' => 'multiple_choice',
+            'default_points' => 2,
+            'default_time_seconds' => 60,
+            'options' => ['TCP', 'TCP'],
+            'correct_option_index' => 0,
+        ]);
+        $dupOptionsResponse->assertStatus(422);
+        $dupOptionsResponse->assertJsonValidationErrors(['options.1']);
+        $this->assertSame('Las alternativas de respuesta no pueden repetirse', $dupOptionsResponse->json('errors')['options.1'][0]);
+
+        // 3. Duplicados en concepts y definitions
+        $dupMatchingResponse = $this->actingAs($teacher)->postJson(route('questions.store'), [
+            'title' => 'Matching Duplicado',
+            'stem' => 'Relacione sin duplicados',
+            'question_type' => 'matching',
+            'default_points' => 3,
+            'default_time_seconds' => 90,
+            'concepts' => ['Clase', 'Clase'],
+            'definitions' => ['Molde', 'Molde'],
+        ]);
+        $dupMatchingResponse->assertStatus(422);
+        $dupMatchingResponse->assertJsonValidationErrors(['concepts.1', 'definitions.1']);
+        $this->assertSame('Los conceptos de la columna izquierda no pueden repetirse', $dupMatchingResponse->json('errors')['concepts.1'][0]);
+        $this->assertSame('Las definiciones de la columna derecha no pueden repetirse', $dupMatchingResponse->json('errors')['definitions.1'][0]);
+
+        // 4. Espacios Unicode invisibles (\u{00A0}, \u{200B}, \u{FEFF}) rechazados cuando dejan campos vacíos
+        $unicodeBlankResponse = $this->actingAs($teacher)->postJson(route('questions.store'), [
+            'title' => "\u{00A0}\u{200B}\u{FEFF}   ",
+            'stem' => "\u{200B}\u{00A0}",
+            'question_type' => 'code',
+            'default_points' => 5,
+            'default_time_seconds' => 120,
+            'programming_language' => "\u{00A0}\u{200B}",
+            'is_find_error' => '1',
+            'starter_code' => "\u{00A0}\u{200B}",
+            'reference_solution' => "\u{200B} ",
+        ]);
+        $unicodeBlankResponse->assertStatus(422);
+        $unicodeBlankResponse->assertJsonValidationErrors([
+            'title',
+            'stem',
+            'programming_language',
+            'starter_code',
+            'reference_solution',
+        ]);
+    }
+
+    public function test_question_store_rejects_initial_paraphrase_equivalent_to_stem_or_duplicated(): void
+    {
+        $teacher = User::factory()->teacher()->create();
+
+        // 1. Paráfrasis inicial igual al stem (incluso variando mayúsculas, espacios y Unicode invisible)
+        $sameAsStemResponse = $this->actingAs($teacher)->postJson(route('questions.store'), [
+            'title' => 'Reactivo con Paráfrasis Equivalente',
+            'stem' => '¿Cuál es la complejidad temporal de búsqueda binaria?',
+            'question_type' => 'open',
+            'default_points' => 4,
+            'default_time_seconds' => 120,
+            'reference_answer' => 'O(log n)',
+            'initial_paraphrases' => ["  ¿CUÁL\u{00A0}ES la  complejidad\u{200B} temporal de búsqueda binaria? "],
+        ]);
+        $sameAsStemResponse->assertStatus(422);
+        $sameAsStemResponse->assertJsonValidationErrors(['initial_paraphrases.0']);
+
+        // 2. Más de 3 paráfrasis iniciales o duplicadas entre sí
+        $tooManyResponse = $this->actingAs($teacher)->postJson(route('questions.store'), [
+            'title' => 'Exceso de Paráfrasis Iniciales',
+            'stem' => 'Enunciado principal único',
+            'question_type' => 'open',
+            'default_points' => 4,
+            'default_time_seconds' => 120,
+            'reference_answer' => 'Respuesta modelo',
+            'initial_paraphrases' => ['Variante 1', 'Variante 2', 'Variante 3', 'Variante 4'],
+        ]);
+        $tooManyResponse->assertStatus(422);
+        $tooManyResponse->assertJsonValidationErrors(['initial_paraphrases']);
+    }
+
+    public function test_question_update_enforces_question_type_immutability_and_tabla_17_validation(): void
+    {
+        $teacher = User::factory()->teacher()->create();
+        $variant = MultipleChoiceItem::create([
+            'options_payload' => [
+                ['index' => 0, 'text' => 'Alternativa A'],
+                ['index' => 1, 'text' => 'Alternativa B'],
+            ],
+            'correct_option_index' => 0,
+        ]);
+        $question = Question::create([
+            'teacher_id' => $teacher->id,
+            'title' => 'Pregunta Inmutable',
+            'stem' => 'Enunciado original de opción múltiple',
+            'question_type' => 'multiple_choice',
+            'default_points' => 2,
+            'default_time_seconds' => 60,
+            'questionable_type' => MultipleChoiceItem::class,
+            'questionable_id' => $variant->id,
+        ]);
+
+        // 1. [MEDIA-01] Intentar mutar question_type a 'open' con payload open falla porque prepareForValidation restaura 'multiple_choice'
+        $mutatingWithOpenPayload = $this->actingAs($teacher)->putJson(route('questions.update', $question), [
+            'title' => 'Intento Mutación Tipo',
+            'stem' => 'Enunciado mutado a open',
+            'question_type' => 'open',
+            'default_points' => 3,
+            'default_time_seconds' => 90,
+            'reference_answer' => 'Respuesta modelo abierta',
+        ]);
+        $mutatingWithOpenPayload->assertStatus(422);
+        $mutatingWithOpenPayload->assertJsonValidationErrors(['options', 'correct_option_index']);
+        $this->assertSame('multiple_choice', $question->fresh()->question_type);
+
+        // 2. Incluso enviando options válidos + question_type='open', jamás muta question_type en BD
+        $mutatingWithMcPayload = $this->actingAs($teacher)->put(route('questions.update', $question), [
+            'title' => 'Intento Mutación Forzada',
+            'stem' => 'Enunciado actualizado manteniendo tipo',
+            'question_type' => 'open',
+            'default_points' => 3,
+            'default_time_seconds' => 90,
+            'options' => ['Alternativa X', 'Alternativa Y'],
+            'correct_option_index' => 1,
+        ]);
+        $mutatingWithMcPayload->assertRedirect(route('questions.show', $question));
+        $this->assertSame('multiple_choice', $question->fresh()->question_type);
+
+        // 3. Validación directa de reglas con ruta enlazada rechaza question_type !== actual
+        $updateRequest = QuestionUpdateRequest::create("/questions/{$question->id}", 'PUT');
+        $route = new Route('PUT', 'questions/{question}', []);
+        $route->bind($updateRequest);
+        $route->setParameter('question', $question->fresh());
+        $updateRequest->setRouteResolver(fn () => $route);
+        $updateRequest->setUserResolver(fn () => $teacher);
+
+        $validator = $this->validate($updateRequest, [
+            'title' => 'Prueba directa',
+            'stem' => 'Enunciado directo',
+            'question_type' => 'open',
+            'default_points' => 2,
+            'default_time_seconds' => 60,
+            'reference_answer' => 'Respuesta',
+        ]);
+        $this->assertTrue($validator->errors()->has('question_type'));
+        $this->assertSame('La opción seleccionada en tipo de reactivo no es válida', $validator->errors()->first('question_type'));
+    }
+
+    public function test_question_paraphrase_batch_and_subject_merge_form_requests(): void
+    {
+        $teacher = User::factory()->teacher()->create();
+
+        // BatchStore: rechaza >30 reactivos y mensajes Tabla 17
+        $batchRequest = QuestionBatchStoreRequest::create('/questions/batch', 'POST');
+        $batchRequest->setUserResolver(fn () => $teacher);
+        $this->assertRule($batchRequest, ['items' => []], 'items');
+
+        $tooManyItems = array_fill(0, 31, [
+            'title' => 'Item',
+            'stem' => 'Enunciado válido',
+            'question_type' => 'open',
+            'default_points' => 2,
+            'default_time_seconds' => 60,
+            'reference_answer' => 'Respuesta',
+        ]);
+        $this->assertRule($batchRequest, ['items' => $tooManyItems], 'items');
+
+        // ParaphraseStore: max 500 chars
+        $paraphraseRequest = new QuestionParaphraseStoreRequest;
+        $this->assertRule($paraphraseRequest, ['stem' => str_repeat('a', 501)], 'stem');
+        $this->assertRule($paraphraseRequest, ['stem' => 'ab'], 'stem');
+
+        // SubjectMerge: valida source_subject_ids y target_name
+        $mergeRequest = SubjectMergeRequest::create('/questions/subjects/merge', 'POST');
+        $mergeRequest->setUserResolver(fn () => $teacher);
+        $this->assertRule($mergeRequest, ['source_subject_ids' => [], 'target_name' => 'A'], 'source_subject_ids');
+        $this->assertRule($mergeRequest, ['source_subject_ids' => [], 'target_name' => 'A'], 'target_name');
     }
 }

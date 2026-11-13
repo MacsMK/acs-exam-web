@@ -13,6 +13,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'A-Code Solutions') · Plataforma de Exámenes</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -368,7 +369,7 @@
                         </div>
                     @endif
 
-                    @if ($errors->any() && !request()->routeIs('exams.create'))
+                    @if ($errors->any() && !request()->routeIs('exams.create', 'questions.create', 'questions.edit', 'questions.batch.create'))
                         <div class="mb-6 rounded-lg border border-acode-danger/30 bg-acode-danger/10 px-4 py-3 text-sm text-acode-danger">
                             <p class="mb-1 font-semibold">Revisa lo siguiente:</p>
                             <ul class="list-inside list-disc space-y-0.5">

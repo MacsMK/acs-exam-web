@@ -143,7 +143,7 @@
                                         <tr>
                                             <td class="px-3 py-3 text-slate-700">
                                                 <span class="font-medium">Pregunta {{ $loop->iteration }}</span>
-                                                <span class="mt-1 block text-xs text-slate-500">{{ \Illuminate\Support\Str::limit($examQuestion->question?->question_text ?? 'Reactivo '.$examQuestion->question_id, 85) }}</span>
+                                                <span class="mt-1 block text-xs text-slate-500">{{ \Illuminate\Support\Str::limit($examQuestion->question?->stem ?? 'Reactivo '.$examQuestion->question_id, 85) }}</span>
                                             </td>
                                             <td class="px-3 py-3">
                                                     <input type="number" name="questions[{{ $examQuestion->id }}][points_weight]" min="0" max="100" step="0.01" required data-points-input @disabled($isPublished)

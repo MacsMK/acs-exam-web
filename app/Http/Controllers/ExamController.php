@@ -20,9 +20,10 @@ use App\Http\Requests\ExamSectionStoreRequest;
 use App\Http\Requests\ExamStoreRequest;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
-use App\Models\Question;
+use App\Models\Group;
 use App\Services\ExamAssemblyService;
 use App\Services\ExamNotificationService;
+use App\Services\QuestionBankService;
 use App\Services\SubscriptionLimitService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -35,6 +36,7 @@ class ExamController extends Controller
     public function __construct(
         private readonly ExamAssemblyService $assemblyService,
         private readonly SubscriptionLimitService $subscriptionLimitService,
+        private readonly QuestionBankService $questionBankService,
     ) {
     }
 
@@ -54,7 +56,7 @@ class ExamController extends Controller
 
     public function store(ExamStoreRequest $request): RedirectResponse
     {
-        $this->subscriptionLimitService?->ensureCanCreateExam($request->user());
+        $this->subscriptionLimitService->ensureCanCreateExam($request->user());
 
         $exam = $this->assemblyService->createExam($request->user(), $request->validated());
 
@@ -73,23 +75,18 @@ class ExamController extends Controller
         $proposedQuestions = collect();
 
         if (is_array($proposal) && ! empty($proposal['question_ids'])) {
-            $questions = Question::where('teacher_id', $exam->teacher_id)
-                ->whereIn('id', $proposal['question_ids'])
-                ->get()
-                ->keyBy('id');
+            $questions = $this->questionBankService->getQuestionsByIdsForTeacher(
+                (int) $exam->teacher_id,
+                $proposal['question_ids']
+            );
 
             $proposedQuestions = collect($proposal['question_ids'])
-                ->map(fn ($id) => $questions->get($id))
+                ->map(fn ($id) => $questions->get((int) $id))
                 ->filter();
         }
 
         // Temas disponibles en el banco privado del docente.
-        $subjectTags = Question::where('teacher_id', $exam->teacher_id)
-            ->whereNotNull('subject_tag')
-            ->where('subject_tag', '!=', '')
-            ->distinct()
-            ->orderBy('subject_tag')
-            ->pluck('subject_tag');
+        $subjectTags = $this->questionBankService->getDistinctSubjects((int) $exam->teacher_id);
 
         return view('exams.assemble', [
             'exam' => $exam,
@@ -228,8 +225,21 @@ class ExamController extends Controller
 
             $exam->update(collect($data)->except(['questions', 'group_ids'])->all());
 
-            if (isset($data['group_ids'])) {
-                $exam->groups()->sync($data['group_ids']);
+            if (array_key_exists('group_ids', $data)) {
+                $requestedGroupIds = array_values(array_unique(array_map('intval', $data['group_ids'] ?? [])));
+                $ownedGroupIds = Group::where('teacher_id', $exam->teacher_id)
+                    ->whereIn('id', $requestedGroupIds)
+                    ->pluck('id')
+                    ->map(static fn (mixed $id): int => (int) $id)
+                    ->all();
+
+                if (count($ownedGroupIds) !== count($requestedGroupIds)) {
+                    throw ValidationException::withMessages([
+                        'group_ids' => ['Alguno de los grupos seleccionados no pertenece a tu catálogo docente.'],
+                    ]);
+                }
+
+                $exam->groups()->sync($ownedGroupIds);
             }
 
             foreach ($submitted as $id => $values) {
@@ -290,7 +300,7 @@ class ExamController extends Controller
     {
         $this->authorizeExam($exam);
 
-        $this->subscriptionLimitService?->ensureCanPublishExam(request()->user(), $exam);
+        $this->subscriptionLimitService->ensureCanPublishExam(request()->user(), $exam);
 
         $questionsCount = $exam->examQuestions()->count();
         abort_if($questionsCount === 0, 422, 'El examen no tiene reactivos todavía.');

@@ -70,7 +70,7 @@
                                 </span>
                             @endif
 
-                            {{-- Enlace a Versión Previa / Derivada --}}
+                            {{-- Enlace a Versión Previa / Derivadas --}}
                             @if ($question->parent)
                                 <a
                                     href="{{ route('questions.show', $question->parent) }}"
@@ -80,6 +80,12 @@
                                     <x-icon name="view" class="w-3.5 h-3.5" />
                                     Versión previa: #{{ $question->parent->id }}
                                 </a>
+                            @endif
+                            @if ($question->children->isNotEmpty())
+                                <span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-acode-accent/10 text-acode-accent border border-acode-accent/30">
+                                    <x-icon name="copy" class="w-3.5 h-3.5" />
+                                    {{ $question->children->count() }} {{ $question->children->count() === 1 ? 'versión derivada' : 'versiones derivadas' }}
+                                </span>
                             @endif
                         </div>
 
@@ -119,6 +125,61 @@
                 </div>
             </div>
         </x-card>
+
+        {{-- Trazabilidad de Versionado Copy-on-Write --}}
+        @if ($question->parent || $question->children->isNotEmpty())
+            <x-card title="Historial de Versiones (Copy-on-Write)" subtitle="Trazabilidad de versiones previas y derivadas para preservar exámenes históricos.">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2">
+                        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Versión de origen</p>
+                        @if ($question->parent)
+                            <div class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                                <div class="min-w-0">
+                                    <p class="text-xs font-semibold text-acode-primary truncate">
+                                        #{{ $question->parent->id }} · {{ $question->parent->title }}
+                                    </p>
+                                    <p class="text-[11px] text-slate-500">
+                                        Creada {{ $question->parent->created_at?->format('d/m/Y H:i') ?? 'previamente' }}
+                                    </p>
+                                </div>
+                                <x-button :href="route('questions.show', $question->parent)" variant="neutral" size="sm">
+                                    <x-icon name="view" class="w-3.5 h-3.5 mr-1" />
+                                    Abrir
+                                </x-button>
+                            </div>
+                        @else
+                            <p class="text-xs text-slate-500 italic">Este reactivo es raíz original (sin versión previa).</p>
+                        @endif
+                    </div>
+
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2">
+                        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            Versiones derivadas ({{ $question->children->count() }})
+                        </p>
+                        <div class="space-y-2">
+                            @forelse ($question->children as $childVersion)
+                                <div class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                                    <div class="min-w-0">
+                                        <p class="text-xs font-semibold text-acode-primary truncate">
+                                            #{{ $childVersion->id }} · {{ $childVersion->title }}
+                                        </p>
+                                        <p class="text-[11px] text-slate-500">
+                                            Derivada {{ $childVersion->created_at?->format('d/m/Y H:i') ?? 'recientemente' }}
+                                        </p>
+                                    </div>
+                                    <x-button :href="route('questions.show', $childVersion)" variant="neutral" size="sm">
+                                        <x-icon name="view" class="w-3.5 h-3.5 mr-1" />
+                                        Abrir
+                                    </x-button>
+                                </div>
+                            @empty
+                                <p class="text-xs text-slate-500 italic">Aún no se han generado versiones derivadas a partir de este reactivo.</p>
+                            @endforelse
+                        </div>
+                    </div>
+                </div>
+            </x-card>
+        @endif
 
         {{-- Desglose Polimórfico Específico según question_type --}}
         @switch($question->question_type)
@@ -175,54 +236,49 @@
                             <x-badge variant="accent">Emparejamiento</x-badge>
                         </div>
 
-                        <div class="overflow-x-auto rounded-xl border border-slate-200">
-                            <table class="w-full text-left text-xs">
-                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
-                                    <tr>
-                                        <th class="py-3 px-4 w-5/12">Columna A: Concepto / Premisa</th>
-                                        <th class="py-3 px-2 w-1/12 text-center">Vínculo</th>
-                                        <th class="py-3 px-4 w-6/12">Columna B: Definición / Respuesta</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-100 bg-white">
-                                    @forelse ($question->questionable->pairs_payload ?? [] as $pair)
-                                        @php
-                                            $left = collect($question->questionable->left_column_payload ?? [])->firstWhere('id', $pair['left_id'] ?? null);
-                                            $right = collect($question->questionable->right_column_payload ?? [])->firstWhere('id', $pair['right_id'] ?? null);
-                                        @endphp
-                                        <tr class="hover:bg-slate-50/50">
-                                            <td class="py-3 px-4 align-top">
-                                                <div class="flex items-start gap-2">
-                                                    <span class="font-mono text-[10px] font-bold text-acode-primary bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
-                                                        {{ $pair['left_id'] ?? 'L'.($loop->iteration) }}
-                                                    </span>
-                                                    <span class="text-slate-800 font-semibold text-xs leading-relaxed">
-                                                        {{ is_array($left) ? ($left['text'] ?? '') : (string) $left }}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td class="py-3 px-2 align-middle text-center text-acode-accent font-bold select-none">
-                                                ↔
-                                            </td>
-                                            <td class="py-3 px-4 align-top">
-                                                <div class="flex items-start gap-2">
-                                                    <span class="font-mono text-[10px] font-bold text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200 shrink-0">
-                                                        {{ $pair['right_id'] ?? 'R'.($loop->iteration) }}
-                                                    </span>
-                                                    <span class="text-slate-700 text-xs leading-relaxed">
-                                                        {{ is_array($right) ? ($right['text'] ?? '') : (string) $right }}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    @empty
-                                        <tr>
-                                            <td colspan="3" class="py-4 text-center text-slate-400 italic">No hay pares registrados para este reactivo.</td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
+                        <x-table>
+                            <x-slot:header>
+                                <tr>
+                                    <x-table.th class="w-5/12">Columna A: Concepto / Premisa</x-table.th>
+                                    <x-table.th align="center" class="w-1/12">Vínculo</x-table.th>
+                                    <x-table.th class="w-6/12">Columna B: Definición / Respuesta</x-table.th>
+                                </tr>
+                            </x-slot:header>
+
+                            @forelse ($question->questionable->pairs_payload ?? [] as $pair)
+                                <tr class="hover:bg-slate-50/50">
+                                    <x-table.td class="align-top">
+                                        <div class="flex items-start gap-2">
+                                            <span class="font-mono text-[10px] font-bold text-acode-primary bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                                                {{ $pair['left_id'] ?? 'L'.($loop->iteration) }}
+                                            </span>
+                                            <span class="text-slate-800 font-semibold text-xs leading-relaxed">
+                                                {{ data_get(collect($question->questionable->left_column_payload ?? [])->firstWhere('id', $pair['left_id'] ?? null), 'text', '') }}
+                                            </span>
+                                        </div>
+                                    </x-table.td>
+                                    <x-table.td align="center" class="align-middle text-acode-accent font-bold select-none">
+                                        ↔
+                                    </x-table.td>
+                                    <x-table.td class="align-top">
+                                        <div class="flex items-start gap-2">
+                                            <span class="font-mono text-[10px] font-bold text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200 shrink-0">
+                                                {{ $pair['right_id'] ?? 'R'.($loop->iteration) }}
+                                            </span>
+                                            <span class="text-slate-700 text-xs leading-relaxed">
+                                                {{ data_get(collect($question->questionable->right_column_payload ?? [])->firstWhere('id', $pair['right_id'] ?? null), 'text', '') }}
+                                            </span>
+                                        </div>
+                                    </x-table.td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <x-table.td colspan="3" align="center" class="py-6 text-slate-400 italic">
+                                        No hay pares registrados para este reactivo.
+                                    </x-table.td>
+                                </tr>
+                            @endforelse
+                        </x-table>
                     </div>
                 </x-card>
                 @break
@@ -341,7 +397,19 @@
 
         {{-- Panel de Paráfrasis Anti-Copia (RF-BAN-010) --}}
         <x-card>
-            <div class="space-y-5" x-data="{ openNewForm: false }">
+            <div
+                class="space-y-5"
+                x-data="{
+                    openNewForm: @js($errors->paraphrase->any() || $errors->has('stem')),
+                    paraphraseStem: @js(old('stem', '')),
+                    originalStem: @js($question->stem),
+                    get matchesOriginal() {
+                        const a = this.paraphraseStem.trim().replace(/\s+/g, ' ').toLowerCase();
+                        const b = (this.originalStem || '').trim().replace(/\s+/g, ' ').toLowerCase();
+                        return a.length > 0 && a === b;
+                    }
+                }"
+            >
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                     <div>
                         <div class="flex items-center gap-2">
@@ -351,7 +419,7 @@
                             </span>
                         </div>
                         <p class="text-xs text-slate-500 mt-0.5">
-                            Variantes de redacción pedagógicamente equivalentes sorteadas aleatoriamente para evitar copias entre alumnos.
+                            Variantes de redacción pedagógicamente equivalentes: durante el examen, el sistema alterna de forma equitativa entre el enunciado original y las paráfrasis registradas entre distintos alumnos, sin cambiar las opciones ni la respuesta correcta.
                         </p>
                     </div>
 
@@ -366,6 +434,15 @@
                     </x-button>
                 </div>
 
+                @if ($isLinkedToExams)
+                    <div class="rounded-xl border border-amber-200 bg-amber-50/70 px-3.5 py-2.5 text-xs text-amber-900 flex items-start gap-2">
+                        <x-icon name="warning" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <span>
+                            <strong>Reactivo vinculado a exámenes:</strong> las nuevas paráfrasis se incorporan sin alterar la versión ni las respuestas de intentos previos o en curso.
+                        </span>
+                    </div>
+                @endif
+
                 {{-- Formulario Integrado para Crear Paráfrasis --}}
                 <div
                     x-show="openNewForm"
@@ -376,12 +453,13 @@
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <h3 class="text-xs font-bold text-acode-primary uppercase tracking-wider">Nueva Variante de Redacción</h3>
-                            <p class="text-[11px] text-slate-500">Conserva la misma respuesta correcta pero formula el problema con diferente redacción o contexto.</p>
+                            <p class="text-[11px] text-slate-500">Conserva la misma respuesta correcta pero formula el problema con diferente redacción o contexto (3 a 500 caracteres).</p>
                         </div>
                         <button
                             type="button"
                             @click="openNewForm = false"
                             class="text-slate-400 hover:text-slate-600 p-1"
+                            aria-label="Cerrar formulario de paráfrasis"
                         >
                             <x-icon name="xMark" class="w-4 h-4" />
                         </button>
@@ -390,30 +468,49 @@
                     {{-- Enunciado original de referencia --}}
                     <div class="p-2.5 bg-white rounded-lg border border-slate-200 text-xs">
                         <span class="font-bold text-slate-400 block text-[10px] uppercase">Enunciado Original de Referencia:</span>
-                        <p class="text-slate-700 mt-0.5 italic">"{{ $question->stem }}"</p>
+                        <p class="text-slate-700 mt-0.5 whitespace-pre-line">"{{ $question->stem }}"</p>
                     </div>
+
+                    @if ($errors->paraphrase->any() || $errors->has('stem'))
+                        <div class="rounded-lg border border-acode-danger/30 bg-acode-danger/10 px-3 py-2 text-xs text-acode-danger">
+                            {{ $errors->paraphrase->first() ?: $errors->first('stem') }}
+                        </div>
+                    @endif
 
                     <form method="POST" action="{{ route('questions.paraphrase.store', $question) }}" class="space-y-3">
                         @csrf
                         <div>
-                            <label for="paraphrase_stem" class="block text-xs font-semibold text-slate-700 mb-1">
-                                Redacción alternativa de la pregunta
-                            </label>
-                            <textarea
+                            <div class="flex items-center justify-between mb-1">
+                                <label for="paraphrase_stem" class="block text-xs font-semibold text-slate-700">
+                                    Redacción alternativa de la pregunta
+                                </label>
+                                <span
+                                    class="text-[11px] font-mono"
+                                    :class="paraphraseStem.length > 480 ? 'text-acode-danger font-bold' : 'text-slate-400'"
+                                    x-text="paraphraseStem.length + ' / 500'"
+                                ></span>
+                            </div>
+                            <x-form.textarea
                                 name="stem"
                                 id="paraphrase_stem"
                                 rows="3"
+                                minlength="3"
+                                maxlength="500"
                                 required
-                                placeholder="Escribe aquí el enunciado equivalente para sortear en el examen…"
-                                class="w-full text-xs rounded-lg border border-slate-300 p-2.5 focus:outline-none focus:ring-2 focus:ring-acode-tech bg-white"
-                            ></textarea>
+                                x-model="paraphraseStem"
+                                :hasError="$errors->paraphrase->any() || $errors->has('stem')"
+                                placeholder="Escribe aquí el enunciado equivalente para alternar entre alumnos…"
+                            />
+                            <p x-show="matchesOriginal" x-cloak class="mt-1 text-xs font-medium text-acode-danger">
+                                La paráfrasis debe redactarse de forma distinta al enunciado original.
+                            </p>
                         </div>
 
                         <div class="flex items-center justify-end gap-2">
                             <x-button type="button" variant="neutral" size="sm" @click="openNewForm = false">
                                 Cancelar
                             </x-button>
-                            <x-button type="submit" variant="primary" size="sm">
+                            <x-button type="submit" variant="primary" size="sm" x-bind:disabled="matchesOriginal">
                                 <x-icon name="save" class="w-3.5 h-3.5 mr-1" />
                                 Guardar paráfrasis
                             </x-button>
@@ -494,7 +591,7 @@
                         onclick="confirmDuplicateBottom()"
                     >
                         <x-icon name="copy" class="w-4 h-4 mr-1.5" />
-                        Duplicar
+                        Copiar
                     </x-button>
                 </form>
 
@@ -529,64 +626,45 @@
 
     @push('scripts')
         <script>
-            function confirmDeleteParaphrase(paraphraseId) {
-                if (typeof AcodeAlert !== 'undefined') {
-                    AcodeAlert.confirm({
-                        title: '¿Eliminar variante de paráfrasis?',
-                        text: 'Esta redacción alternativa ya no será sorteada en los exámenes futuros.',
-                        confirmButtonText: 'Eliminar',
-                        cancelButtonText: 'Cancelar',
-                        isDanger: true,
-                        onConfirm: function() {
-                            document.getElementById('delete-paraphrase-form-' + paraphraseId).submit();
-                        }
-                    });
-                    return;
-                }
+            const questionTitleLabel = @js($question->title);
 
-                if (confirm('¿Eliminar esta redacción alternativa?')) {
-                    document.getElementById('delete-paraphrase-form-' + paraphraseId).submit();
-                }
+            function confirmDeleteParaphrase(paraphraseId) {
+                AcodeAlert.confirm({
+                    title: '¿Eliminar variante de paráfrasis?',
+                    text: 'Esta redacción alternativa ya no será alternada en exámenes futuros.',
+                    confirmButtonText: 'Eliminar',
+                    cancelButtonText: 'Cancelar',
+                    isDanger: true,
+                    onConfirm: function () {
+                        document.getElementById('delete-paraphrase-form-' + paraphraseId).submit();
+                    }
+                });
             }
 
             function confirmDuplicateBottom() {
-                if (typeof AcodeAlert !== 'undefined') {
-                    AcodeAlert.confirm({
-                        title: '¿Duplicar reactivo?',
-                        text: 'Se creará una copia idéntica del reactivo "{{ addslashes($question->title) }}" para edición libre.',
-                        confirmButtonText: 'Duplicar',
-                        cancelButtonText: 'Cancelar',
-                        isDanger: false,
-                        onConfirm: function() {
-                            document.getElementById('duplicate-bottom-form').submit();
-                        }
-                    });
-                    return;
-                }
-
-                if (confirm('¿Deseas duplicar este reactivo?')) {
-                    document.getElementById('duplicate-bottom-form').submit();
-                }
+                AcodeAlert.confirm({
+                    title: '¿Copiar reactivo?',
+                    text: 'Se creará una copia independiente del reactivo "' + questionTitleLabel + '" para edición libre.',
+                    confirmButtonText: 'Copiar',
+                    cancelButtonText: 'Cancelar',
+                    isDanger: false,
+                    onConfirm: function () {
+                        document.getElementById('duplicate-bottom-form').submit();
+                    }
+                });
             }
 
             function confirmDeleteBottom() {
-                if (typeof AcodeAlert !== 'undefined') {
-                    AcodeAlert.confirm({
-                        title: '¿Eliminar reactivo?',
-                        text: 'El reactivo "{{ addslashes($question->title) }}" será retirado de tu catálogo activo.',
-                        confirmButtonText: 'Eliminar',
-                        cancelButtonText: 'Cancelar',
-                        isDanger: true,
-                        onConfirm: function() {
-                            document.getElementById('delete-bottom-form').submit();
-                        }
-                    });
-                    return;
-                }
-
-                if (confirm('¿Deseas eliminar este reactivo?')) {
-                    document.getElementById('delete-bottom-form').submit();
-                }
+                AcodeAlert.confirm({
+                    title: '¿Eliminar reactivo?',
+                    text: 'El reactivo "' + questionTitleLabel + '" será retirado de tu catálogo activo.',
+                    confirmButtonText: 'Eliminar',
+                    cancelButtonText: 'Cancelar',
+                    isDanger: true,
+                    onConfirm: function () {
+                        document.getElementById('delete-bottom-form').submit();
+                    }
+                });
             }
         </script>
     @endpush

@@ -14,21 +14,42 @@
     {{-- Métricas de IA --}}
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <x-card>
-            <p class="text-xs font-semibold uppercase text-slate-400">Total Evaluaciones IA</p>
-            <p class="text-3xl font-extrabold text-acode-primary mt-1">{{ number_format($totalAiEvaluations) }}</p>
-            <p class="text-xs text-slate-500 mt-2">Respuestas procesadas por el motor semántico</p>
+            <div class="flex items-center gap-3">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
+                    <x-nav-icon name="ai-credits" class="w-5 h-5 text-acode-tech" />
+                </div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Evaluaciones IA</p>
+            </div>
+            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <p class="text-3xl font-extrabold text-acode-primary">{{ number_format($totalAiEvaluations) }}</p>
+                <p class="text-xs text-slate-500">Respuestas procesadas</p>
+            </div>
         </x-card>
 
         <x-card>
-            <p class="text-xs font-semibold uppercase text-slate-400">Recotejes Realizados</p>
-            <p class="text-3xl font-extrabold text-acode-accent mt-1">{{ number_format($recotejadasCount) }}</p>
-            <p class="text-xs text-slate-500 mt-2">Calificaciones ajustadas por el docente</p>
+            <div class="flex items-center gap-3">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                    <x-icon name="check" class="w-5 h-5 text-emerald-600" />
+                </div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Recotejes Realizados</p>
+            </div>
+            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <p class="text-3xl font-extrabold text-acode-accent">{{ number_format($recotejadasCount) }}</p>
+                <p class="text-xs text-slate-500">Calificaciones ajustadas</p>
+            </div>
         </x-card>
 
         <x-card>
-            <p class="text-xs font-semibold uppercase text-slate-400">Promedio de Similitud</p>
-            <p class="text-3xl font-extrabold text-acode-tech mt-1">{{ $promedioSimilitud }}%</p>
-            <p class="text-xs text-slate-500 mt-2">Cotejo contra solución modelo de referencia</p>
+            <div class="flex items-center gap-3">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
+                    <x-icon name="reportBar" class="w-5 h-5 text-acode-tech" />
+                </div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Promedio de Similitud</p>
+            </div>
+            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <p class="text-3xl font-extrabold text-acode-tech">{{ $promedioSimilitud }}%</p>
+                <p class="text-xs text-slate-500">Cotejo semántico</p>
+            </div>
         </x-card>
     </div>
 

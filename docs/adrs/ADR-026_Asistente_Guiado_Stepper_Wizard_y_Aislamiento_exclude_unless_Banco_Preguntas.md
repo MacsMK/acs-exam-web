@@ -51,3 +51,12 @@ En la versión inicial de autoría de reactivos (`questions/create.blade.php`), 
 - **Seguridad e Integridad de Datos:** La base de desarrollo `acs_exam_web` está 100% protegida contra purgas automatizadas de pruebas.
 - **Ergonomía Superior:** La división en 3 etapas reduce la carga cognitiva, mejora la tasa de éxito en la captura de reactivos y cumple con los estándares institucionales de A-Code Solutions.
 - **Certificación QA:** 100% de la suite de pruebas automatizadas pasando (22 pruebas, 214 aserciones).
+
+---
+
+## 4. Actualización de Alineación (Anillo 2 — Homologación `Tabla 17`, Unicode e Inmutabilidad)
+- Se extrajo la lógica transversal de sanitización y validación polimórfica al trait [`NormalizesQuestionInputs`](file:///home/laambws/Escritorio/acs-exam-web/app/Http/Requests/Concerns/NormalizesQuestionInputs.php), compartido por `QuestionStoreRequest`, `QuestionUpdateRequest` y `QuestionBatchStoreRequest`:
+  - `prepareForValidation()` limpia espacios Unicode invisibles (`\u{00A0}`, `\u{200B}`, etc.), aplica `trim()` / `Subject::cleanDisplayName()` y reindexa arreglos (`array_values`) antes de validar.
+  - Se corrigió el defecto en los mensajes españoles de `MPW-V2 Tabla 17` reemplazando las claves `.required_if` por `.required` compatibles con `exclude_unless` (`options.required`, `concepts.required`, `definitions.required`, `reference_answer.required`, `programming_language.required`, `reference_solution.required`, etc.).
+  - Se incorporaron `save_and_new` e `initial_paraphrases` (máximo 3, distintas y no equivalentes al `stem` tras normalización).
+  - En `QuestionUpdateRequest` (`[MEDIA-01]`) se fuerza la inmutabilidad de `question_type` sobreescribiéndolo en `prepareForValidation()` desde el modelo `Question` en ruta y validando `Rule::in([$question->question_type])`.

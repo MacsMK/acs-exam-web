@@ -1,7 +1,8 @@
 # 02 — Base de datos
 
-> Fuente de verdad: `database/migrations/` (24 migraciones, folio
-> `BD01-2026-001` a `BD01-2026-024`). Este documento es un resumen legible
+> Fuente de verdad: `database/migrations/` (migraciones base `BD01-2026-001` a `BD01-2026-024`
+> más evoluciones de normalización de materias y trazabilidad inmutable
+> `2026_11_12_000001` y `2026_11_12_000002`). Este documento es un resumen legible
 > de lo que ya está migrado y corriendo — si hay diferencia, las
 > migraciones mandan.
 
@@ -55,6 +56,11 @@ unirse dos veces al mismo grupo.
 
 Esta es la parte menos obvia del esquema, vale la pena leerla completa.
 
+**`acs_subjects`** (migración `2026_11_12_000001`) — catálogo normalizado de
+asignaturas por docente (`teacher_id` → `acs_users`, `name`, `normalized_name`),
+con índice único `(teacher_id, normalized_name)` para prevenir duplicados por
+acentos, mayúsculas o espacios múltiples/invisibles Unicode.
+
 **`acs_questions`** es la tabla raíz y **compartida** por los 4 tipos de
 reactivo. No tiene columnas específicas de tipo — esas viven en una tabla
 aparte por tipo, y `acs_questions` apunta a la fila correspondiente por
@@ -64,11 +70,14 @@ polimorfismo:
 - `questionable_type` + `questionable_id` → apuntan a una fila de una de
   las 4 tablas de abajo, según `question_type`. En Eloquent esto es la
   relación `morphTo()` del modelo `Question` (ver `questionable()`).
-- `teacher_id`, `subject_tag` (para filtrar banco por tema),
-  `title`, `stem` (enunciado), `default_points`, `default_time_seconds`.
+- `teacher_id`, `subject_id` (FK nullable → `acs_subjects` con `nullOnDelete`),
+  `subject_tag` (nombre canónico sincronizado para compatibilidad de filtros),
+  `title`, `stem` (enunciado), `default_points`, `default_time_seconds`,
+  `deleted_at` (`SoftDeletes` para preservar evidencia histórica, ADR-028).
 - `parent_question_id` (auto-referencia a `acs_questions`) — **esto es
-  versionado/edición del reactivo** (una edición posterior del mismo
-  reactivo), *no* el mecanismo anti-copia. No confundir con lo siguiente.
+  versionado/edición Copy-On-Write del reactivo** (una edición posterior
+  cuando el reactivo ya está vinculado a exámenes), *no* el mecanismo anti-copia.
+  No confundir con lo siguiente.
 
 Las 4 tablas de variante (cada una solo tiene las columnas que le
 corresponden a su tipo, sin columnas compartidas duplicadas):
@@ -97,10 +106,11 @@ puede "incidentar" — ej. perder foco de la app — antes de cancelarse),
 `starts_at`/`ends_at`, `share_token` (único), `is_published`.
 
 **`acs_exam_sections`** — un examen se arma por secciones
-(`exam_id`, `title`, `question_type`, `requested_quantity`,
-`sort_order`) — cada sección pide "N reactivos de tipo X", y
-`ExamAssemblyService` sortea del banco para llenarla (ver
-`03_BACKEND_Y_FRONTEND.md`).
+(`exam_id`, `title`, `question_type`, `subject_tag`, `subject_id` nullable →
+`acs_subjects` con `nullOnDelete`, `requested_quantity`, `sort_order`) — cada
+sección pide "N reactivos de tipo X (opcionalmente de una materia específica)",
+y `ExamAssemblyService` sortea del banco mediante `QuestionRepositoryInterface`
+excluyendo linajes Copy-On-Write ya usados en el examen (ver `03_BACKEND_Y_FRONTEND.md`).
 
 **`acs_exam_group`** — pivote: a qué grupos está publicado el examen
 (único por `exam_id`+`group_id`).
@@ -116,8 +126,11 @@ sobreescribir el `default_time_seconds` del reactivo—, `points_weight`,
 **`acs_student_attempts`** — un alumno solo puede tener un intento por
 examen (único por `exam_id`+`student_id`). Guarda
 `question_sequence_payload` (jsonb — el orden ya sorteado de reactivos
-para ESE intento, fijo una vez empezado) y `current_question_index`
-(hasta dónde va). `status`: `in_progress` / `submitted` / `expired` /
+para ESE intento, fijo una vez empezado), `paraphrase_snapshot_payload`
+(jsonb nullable, migración `2026_11_12_000002` — mapa inmutable
+`exam_question_id -> {paraphrase_id, stem}` congelado al iniciar el intento
+con rotación `1 + N` entre enunciado original y paráfrasis) y
+`current_question_index` (hasta dónde va). `status`: `in_progress` / `submitted` / `expired` /
 `cancelled_by_incident`. Tres marcadores de calificación:
 `objective_score` (lo que se califica solo, al instante),
 `ai_estimated_score` (lo que ya evaluó la IA), `final_score` (nullable
@@ -126,8 +139,11 @@ anti-fraude de `max_allowed_incidents`.
 
 **`acs_student_answers`** — una fila por reactivo contestado
 (`student_attempt_id`, `exam_question_id`, único entre ambos).
-`answer_payload` (jsonb, la respuesta cruda del alumno). Para objetivos:
-`is_correct`, `points_awarded` (calculados al responder). Para
+`answer_payload` (jsonb, la respuesta cruda del alumno),
+`question_paraphrase_id` (FK nullable → `acs_question_paraphrases` con
+`nullOnDelete`) y `served_stem_snapshot` (`text` nullable — texto exacto del
+enunciado presentado al estudiante al contestar, preservando auditoría histórica).
+Para objetivos: `is_correct`, `points_awarded` (calculados al responder). Para
 abierto/código: `ai_similarity_score`, `ai_meets_goal`, `ai_feedback`,
 `ai_evaluated_at` (los llena `MockAiEvaluator`/`GradeCalculatorService`),
 más `teacher_recoteje_score`/`teacher_recoteje_notes` (nullable — espacio

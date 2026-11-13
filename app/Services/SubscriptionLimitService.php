@@ -11,13 +11,16 @@ declare(strict_types=1);
  * Ubicación:      app/Services/SubscriptionLimitService.php
  * Requerimiento:  RF-SUS-001..015, RF-SUS-010, RW-01..04, RNF-SEG-003, RNF-SEG-004
  * Autor:          Equipo de Ingeniería (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Descripción:    Servicio de dominio encargado de auditar y hacer cumplir
- *                 las cotas de suscripción SaaS y la regla de prueba freemium.
+ *                 las cotas de suscripción SaaS, bloqueo pesimista contra
+ *                 concurrencia TOCTOU [ALTA-03] y la regla freemium.
  * ============================================================================
  */
 
 namespace App\Services;
+
+use Illuminate\Support\Facades\DB;
 
 use App\Exceptions\SubscriptionLimitExceededException;
 use App\Models\Exam;
@@ -93,56 +96,100 @@ class SubscriptionLimitService
 
     /**
      * Valida si el docente puede dar de alta N reactivos en su banco de preguntas.
+     * Si ya existe una transacción abierta, aplica bloqueo pesimista [ALTA-03].
      *
      * @throws SubscriptionLimitExceededException
      */
     public function ensureCanCreateQuestions(User $teacher, int $quantity = 1): void
     {
-        $package = $this->resolveActivePackage($teacher);
-        $currentQuestions = Question::withoutGlobalScopes()
-            ->where('teacher_id', $teacher->id)
-            ->count();
+        if ($quantity <= 0) {
+            return;
+        }
 
-        // Caso 1: Nivel Freemium
-        if ($package === null) {
-            if (($currentQuestions + $quantity) > self::FREEMIUM_MAX_QUESTIONS) {
-                throw new SubscriptionLimitExceededException(
-                    sprintf(
-                        'No es posible registrar %d reactivo(s). Tu cuenta gratuita tiene registrados %d/%d reactivos permitidos.',
-                        $quantity,
-                        $currentQuestions,
-                        self::FREEMIUM_MAX_QUESTIONS
-                    ),
-                    'questions',
-                    $currentQuestions,
-                    self::FREEMIUM_MAX_QUESTIONS,
-                    'freemium'
-                );
-            }
+        if (DB::transactionLevel() > 0) {
+            $this->ensureCanCreateQuestionsLocked($teacher, $quantity);
 
             return;
         }
 
-        // Caso 2: Plan de Pago
-        if ($package->max_questions === null) {
-            return; // Ilimitado
+        $this->evaluateQuestionQuota($teacher, $quantity);
+    }
+
+    /**
+     * Valida la cuota de reactivos adquiriendo bloqueo pesimista FOR UPDATE sobre
+     * el registro del docente para prevenir condiciones de carrera TOCTOU [ALTA-03].
+     *
+     * @throws SubscriptionLimitExceededException
+     */
+    public function ensureCanCreateQuestionsLocked(User $teacher, int $quantity = 1): void
+    {
+        if ($quantity <= 0) {
+            return;
         }
 
-        if (($currentQuestions + $quantity) > $package->max_questions) {
-            throw new SubscriptionLimitExceededException(
-                sprintf(
-                    'Tu paquete %s permite un máximo de %d reactivos en el banco. Uso actual: %d. Excederías el límite por %d reactivo(s).',
-                    $package->name,
-                    $package->max_questions,
-                    $currentQuestions,
-                    ($currentQuestions + $quantity) - $package->max_questions
-                ),
-                'questions',
-                $currentQuestions,
-                $package->max_questions,
-                $package->tier
-            );
+        $lockedTeacher = User::query()
+            ->with('subscription.subscriptionPackage')
+            ->whereKey($teacher->id)
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        $this->evaluateQuestionQuota($lockedTeacher, $quantity);
+    }
+
+    /**
+     * Retorna el resumen de cuota de reactivos para KPIs del banco e importación masiva.
+     *
+     * @return array{used: int, limit: ?int, remaining: ?int, is_unlimited: bool, tier: string, package_name: string}
+     */
+    public function getQuestionQuotaSummary(User $teacher): array
+    {
+        try {
+            $package = $this->resolveActivePackage($teacher);
+        } catch (SubscriptionLimitExceededException) {
+            $used = Question::withoutGlobalScopes()
+                ->where('teacher_id', $teacher->id)
+                ->count();
+
+            return [
+                'used' => $used,
+                'limit' => 0,
+                'remaining' => 0,
+                'is_unlimited' => false,
+                'tier' => 'suspended',
+                'package_name' => 'Suscripción Suspendida',
+            ];
         }
+
+        if ($package === null) {
+            $used = Question::withoutGlobalScopes()
+                ->where('teacher_id', $teacher->id)
+                ->count();
+
+            return [
+                'used' => $used,
+                'limit' => self::FREEMIUM_MAX_QUESTIONS,
+                'remaining' => max(0, self::FREEMIUM_MAX_QUESTIONS - $used),
+                'is_unlimited' => false,
+                'tier' => 'freemium',
+                'package_name' => 'Prueba Gratuita (Freemium)',
+            ];
+        }
+
+        $usedActive = Question::withoutGlobalScopes()
+            ->where('teacher_id', $teacher->id)
+            ->whereNull('deleted_at')
+            ->count();
+
+        $limit = $package->max_questions;
+
+        return [
+            'used' => $usedActive,
+            'limit' => $limit,
+            'remaining' => $limit === null ? null : max(0, $limit - $usedActive),
+            'is_unlimited' => $limit === null,
+            'tier' => (string) $package->tier,
+            'package_name' => (string) $package->name,
+        ];
     }
 
     /**
@@ -240,6 +287,7 @@ class SubscriptionLimitService
      */
     public function ensureCanEnrollStudent(Group $group): void
     {
+        $group->loadMissing('teacher');
         $teacher = $group->teacher;
         $package = $this->resolveActivePackage($teacher);
         $currentStudents = $group->students()->count();
@@ -262,6 +310,7 @@ class SubscriptionLimitService
      */
     public function resolveActivePackage(User $teacher): ?SubscriptionPackage
     {
+        $teacher->loadMissing('subscription.subscriptionPackage');
         $subscription = $teacher->subscription;
 
         if (! $subscription instanceof TeacherSubscription) {
@@ -287,5 +336,65 @@ class SubscriptionLimitService
         }
 
         return $subscription->subscriptionPackage;
+    }
+
+    /**
+     * Evalúa el consumo histórico (Freemium) o activo (Plan de Pago) contra la cota vigente.
+     *
+     * @throws SubscriptionLimitExceededException
+     */
+    private function evaluateQuestionQuota(User $teacher, int $quantity): void
+    {
+        $package = $this->resolveActivePackage($teacher);
+
+        // Caso 1: Nivel Freemium (conteo histórico acumulado para evitar reinicio borrando y recreando)
+        if ($package === null) {
+            $currentQuestions = Question::withoutGlobalScopes()
+                ->where('teacher_id', $teacher->id)
+                ->count();
+
+            if (($currentQuestions + $quantity) > self::FREEMIUM_MAX_QUESTIONS) {
+                throw new SubscriptionLimitExceededException(
+                    sprintf(
+                        'No es posible registrar %d reactivo(s). Tu cuenta gratuita tiene registrados %d/%d reactivos permitidos.',
+                        $quantity,
+                        $currentQuestions,
+                        self::FREEMIUM_MAX_QUESTIONS
+                    ),
+                    'questions',
+                    $currentQuestions,
+                    self::FREEMIUM_MAX_QUESTIONS,
+                    'freemium'
+                );
+            }
+
+            return;
+        }
+
+        // Caso 2: Plan de Pago (solo cuenta reactivos activos en el banco)
+        if ($package->max_questions === null) {
+            return; // Ilimitado
+        }
+
+        $activeQuestions = Question::withoutGlobalScopes()
+            ->where('teacher_id', $teacher->id)
+            ->whereNull('deleted_at')
+            ->count();
+
+        if (($activeQuestions + $quantity) > $package->max_questions) {
+            throw new SubscriptionLimitExceededException(
+                sprintf(
+                    'Tu paquete %s permite un máximo de %d reactivos activos en el banco. Uso actual: %d. Excederías el límite por %d reactivo(s).',
+                    $package->name,
+                    $package->max_questions,
+                    $activeQuestions,
+                    ($activeQuestions + $quantity) - $package->max_questions
+                ),
+                'questions',
+                $activeQuestions,
+                $package->max_questions,
+                $package->tier
+            );
+        }
     }
 }

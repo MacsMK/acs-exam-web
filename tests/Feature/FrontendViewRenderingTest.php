@@ -25,8 +25,12 @@ use App\Models\Group;
 use App\Models\MultipleChoiceItem;
 use App\Models\Question;
 use App\Models\StudentAttempt;
+use App\Models\SubscriptionPackage;
+use App\Models\TeacherSubscription;
 use App\Models\User;
 use App\Services\AttemptService;
+use Database\Seeders\SubscriptionPackageSeeder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -344,15 +348,44 @@ class FrontendViewRenderingTest extends TestCase
         $groupsShow->assertSee($group->name);
         $groupsShow->assertSee($group->access_folio);
 
-        // 4. questions.index
+        // 4. questions.index (con múltiples paráfrasis y prevención estricta de lazy loading)
+        $question->paraphrases()->createMany([
+            ['stem' => 'Variante anti-copia A sobre estructura LIFO en memoria.'],
+            ['stem' => 'Variante anti-copia B sobre comportamiento último en entrar, primero en salir.'],
+        ]);
+        $this->assertTrue(Model::preventsLazyLoading());
+
         $questionsIndex = $this->actingAs($teacher)->get(route('questions.index'));
         $questionsIndex->assertOk();
         $questionsIndex->assertSee($question->title);
+        $questionsIndex->assertSee('2 paráfrasis');
 
         // 5. questions.create
         $questionsCreate = $this->actingAs($teacher)->get(route('questions.create'));
         $questionsCreate->assertOk();
         $questionsCreate->assertSee('Nueva pregunta');
+
+        // 5.1 questions.batch.create
+        $questionsBatchCreate = $this->actingAs($teacher)->get(route('questions.batch.create'));
+        $questionsBatchCreate->assertOk();
+        $questionsBatchCreate->assertSee('Captura rápida en lote');
+        $questionsBatchCreate->assertSee('Materia compartida del lote');
+
+        // 5.2 teacher.subscription.index con plan Pro mostrando 'Ilimitado'
+        $this->seed(SubscriptionPackageSeeder::class);
+        $proPackage = SubscriptionPackage::where('tier', 'pro')->firstOrFail();
+        TeacherSubscription::create([
+            'teacher_id' => $teacher->id,
+            'subscription_package_id' => $proPackage->id,
+            'payment_status' => 'paid',
+            'starts_at' => now()->subDay(),
+            'expires_at' => now()->addMonth(),
+        ]);
+
+        $subscriptionIndex = $this->actingAs($teacher)->get(route('teacher.subscription.index'));
+        $subscriptionIndex->assertOk();
+        $subscriptionIndex->assertSee('Pro');
+        $subscriptionIndex->assertSee('Ilimitado');
 
         // 6. exams.index
         $examsIndex = $this->actingAs($teacher)->get(route('exams.index'));
@@ -451,7 +484,8 @@ class FrontendViewRenderingTest extends TestCase
         $takeExamResponse->assertOk();
         $takeExamResponse->assertSee('Presentando examen');
         $takeExamResponse->assertSee($exam->title);
-        $takeExamResponse->assertSee($question->title);
+        $takeExamResponse->assertDontSee($question->title);
+        $takeExamResponse->assertSee($question->stem);
         $takeExamResponse->assertSee('Reactivo 1 de 1');
         $takeExamResponse->assertSee('answerForm');
         $takeExamResponse->assertSee('role="timer"', false);

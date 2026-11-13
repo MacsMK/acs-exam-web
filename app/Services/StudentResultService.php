@@ -167,7 +167,7 @@ class StudentResultService
                     return [
                         'id' => (string) $question->id,
                         'title' => $question->title,
-                        'stem' => $this->attemptService->visibleStem($examQuestion, $attempt),
+                        'stem' => $answer?->served_stem_snapshot ?? $this->attemptService->visibleStem($examQuestion, $attempt),
                         'question_type' => $question->question_type,
                         'student_answer' => $answer === null
                             ? null
@@ -228,7 +228,7 @@ class StudentResultService
     {
         $sequence = array_map('intval', $attempt->question_sequence_payload ?? []);
 
-        $byId = ExamQuestion::with(['question.questionable', 'examSection'])
+        $byId = ExamQuestion::with(['question.questionable', 'question.paraphrases', 'examSection'])
             ->whereIn('id', $sequence)
             ->get()
             ->keyBy('id');

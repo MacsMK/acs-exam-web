@@ -23,11 +23,13 @@ use App\Models\CodeItem;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
 use App\Models\ExamSection;
+use App\Models\Group;
 use App\Models\MatchingItem;
 use App\Models\MultipleChoiceItem;
 use App\Models\OpenItem;
 use App\Models\Question;
 use App\Models\QuestionParaphrase;
+use App\Models\StudentAttempt;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -422,38 +424,104 @@ class QuestionBankManagementTest extends TestCase
     }
 
     /**
-     * 7. Certifica que la eliminación de un reactivo vinculado a un examen histórico
-     *    aplica SoftDeletes (deleted_at), preservando la integridad referencial en
-     *    acs_exam_question sin violar la restricción RESTRICT ni provocar un error 500.
+     * 7. Certifica ambas garantías de [ALTA-02] y la resolución 404 de [ALTA-01]:
+     *    (a) Un reactivo vinculado a un examen publicado o con intentos bloquea DELETE con error 'question'
+     *        y mantiene deleted_at === null.
+     *    (b) Un reactivo vinculado únicamente a un examen borrador sin intentos permite SoftDelete,
+     *        $examQuestion->fresh()->question sigue resolviendo vía withTrashed() sin lanzar null/500,
+     *        y acceder por URL a show/edit del reactivo eliminado devuelve 404.
      */
     public function test_soft_delete_preserves_fk_integrity_with_historic_exam(): void
     {
         $teacher = $this->createTeacher();
-
-        $question = $this->createMultipleChoiceQuestion($teacher, [
-            'title' => 'Reactivo Histórico a Eliminar Suavemente',
+        $student = User::create([
+            'role' => 'student',
+            'first_name' => 'Alumno',
+            'last_name' => 'Histórico',
+            'email' => uniqid('student-', true) . '@acode.test',
+            'password' => 'Alumno123!',
+            'is_active' => true,
         ]);
 
-        // Vincular a un examen histórico (clave foránea restrictiva)
-        $this->linkQuestionToExam($teacher, $question);
+        // (a.1) Bloqueo ante examen publicado
+        $publishedQuestion = $this->createMultipleChoiceQuestion($teacher, [
+            'title' => 'Reactivo En Examen Publicado',
+        ]);
+        $this->linkQuestionToExam($teacher, $publishedQuestion, true);
 
-        $deleteResponse = $this->actingAs($teacher)->delete(route('questions.destroy', $question));
+        $blockedPublishedResponse = $this->actingAs($teacher)
+            ->from(route('questions.index'))
+            ->delete(route('questions.destroy', $publishedQuestion));
+
+        $blockedPublishedResponse->assertRedirect(route('questions.index'));
+        $blockedPublishedResponse->assertSessionHasErrors('question');
+        $this->assertNull($publishedQuestion->fresh()->deleted_at);
+        $this->assertNotSoftDeleted('acs_questions', ['id' => $publishedQuestion->id]);
+
+        // (a.2) Bloqueo ante examen no publicado pero con intentos de alumnos
+        $attemptedQuestion = $this->createMultipleChoiceQuestion($teacher, [
+            'title' => 'Reactivo En Examen Con Intento',
+        ]);
+        $attemptedExamQuestion = $this->linkQuestionToExam($teacher, $attemptedQuestion, false);
+        $group = Group::create([
+            'teacher_id' => $teacher->id,
+            'name' => 'Grupo Histórico',
+            'access_folio' => 'HIST001',
+            'is_closed' => false,
+        ]);
+        StudentAttempt::create([
+            'exam_id' => $attemptedExamQuestion->exam_id,
+            'student_id' => $student->id,
+            'group_id' => $group->id,
+            'question_sequence_payload' => [$attemptedExamQuestion->id],
+            'current_question_index' => 0,
+            'started_at' => now(),
+            'status' => 'submitted',
+        ]);
+
+        $blockedAttemptResponse = $this->actingAs($teacher)
+            ->from(route('questions.index'))
+            ->delete(route('questions.destroy', $attemptedQuestion));
+
+        $blockedAttemptResponse->assertRedirect(route('questions.index'));
+        $blockedAttemptResponse->assertSessionHasErrors('question');
+        $this->assertNull($attemptedQuestion->fresh()->deleted_at);
+
+        // (b) Examen borrador sin intentos permite SoftDelete preservando FK y withTrashed()
+        $draftQuestion = $this->createMultipleChoiceQuestion($teacher, [
+            'title' => 'Reactivo En Borrador Sin Intentos',
+        ]);
+        $draftExamQuestion = $this->linkQuestionToExam($teacher, $draftQuestion, false);
+
+        $deleteResponse = $this->actingAs($teacher)->delete(route('questions.destroy', $draftQuestion));
 
         $deleteResponse->assertRedirect(route('questions.index'));
         $deleteResponse->assertSessionHas('status', 'Reactivo eliminado del banco exitosamente.');
 
         // Debe haberse marcado como SoftDeleted en la base de datos
-        $this->assertSoftDeleted('acs_questions', ['id' => $question->id]);
-        $this->assertTrue($question->fresh()->trashed());
+        $this->assertSoftDeleted('acs_questions', ['id' => $draftQuestion->id]);
+        $this->assertTrue($draftQuestion->fresh()->trashed());
 
         // Ya no debe ser accesible en consultas ordinarias del banco de preguntas
-        $this->assertNull(Question::query()->find($question->id));
-        $this->assertNotNull(Question::withTrashed()->find($question->id));
+        $this->assertNull(Question::query()->find($draftQuestion->id));
+        $this->assertNotNull(Question::withTrashed()->find($draftQuestion->id));
 
-        // La relación en acs_exam_question debe persistir intacta
+        // La relación en acs_exam_question debe persistir intacta y resolver vía withTrashed()
         $this->assertDatabaseHas('acs_exam_question', [
-            'question_id' => $question->id,
+            'question_id' => $draftQuestion->id,
         ]);
+        $resolvedQuestion = $draftExamQuestion->fresh()->question;
+        $this->assertNotNull($resolvedQuestion);
+        $this->assertSame($draftQuestion->id, $resolvedQuestion->id);
+        $this->assertTrue($resolvedQuestion->trashed());
+
+        // [ALTA-01] Acceder por URL a un reactivo soft-deleted debe retornar 404 Not Found
+        $this->actingAs($teacher)
+            ->get(route('questions.show', $draftQuestion->id))
+            ->assertNotFound();
+        $this->actingAs($teacher)
+            ->get(route('questions.edit', $draftQuestion->id))
+            ->assertNotFound();
     }
 
     /**
@@ -690,7 +758,7 @@ class QuestionBankManagementTest extends TestCase
         ], $attributes));
     }
 
-    private function linkQuestionToExam(User $teacher, Question $question): ExamQuestion
+    private function linkQuestionToExam(User $teacher, Question $question, bool $isPublished = true): ExamQuestion
     {
         $exam = Exam::create([
             'teacher_id' => $teacher->id,
@@ -703,7 +771,7 @@ class QuestionBankManagementTest extends TestCase
             'starts_at' => now()->subDay(),
             'ends_at' => now()->addDay(),
             'share_token' => bin2hex(random_bytes(8)),
-            'is_published' => true,
+            'is_published' => $isPublished,
         ]);
 
         $section = ExamSection::create([

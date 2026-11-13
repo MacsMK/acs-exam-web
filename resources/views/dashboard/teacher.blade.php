@@ -53,8 +53,8 @@
         {{-- KPI 1: Mis grupos --}}
         <a href="{{ route('groups.index') }}"
            class="group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-acode-tech hover:shadow-md">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-acode-surface text-acode-tech transition-transform duration-200 group-hover:scale-105">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech transition-transform duration-200 group-hover:scale-105">
                     <x-nav-icon name="groups" class="h-6 w-6" />
                 </div>
                 <div class="flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition-colors duration-200 group-hover:text-acode-tech">
@@ -65,9 +65,12 @@
                 </div>
             </div>
 
-            <div class="mt-4">
+            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
                     {{ $groupsCount }}
+                </p>
+                <p class="text-xs text-slate-500">
+                    Aulas escolares
                 </p>
             </div>
         </a>
@@ -75,8 +78,8 @@
         {{-- KPI 2: Banco de preguntas --}}
         <a href="{{ route('questions.index') }}"
            class="group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-acode-tech hover:shadow-md">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-acode-surface text-acode-tech transition-transform duration-200 group-hover:scale-105">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech transition-transform duration-200 group-hover:scale-105">
                     <x-nav-icon name="questions" class="h-6 w-6" />
                 </div>
                 <div class="flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition-colors duration-200 group-hover:text-acode-tech">
@@ -87,9 +90,12 @@
                 </div>
             </div>
 
-            <div class="mt-4">
+            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
                     {{ $questionsCount }}
+                </p>
+                <p class="text-xs text-slate-500">
+                    Reactivos registrados
                 </p>
             </div>
         </a>
@@ -97,8 +103,8 @@
         {{-- KPI 3: Exámenes creados --}}
         <a href="{{ route('exams.index') }}"
            class="group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition-transform duration-200 group-hover:scale-105">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition-transform duration-200 group-hover:scale-105">
                     <x-nav-icon name="exams" class="h-6 w-6" />
                 </div>
                 <div class="flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition-colors duration-200 group-hover:text-amber-600">
@@ -109,9 +115,12 @@
                 </div>
             </div>
 
-            <div class="mt-4">
+            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
                     {{ $examsCount }}
+                </p>
+                <p class="text-xs text-slate-500">
+                    Evaluaciones activas
                 </p>
             </div>
         </a>
@@ -119,8 +128,8 @@
         {{-- KPI 4: Promedio general --}}
         <a href="{{ route('teacher.gradebook.hub') }}"
            class="group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-transform duration-200 group-hover:scale-105">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-transform duration-200 group-hover:scale-105">
                     <x-nav-icon name="grades" class="h-6 w-6" />
                 </div>
                 <div class="flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition-colors duration-200 group-hover:text-emerald-600">
@@ -131,7 +140,7 @@
                 </div>
             </div>
 
-            <div class="mt-4 flex flex-wrap items-center justify-between gap-2">
+            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <p class="font-mono text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
                     {{ number_format((float) ($averageScore ?? 0), 1) }}
                 </p>

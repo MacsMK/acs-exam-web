@@ -81,16 +81,27 @@
 
             {{-- Banco de preguntas --}}
             @php
-                $maxQuestions = $activePackage?->max_questions ?? 50;
-                $pctQuestions = min(100, (int) round(($questionsCount / max(1, $maxQuestions)) * 100));
+                $isUnlimitedQuestions = $activePackage !== null && $activePackage->max_questions === null;
+                $maxQuestions = $isUnlimitedQuestions ? null : ($activePackage?->max_questions ?? 50);
+                $pctQuestions = $isUnlimitedQuestions
+                    ? 100
+                    : min(100, (int) round(($questionsCount / max(1, (int) $maxQuestions)) * 100));
             @endphp
             <div>
                 <div class="flex justify-between text-xs font-semibold mb-1">
                     <span class="text-slate-700">Reactivos en Banco de Preguntas</span>
-                    <span class="text-acode-primary">{{ $questionsCount }} / {{ number_format($maxQuestions) }}</span>
+                    @if ($isUnlimitedQuestions)
+                        <span class="text-acode-accent font-bold">{{ $questionsCount }} / Ilimitado</span>
+                    @else
+                        <span class="text-acode-primary">{{ $questionsCount }} / {{ number_format((int) $maxQuestions) }}</span>
+                    @endif
                 </div>
                 <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div class="h-full {{ $pctQuestions >= 100 ? 'bg-acode-danger' : 'bg-acode-accent' }} rounded-full transition-all duration-500" style="width: {{ $pctQuestions }}%"></div>
+                    @if ($isUnlimitedQuestions)
+                        <div class="h-full w-full bg-acode-accent rounded-full transition-all duration-500"></div>
+                    @else
+                        <div class="h-full {{ $pctQuestions >= 100 ? 'bg-acode-danger' : 'bg-acode-accent' }} rounded-full transition-all duration-500" style="width: {{ $pctQuestions }}%"></div>
+                    @endif
                 </div>
             </div>
 
@@ -143,7 +154,11 @@
                             </li>
                             <li class="flex items-center gap-2">
                                 <span class="text-acode-accent font-bold">✓</span>
-                                <span>Hasta <strong>{{ number_format((int) $pkg->max_questions) }}</strong> reactivos en banco</span>
+                                @if ($pkg->max_questions === null)
+                                    <span><strong>Ilimitados</strong> reactivos en banco</span>
+                                @else
+                                    <span>Hasta <strong>{{ number_format((int) $pkg->max_questions) }}</strong> reactivos en banco</span>
+                                @endif
                             </li>
                             <li class="flex items-center gap-2">
                                 <span class="text-acode-accent font-bold">✓</span>

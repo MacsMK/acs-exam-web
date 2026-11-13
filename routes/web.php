@@ -66,10 +66,18 @@ Route::middleware('auth')->group(function (): void {
         Route::get('groups/{group}/periodos/{period}/sabana/export', [EvaluationPeriodController::class, 'exportGradebook'])->name('groups.periods.gradebook.export');
 
         Route::get('questions/template/csv', [QuestionController::class, 'downloadTemplate'])->name('questions.template.csv');
+        Route::get('questions/template/xlsx', [QuestionController::class, 'downloadExcelTemplate'])->name('questions.template.xlsx');
+        Route::post('questions/import/preview', [QuestionController::class, 'previewImport'])->name('questions.import.preview');
         Route::post('questions/import', [QuestionController::class, 'import'])->name('questions.import');
+        Route::get('questions/batch/create', [QuestionController::class, 'batchCreate'])->name('questions.batch.create');
+        Route::post('questions/batch', [QuestionController::class, 'batchStore'])->name('questions.batch.store');
+        Route::post('questions/subjects/merge', [QuestionController::class, 'mergeSubjects'])->name('questions.subjects.merge');
+        Route::get('questions/subjects/suggestions', [QuestionController::class, 'suggestSubjects'])->name('questions.subjects.suggestions');
         Route::post('questions/{question}/duplicate', [QuestionController::class, 'duplicate'])->name('questions.duplicate');
         Route::post('questions/{question}/parafrasis', [QuestionController::class, 'storeParaphrase'])->name('questions.paraphrase.store');
-        Route::delete('questions/{question}/parafrasis/{paraphrase}', [QuestionController::class, 'destroyParaphrase'])->name('questions.paraphrase.destroy');
+        Route::delete('questions/{question}/parafrasis/{paraphrase}', [QuestionController::class, 'destroyParaphrase'])
+            ->whereNumber('paraphrase')
+            ->name('questions.paraphrase.destroy');
         Route::resource('questions', QuestionController::class);
 
         Route::resource('exams', ExamController::class)->only(['index', 'create', 'store']);

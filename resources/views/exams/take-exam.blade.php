@@ -25,8 +25,8 @@
 
         {{-- Tarjeta Principal del Reactivo --}}
         <x-card class="mb-5 shadow-sm border-slate-200">
-            <h2 class="text-lg font-bold text-acode-primary mb-2">
-                {{ $current['question']['title'] }}
+            <h2 class="text-xs font-bold uppercase tracking-wider text-acode-tech mb-3">
+                Reactivo activo
             </h2>
             <div class="text-sm text-slate-700 mb-6 whitespace-pre-line leading-relaxed">
                 {{ $current['question']['stem'] }}

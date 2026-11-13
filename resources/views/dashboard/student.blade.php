@@ -37,77 +37,77 @@
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
         {{-- Tarjeta 1: Grupos --}}
         <a href="{{ route('student.groups.index') }}"
-           class="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-acode-tech hover:shadow-md">
-            <div class="flex items-start justify-between">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
+           class="group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-acode-tech hover:shadow-md">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech transition-transform duration-200 group-hover:scale-105">
                     <x-nav-icon name="groups" class="h-6 w-6" />
                 </div>
-                <span class="text-sm text-slate-400 transition group-hover:text-acode-tech">
-                    ↗
-                </span>
+                <div class="flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition-colors duration-200 group-hover:text-acode-tech">
+                    <span>Grupos Inscritos</span>
+                    <svg class="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
+                    </svg>
+                </div>
             </div>
 
-            <p class="mt-4 text-3xl font-extrabold text-acode-primary">
-                {{ $groupsCount }}
-            </p>
-
-            <p class="mt-1 text-sm font-semibold text-slate-700">
-                Grupos Inscritos
-            </p>
-
-            <p class="mt-1 text-xs text-slate-500">
-                Materias y grupos escolares en los que participas.
-            </p>
+            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
+                    {{ $groupsCount }}
+                </p>
+                <p class="text-xs text-slate-500">
+                    Materias matriculadas
+                </p>
+            </div>
         </a>
 
         {{-- Tarjeta 2: Exámenes Pendientes --}}
         <a href="{{ route('student.exams.index') }}"
-           class="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-acode-warning hover:shadow-md">
-            <div class="flex items-start justify-between">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+           class="group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition-transform duration-200 group-hover:scale-105">
                     <x-nav-icon name="exams" class="h-6 w-6" />
                 </div>
-                <span class="text-sm text-slate-400 transition group-hover:text-amber-600">
-                    ↗
-                </span>
+                <div class="flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition-colors duration-200 group-hover:text-amber-600">
+                    <span>Exámenes Pendientes</span>
+                    <svg class="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
+                    </svg>
+                </div>
             </div>
 
-            <p class="mt-4 text-3xl font-extrabold text-acode-primary">
-                {{ $pendingExams->count() }}
-            </p>
-
-            <p class="mt-1 text-sm font-semibold text-slate-700">
-                Exámenes Pendientes
-            </p>
-
-            <p class="mt-1 text-xs text-slate-500">
-                Evaluaciones listas para resolver en tus asignaturas.
-            </p>
+            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
+                    {{ $pendingExams->count() }}
+                </p>
+                <p class="text-xs text-slate-500">
+                    Evaluaciones activas
+                </p>
+            </div>
         </a>
 
         {{-- Tarjeta 3: Evaluaciones Presentadas --}}
         <a href="{{ route('student.grades.index') }}"
-           class="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-acode-accent hover:shadow-md">
-            <div class="flex items-start justify-between">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+           class="group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-transform duration-200 group-hover:scale-105">
                     <x-nav-icon name="grades" class="h-6 w-6" />
                 </div>
-                <span class="text-sm text-slate-400 transition group-hover:text-emerald-600">
-                    ↗
-                </span>
+                <div class="flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition-colors duration-200 group-hover:text-emerald-600">
+                    <span>Evaluaciones Presentadas</span>
+                    <svg class="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
+                    </svg>
+                </div>
             </div>
 
-            <p class="mt-4 text-3xl font-extrabold text-acode-primary">
-                {{ $recentAttempts->count() }}
-            </p>
-
-            <p class="mt-1 text-sm font-semibold text-slate-700">
-                Evaluaciones Presentadas
-            </p>
-
-            <p class="mt-1 text-xs text-slate-500">
-                Intentos y calificaciones en tu historial académico.
-            </p>
+            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
+                    {{ $recentAttempts->count() }}
+                </p>
+                <p class="text-xs text-slate-500">
+                    Intentos calificados
+                </p>
+            </div>
         </a>
     </div>
 

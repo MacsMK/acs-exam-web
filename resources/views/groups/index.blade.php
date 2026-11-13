@@ -132,19 +132,19 @@
     <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {{-- KPI 1: Total de grupos --}}
         <div class="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
                     <x-icon name="userGroup" class="w-6 h-6 text-acode-tech" />
                 </div>
                 <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Total de grupos
                 </span>
             </div>
-            <div class="mt-4">
+            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
                     {{ $groups->count() }}
                 </p>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="text-xs text-slate-500">
                     Aulas escolares registradas
                 </p>
             </div>
@@ -152,19 +152,19 @@
 
         {{-- KPI 2: Grupos activos --}}
         <div class="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-acode-accent/10 text-acode-accent">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-acode-accent/10 text-acode-accent">
                     <x-icon name="check" class="w-6 h-6 text-acode-accent" />
                 </div>
                 <x-badge variant="accent">
                     Grupos activos
                 </x-badge>
             </div>
-            <div class="mt-4">
+            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
                     {{ $groups->where('is_closed', false)->count() }}
                 </p>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="text-xs text-slate-500">
                     En ciclo lectivo vigente
                 </p>
             </div>
@@ -172,19 +172,19 @@
 
         {{-- KPI 3: Grupos cerrados --}}
         <div class="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
                     <x-icon name="lock" class="w-6 h-6 text-slate-500" />
                 </div>
                 <x-badge variant="neutral">
                     Grupos cerrados
                 </x-badge>
             </div>
-            <div class="mt-4">
+            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p class="text-3xl lg:text-4xl font-extrabold text-slate-600 tracking-tight">
                     {{ $groups->where('is_closed', true)->count() }}
                 </p>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="text-xs text-slate-500">
                     Ciclos escolares concluidos
                 </p>
             </div>
@@ -192,19 +192,19 @@
 
         {{-- KPI 4: Alumnos matriculados --}}
         <div class="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
                     <x-icon name="user" class="w-6 h-6 text-acode-tech" />
                 </div>
                 <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Alumnos matriculados
                 </span>
             </div>
-            <div class="mt-4">
+            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
                     {{ $groups->sum('students_count') }}
                 </p>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="text-xs text-slate-500">
                     Censo total en tus aulas
                 </p>
             </div>

@@ -107,14 +107,20 @@ class BackendArchitectureAndSecurityTest extends TestCase
             'left_column_payload' => [
                 ['id' => 'L1', 'text' => 'Concepto 1'],
                 ['id' => 'L2', 'text' => 'Concepto 2'],
+                ['id' => 'L3', 'text' => 'Concepto 3'],
+                ['id' => 'L4', 'text' => 'Concepto 4'],
             ],
             'right_column_payload' => [
                 ['id' => 'R1', 'text' => 'Definición 1'],
                 ['id' => 'R2', 'text' => 'Definición 2'],
+                ['id' => 'R3', 'text' => 'Definición 3'],
+                ['id' => 'R4', 'text' => 'Definición 4'],
             ],
             'pairs_payload' => [
                 ['left_id' => 'L1', 'right_id' => 'R1'],
                 ['left_id' => 'L2', 'right_id' => 'R2'],
+                ['left_id' => 'L3', 'right_id' => 'R3'],
+                ['left_id' => 'L4', 'right_id' => 'R4'],
             ],
         ]);
 
@@ -142,13 +148,15 @@ class BackendArchitectureAndSecurityTest extends TestCase
             ->postJson('/api/v1/exams/take', ['exam_id' => $exam->id])
             ->assertOk();
 
-        // Acierta 1 de 2 pares (L1 => R1 correcto, L2 => R1 incorrecto) sobre 10 puntos -> 5.0 puntos
+        // Respuesta biyectiva legítima: acierta 2 de 4 pares (L1=>R1 y L4=>R4 correctos; L2=>R3 y L3=>R2 cruzados) -> 50% = 5.0 puntos
         $answerResponse = $this->withFreshToken($studentToken)
             ->postJson("/api/v1/exams/{$exam->id}/answers", [
                 'question_id' => (string) $matchingQuestion->id,
                 'pairs' => [
                     'L1' => 'R1',
-                    'L2' => 'R1',
+                    'L2' => 'R3',
+                    'L3' => 'R2',
+                    'L4' => 'R4',
                 ],
             ]);
 
@@ -161,6 +169,202 @@ class BackendArchitectureAndSecurityTest extends TestCase
         $attempt = StudentAttempt::where('exam_id', $exam->id)->where('student_id', $student->id)->firstOrFail();
         $this->assertEquals(5.0, (float) $attempt->objective_score);
         $this->assertEquals(5.0, (float) $attempt->final_score);
+    }
+
+    public function test_matching_question_rejects_duplicate_right_ids_with_422_in_api_and_web(): void
+    {
+        $teacher = $this->createUser('teacher');
+        $studentApi = $this->createUser('student');
+        $studentWeb = $this->createUser('student');
+        $apiToken = $this->tokenFor($studentApi);
+
+        $group = Group::create([
+            'teacher_id' => $teacher->id,
+            'name' => 'Grupo Biyección',
+            'access_folio' => 'BIYEC01',
+            'is_closed' => false,
+        ]);
+        $group->students()->attach([$studentApi->id => ['joined_at' => now()], $studentWeb->id => ['joined_at' => now()]]);
+
+        $exam = Exam::create([
+            'teacher_id' => $teacher->id,
+            'title' => 'Examen Escudo Cartesiano',
+            'grading_scale' => '0-10',
+            'randomize_question_order' => false,
+            'result_visibility_mode' => 'final_score',
+            'require_webcam' => false,
+            'max_allowed_incidents' => 2,
+            'starts_at' => now()->subHour(),
+            'ends_at' => now()->addHour(),
+            'share_token' => bin2hex(random_bytes(8)),
+            'is_published' => true,
+        ]);
+        $exam->groups()->attach($group->id);
+
+        $section = ExamSection::create([
+            'exam_id' => $exam->id,
+            'title' => 'Sección Relación',
+            'question_type' => 'matching',
+            'requested_quantity' => 1,
+            'sort_order' => 0,
+        ]);
+
+        $matchingItem = MatchingItem::create([
+            'left_column_payload' => [
+                ['id' => 'L1', 'text' => 'Concepto 1'],
+                ['id' => 'L2', 'text' => 'Concepto 2'],
+            ],
+            'right_column_payload' => [
+                ['id' => 'R1', 'text' => 'Definición 1'],
+                ['id' => 'R2', 'text' => 'Definición 2'],
+            ],
+            'pairs_payload' => [
+                ['left_id' => 'L1', 'right_id' => 'R1'],
+                ['left_id' => 'L2', 'right_id' => 'R2'],
+            ],
+        ]);
+
+        $matchingQuestion = Question::create([
+            'teacher_id' => $teacher->id,
+            'title' => 'Relación bloqueada ante repetición',
+            'stem' => 'Relacione biyectivamente',
+            'question_type' => 'matching',
+            'default_points' => 10,
+            'default_time_seconds' => 90,
+            'questionable_type' => MatchingItem::class,
+            'questionable_id' => $matchingItem->id,
+        ]);
+
+        $examQuestion = ExamQuestion::create([
+            'exam_id' => $exam->id,
+            'exam_section_id' => $section->id,
+            'question_id' => $matchingQuestion->id,
+            'time_limit_seconds' => 90,
+            'points_weight' => 10,
+            'sort_order' => 0,
+        ]);
+
+        // 1. Escudo [CRÍTICA-03] en API móvil v1 -> 422
+        $this->withFreshToken($apiToken)
+            ->postJson('/api/v1/exams/take', ['exam_id' => $exam->id])
+            ->assertOk();
+
+        $apiAttempt = StudentAttempt::where('exam_id', $exam->id)->where('student_id', $studentApi->id)->firstOrFail();
+
+        $apiDuplicateResponse = $this->withFreshToken($apiToken)
+            ->postJson("/api/v1/exams/{$exam->id}/answers", [
+                'question_id' => (string) $matchingQuestion->id,
+                'pairs' => [
+                    'L1' => 'R1',
+                    'L2' => 'R1',
+                ],
+            ]);
+
+        $apiDuplicateResponse->assertStatus(422);
+        $apiDuplicateResponse->assertJsonValidationErrors(['pairs']);
+        $this->assertDatabaseMissing('acs_student_answers', ['student_attempt_id' => $apiAttempt->id]);
+        $this->assertSame(0, $apiAttempt->fresh()->current_question_index);
+
+        // 2. Escudo [CRÍTICA-03] en Web -> 422 JSON y redirect con error de sesión en formulario
+        $webAttempt = app(AttemptService::class)->start($exam, $studentWeb);
+
+        $webJsonDuplicate = $this->actingAs($studentWeb)
+            ->postJson(route('attempts.answer', $webAttempt), [
+                'exam_question_id' => $examQuestion->id,
+                'pairs' => [
+                    ['left_id' => 'L1', 'right_id' => 'R1'],
+                    ['left_id' => 'L2', 'right_id' => 'R1'],
+                ],
+            ]);
+
+        $webJsonDuplicate->assertStatus(422);
+        $webJsonDuplicate->assertJsonValidationErrors(['pairs']);
+
+        $webFormDuplicate = $this->actingAs($studentWeb)
+            ->from(route('attempts.show', $webAttempt))
+            ->post(route('attempts.answer', $webAttempt), [
+                'exam_question_id' => $examQuestion->id,
+                'pairs' => [
+                    ['left_id' => 'L1', 'right_id' => 'R1'],
+                    ['left_id' => 'L2', 'right_id' => 'R1'],
+                ],
+            ]);
+
+        $webFormDuplicate->assertRedirect(route('attempts.show', $webAttempt));
+        $webFormDuplicate->assertSessionHasErrors(['pairs']);
+        $this->assertDatabaseMissing('acs_student_answers', ['student_attempt_id' => $webAttempt->id]);
+        $this->assertSame(0, $webAttempt->fresh()->current_question_index);
+    }
+
+    public function test_exam_configuration_update_rejects_foreign_teacher_groups(): void
+    {
+        $teacherA = $this->createUser('teacher');
+        $teacherB = $this->createUser('teacher');
+
+        $ownGroup = Group::create([
+            'teacher_id' => $teacherA->id,
+            'name' => 'Grupo Propio A',
+            'access_folio' => 'PROPA01',
+            'is_closed' => false,
+        ]);
+        $foreignGroup = Group::create([
+            'teacher_id' => $teacherB->id,
+            'name' => 'Grupo Ajeno B',
+            'access_folio' => 'AJENB01',
+            'is_closed' => false,
+        ]);
+
+        $examA = $this->createDraftExam($teacherA);
+        $sectionA = ExamSection::create([
+            'exam_id' => $examA->id,
+            'title' => 'Sección A',
+            'question_type' => 'multiple_choice',
+            'requested_quantity' => 1,
+            'sort_order' => 0,
+        ]);
+        [, $examQuestionA] = $this->attachMultipleChoiceQuestion($examA, $sectionA, $teacherA, 0);
+
+        $basePayload = [
+            'title' => 'Examen Configurado Seguro',
+            'description' => 'Prueba IDOR group_ids',
+            'grading_scale' => '0-10',
+            'result_visibility_mode' => 'final_score',
+            'max_allowed_incidents' => 2,
+            'randomize_question_order' => true,
+            'require_webcam' => false,
+            'questions' => [
+                $examQuestionA->id => [
+                    'points_weight' => 100,
+                    'time_limit_seconds' => 90,
+                ],
+            ],
+        ];
+
+        // 1. Intento de inyectar grupo de otro docente -> 422 [CRÍTICA-01]
+        $idorResponse = $this->actingAs($teacherA)->putJson(
+            route('exams.configuration.update', $examA),
+            $basePayload + ['group_ids' => [$foreignGroup->id]]
+        );
+        $idorResponse->assertStatus(422);
+        $idorResponse->assertJsonValidationErrors(['group_ids.0']);
+        $this->assertSame(0, $examA->groups()->count());
+
+        // 2. Mezcla de grupo propio y ajeno -> también rechazado
+        $mixedResponse = $this->actingAs($teacherA)->putJson(
+            route('exams.configuration.update', $examA),
+            $basePayload + ['group_ids' => [$ownGroup->id, $foreignGroup->id]]
+        );
+        $mixedResponse->assertStatus(422);
+        $mixedResponse->assertJsonValidationErrors(['group_ids.1']);
+        $this->assertSame(0, $examA->groups()->count());
+
+        // 3. Grupo propio válido -> éxito
+        $validResponse = $this->actingAs($teacherA)->put(
+            route('exams.configuration.update', $examA),
+            $basePayload + ['group_ids' => [$ownGroup->id]]
+        );
+        $validResponse->assertRedirect(route('exams.review', $examA));
+        $this->assertSame([$ownGroup->id], $examA->groups()->pluck('acs_groups.id')->all());
     }
 
     public function test_empty_open_and_code_answers_bypass_ai_evaluator_and_award_zero_points(): void

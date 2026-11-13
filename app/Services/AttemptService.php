@@ -80,11 +80,23 @@ class AttemptService
         abort_unless($group, 403, 'No perteneces a ningún grupo asignado a este examen.');
 
         $attempt = DB::transaction(function () use ($exam, $student, $group): StudentAttempt {
+            $existing = StudentAttempt::where('exam_id', $exam->id)
+                ->where('student_id', $student->id)
+                ->first();
+
+            if ($existing !== null) {
+                return $existing;
+            }
+
+            $sequence = $this->assemblyService->buildQuestionSequence($exam);
+            $paraphraseSnapshot = $this->buildParaphraseSnapshot($sequence, (int) $student->id);
+
             return StudentAttempt::firstOrCreate(
                 ['exam_id' => $exam->id, 'student_id' => $student->id],
                 [
                     'group_id' => $group->id,
-                    'question_sequence_payload' => $this->assemblyService->buildQuestionSequence($exam),
+                    'question_sequence_payload' => $sequence,
+                    'paraphrase_snapshot_payload' => $paraphraseSnapshot,
                     'current_question_index' => 0,
                     'started_at' => now(),
                     'status' => 'in_progress',
@@ -220,9 +232,14 @@ class AttemptService
 
         $this->assertAttemptWithinTimeLimit($attempt);
 
-        $examQuestion = ExamQuestion::with('question.questionable')->findOrFail($examQuestionId);
+        $examQuestion = ExamQuestion::with(['question.questionable', 'question.paraphrases'])->findOrFail($examQuestionId);
         $question = $examQuestion->question;
         $questionable = $question->questionable;
+        $resolvedStem = $this->resolvedStemData($examQuestion, $attempt);
+        $persistedParaphraseId = $resolvedStem['paraphrase_id'] !== null
+            && $question->paraphrases->contains('id', $resolvedStem['paraphrase_id'])
+            ? $resolvedStem['paraphrase_id']
+            : null;
 
         $isLate = $this->isAnswerLate($attempt, (int) $examQuestion->time_limit_seconds);
 
@@ -235,13 +252,15 @@ class AttemptService
                 (float) $examQuestion->points_weight,
             );
 
-        DB::transaction(static function () use ($attempt, $examQuestion, $graded, $answerPayload): void {
+        DB::transaction(static function () use ($attempt, $examQuestion, $graded, $answerPayload, $persistedParaphraseId, $resolvedStem): void {
             $lockedAttempt = StudentAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
 
             StudentAnswer::updateOrCreate(
                 ['student_attempt_id' => $lockedAttempt->id, 'exam_question_id' => $examQuestion->id],
                 array_merge($graded, [
                     'answer_payload' => $answerPayload,
+                    'question_paraphrase_id' => $persistedParaphraseId,
+                    'served_stem_snapshot' => $resolvedStem['stem'],
                     'answered_at' => now(),
                 ]),
             );
@@ -423,23 +442,74 @@ class AttemptService
     }
 
     /**
-     * Calificación proporcional en relación de columnas (RF-EVA-002 / P-114):
-     * (pares_correctos / total_pares) * pointsWeight.
+     * Calificación proporcional estrictamente biyectiva en relación de columnas [CRÍTICA-03]
+     * (RF-EVA-002 / P-114): (pares_correctos / total_pares) * pointsWeight.
      *
      * @return array<string, mixed>
      */
     private function gradeMatching(mixed $item, mixed $answerPayload, float $pointsWeight): array
     {
-        $submittedPairs = is_array($answerPayload) ? $answerPayload : [];
-        $expected = $this->normalizePairs($item->pairs_payload ?? []);
-        $normalized = array_values(array_unique($this->normalizePairs($submittedPairs)));
-
-        $totalPairs = count($expected);
-        if ($totalPairs === 0) {
+        $expectedRaw = is_array($item->pairs_payload ?? null) ? $item->pairs_payload : [];
+        $totalPairs = count($expectedRaw);
+        if ($totalPairs === 0 || ! is_array($answerPayload)) {
             return ['is_correct' => false, 'points_awarded' => 0.0];
         }
 
-        $correctPairs = count(array_intersect($expected, $normalized));
+        if (count($answerPayload) > $totalPairs) {
+            return ['is_correct' => false, 'points_awarded' => 0.0];
+        }
+
+        $validLeftIds = collect($item->left_column_payload ?? [])
+            ->pluck('id')
+            ->filter()
+            ->mapWithKeys(static fn (mixed $id): array => [(string) $id => true])
+            ->all();
+        $validRightIds = collect($item->right_column_payload ?? [])
+            ->pluck('id')
+            ->filter()
+            ->mapWithKeys(static fn (mixed $id): array => [(string) $id => true])
+            ->all();
+
+        $expectedMap = [];
+        foreach ($expectedRaw as $pair) {
+            if (is_array($pair) && isset($pair['left_id'], $pair['right_id'])) {
+                $expectedMap[(string) $pair['left_id']] = (string) $pair['right_id'];
+            }
+        }
+
+        $seenLeft = [];
+        $seenRight = [];
+        $correctPairs = 0;
+
+        foreach ($answerPayload as $pair) {
+            if (! is_array($pair)) {
+                return ['is_correct' => false, 'points_awarded' => 0.0];
+            }
+
+            $leftId = trim((string) ($pair['left_id'] ?? ''));
+            $rightId = trim((string) ($pair['right_id'] ?? ''));
+
+            if ($leftId === '' || isset($seenLeft[$leftId])) {
+                return ['is_correct' => false, 'points_awarded' => 0.0];
+            }
+            if ($validLeftIds !== [] && ! isset($validLeftIds[$leftId])) {
+                return ['is_correct' => false, 'points_awarded' => 0.0];
+            }
+            $seenLeft[$leftId] = true;
+
+            if ($rightId === '') {
+                continue;
+            }
+            if (($validRightIds !== [] && ! isset($validRightIds[$rightId])) || isset($seenRight[$rightId])) {
+                return ['is_correct' => false, 'points_awarded' => 0.0];
+            }
+            $seenRight[$rightId] = true;
+
+            if (isset($expectedMap[$leftId]) && $expectedMap[$leftId] === $rightId) {
+                $correctPairs++;
+            }
+        }
+
         $score = round(($correctPairs / $totalPairs) * $pointsWeight, 2);
         $isCorrect = $correctPairs === $totalPairs;
 
@@ -447,21 +517,6 @@ class AttemptService
             'is_correct' => $isCorrect,
             'points_awarded' => $score,
         ];
-    }
-
-    /**
-     * @param array<int, array<string, mixed>> $pairs
-     * @return array<int, string>
-     */
-    private function normalizePairs(array $pairs): array
-    {
-        $normalized = array_map(
-            static fn (array $pair) => ($pair['left_id'] ?? '').'-'.($pair['right_id'] ?? ''),
-            $pairs,
-        );
-        sort($normalized);
-
-        return $normalized;
     }
 
     /**
@@ -496,7 +551,7 @@ class AttemptService
 
     /**
      * Construye el payload de la pregunta ocultando la respuesta correcta y
-     * aplicando la paráfrasis activa cuando existe (RF-BAN-010).
+     * aplicando la paráfrasis congelada en snapshot o activa (RF-BAN-010).
      *
      * @return array<string, mixed>
      */
@@ -505,8 +560,8 @@ class AttemptService
         $question = $examQuestion->question;
         $item = $question->questionable;
 
-        $activeParaphrase = $this->resolveActiveParaphrase($examQuestion, $attempt);
-        $stem = $activeParaphrase !== null ? $activeParaphrase->stem : $question->stem;
+        $resolved = $this->resolvedStemData($examQuestion, $attempt);
+        $stem = $resolved['stem'];
 
         $itemPayload = match ($question->question_type) {
             'multiple_choice' => ['options' => $item->options_payload],
@@ -528,26 +583,114 @@ class AttemptService
             'question_type' => $question->question_type,
         ];
 
-        if ($activeParaphrase !== null) {
-            $basePayload['paraphrase_id'] = $activeParaphrase->id;
-            $basePayload['paraphrased_text'] = $activeParaphrase->stem;
+        if ($resolved['paraphrase_id'] !== null) {
+            $basePayload['paraphrase_id'] = $resolved['paraphrase_id'];
+            $basePayload['paraphrased_text'] = $stem;
         }
 
         return array_merge($basePayload, $itemPayload);
     }
 
     /**
-     * Enunciado que el estudiante vio en su intento (paráfrasis activa si la
-     * hay), para mostrarlo igual en la revisión posterior (RF-REP-005).
+     * Enunciado que el estudiante vio en su intento (paráfrasis congelada en
+     * snapshot o rotación determinista), para mostrarlo igual en la revisión
+     * posterior (RF-REP-005).
      */
     public function visibleStem(ExamQuestion $examQuestion, ?StudentAttempt $attempt = null): string
     {
-        $paraphrase = $this->resolveActiveParaphrase($examQuestion, $attempt);
-
-        return $paraphrase !== null ? $paraphrase->stem : (string) $examQuestion->question->stem;
+        return $this->resolvedStemData($examQuestion, $attempt)['stem'];
     }
 
-    private function resolveActiveParaphrase(ExamQuestion $examQuestion, ?StudentAttempt $attempt): ?QuestionParaphrase
+    /**
+     * Construye el mapa inmutable de enunciados servidos por exam_question_id
+     * al iniciar el intento, con rotación 1 + N (enunciado raíz + paráfrasis)
+     * cargando las relaciones en bloque sin N+1 [ALTA-09 / MEDIA-05].
+     *
+     * @param array<int, int> $sequence
+     * @return array<string, array{paraphrase_id: ?int, stem: string}>
+     */
+    private function buildParaphraseSnapshot(array $sequence, int $studentId): array
+    {
+        if ($sequence === []) {
+            return [];
+        }
+
+        $examQuestions = ExamQuestion::with('question.paraphrases')
+            ->whereIn('id', $sequence)
+            ->get()
+            ->keyBy('id');
+
+        $snapshot = [];
+        foreach ($sequence as $examQuestionId) {
+            $examQuestion = $examQuestions->get((int) $examQuestionId);
+            if ($examQuestion === null || $examQuestion->question === null) {
+                continue;
+            }
+
+            $selected = $this->selectVariantForStudent($examQuestion, $studentId);
+            $snapshot[(string) $examQuestion->id] = [
+                'paraphrase_id' => $selected['paraphrase_id'],
+                'stem' => $selected['stem'],
+            ];
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * Resuelve el enunciado y paráfrasis efectivos priorizando el snapshot congelado
+     * en el intento para garantizar inmutabilidad histórica [ALTA-09 / MEDIA-05].
+     *
+     * @return array{paraphrase_id: ?int, paraphrase: ?QuestionParaphrase, stem: string}
+     */
+    private function resolvedStemData(ExamQuestion $examQuestion, ?StudentAttempt $attempt): array
+    {
+        $question = $examQuestion->question;
+
+        if ($attempt !== null && is_array($attempt->paraphrase_snapshot_payload)) {
+            $snapshotEntry = $attempt->paraphrase_snapshot_payload[(string) $examQuestion->id]
+                ?? $attempt->paraphrase_snapshot_payload[(int) $examQuestion->id]
+                ?? null;
+
+            if (is_array($snapshotEntry) && array_key_exists('stem', $snapshotEntry)) {
+                $paraphraseId = isset($snapshotEntry['paraphrase_id']) && $snapshotEntry['paraphrase_id'] !== null
+                    ? (int) $snapshotEntry['paraphrase_id']
+                    : null;
+                $frozenStem = (string) $snapshotEntry['stem'];
+                $paraphrase = null;
+
+                if ($paraphraseId !== null) {
+                    $paraphrases = $question->relationLoaded('paraphrases')
+                        ? $question->paraphrases
+                        : $question->paraphrases()->get();
+                    $paraphrase = $paraphrases->firstWhere('id', $paraphraseId);
+                    if ($paraphrase === null) {
+                        $paraphrase = new QuestionParaphrase([
+                            'question_id' => $question->id,
+                            'stem' => $frozenStem,
+                        ]);
+                        $paraphrase->id = $paraphraseId;
+                        $paraphrase->exists = true;
+                    }
+                }
+
+                return [
+                    'paraphrase_id' => $paraphraseId,
+                    'paraphrase' => $paraphrase,
+                    'stem' => $frozenStem,
+                ];
+            }
+        }
+
+        $seedActor = (int) ($attempt?->student_id ?? $attempt?->id ?? 0);
+
+        return $this->selectVariantForStudent($examQuestion, $seedActor);
+    }
+
+    /**
+     * @return array{paraphrase_id: ?int, paraphrase: ?QuestionParaphrase, stem: string}
+     */
+    private function selectVariantForStudent(ExamQuestion $examQuestion, int $seedActor): array
     {
         $question = $examQuestion->question;
         $paraphrases = $question->relationLoaded('paraphrases')
@@ -555,16 +698,46 @@ class AttemptService
             : $question->paraphrases()->get();
 
         if ($paraphrases->isEmpty()) {
-            return null;
+            return [
+                'paraphrase_id' => null,
+                'paraphrase' => null,
+                'stem' => (string) $question->stem,
+            ];
         }
 
         $explicitParaphraseId = $examQuestion->getAttribute('paraphrase_id');
         if ($explicitParaphraseId !== null) {
-            return $paraphrases->firstWhere('id', (int) $explicitParaphraseId) ?? $paraphrases->first();
+            $chosen = $paraphrases->firstWhere('id', (int) $explicitParaphraseId) ?? $paraphrases->first();
+
+            return [
+                'paraphrase_id' => $chosen !== null ? (int) $chosen->id : null,
+                'paraphrase' => $chosen,
+                'stem' => $chosen !== null ? (string) $chosen->stem : (string) $question->stem,
+            ];
         }
 
-        $seed = ($attempt?->id ?? 0) + $examQuestion->id;
+        // Rotación 1 + N incluyendo el enunciado original en el índice 0
+        $variants = array_merge([null], $paraphrases->values()->all());
+        $hash = (int) sprintf('%u', crc32($seedActor . ':' . $examQuestion->id));
+        $chosen = $variants[$hash % count($variants)];
 
-        return $paraphrases->values()->get($seed % $paraphrases->count());
+        if ($chosen instanceof QuestionParaphrase) {
+            return [
+                'paraphrase_id' => (int) $chosen->id,
+                'paraphrase' => $chosen,
+                'stem' => (string) $chosen->stem,
+            ];
+        }
+
+        return [
+            'paraphrase_id' => null,
+            'paraphrase' => null,
+            'stem' => (string) $question->stem,
+        ];
+    }
+
+    private function resolveActiveParaphrase(ExamQuestion $examQuestion, ?StudentAttempt $attempt): ?QuestionParaphrase
+    {
+        return $this->resolvedStemData($examQuestion, $attempt)['paraphrase'];
     }
 }

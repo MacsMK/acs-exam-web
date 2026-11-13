@@ -86,3 +86,10 @@ En `EloquentQuestionRepository` y `QuestionBankService`:
   7. `test_soft_delete_preserves_fk_integrity_with_historic_exam`: Integridad referencial con borrado lógico.
   8. `test_paraphrase_creation_and_deletion`: Ciclo de vida y protección de paráfrasis anti-copia.
   9. `test_csv_template_download_and_batch_import`: Descarga de plantilla con BOM UTF-8 e importación masiva de las 4 variantes.
+
+---
+
+## 4. Actualización de Alineación (Anillo 2 — Materias Normalizadas, Bloqueo COW, XLSX y Seguridad Exportación)
+- **Protección Copy-On-Write y borrado seguro (`[ALTA-08]`, `[MEDIA-02]`):** `QuestionBankService::updateQuestion()` ejecuta bloqueo transaccional pesimista (`Question::whereKey()->lockForUpdate()`) y verifica vínculos mediante `QuestionRepositoryInterface::hasExamLinks()`. `deleteQuestion()` impide eliminar reactivos enlazados a exámenes activos o publicados (`hasActiveOrPublishedExamLinks()`), emitiendo `DomainException`.
+- **Resolución de materias y métricas:** Al crear, editar o importar se resuelve `subject_id` y `subject_tag` canónico a través de `Subject::cleanDisplayName()` / `resolveOrCreateSubject()`, habilitando además captura rápida en lote (`QuestionBatchStoreRequest`, hasta 30 reactivos).
+- **Importación CSV/TXT/XLSX en dos fases y exportación segura (`CWE-1236`):** Además de la plantilla CSV con BOM UTF-8 y saneamiento anti-inyección de fórmulas (`sanitizeSpreadsheetCellForExport()`), se añade soporte `.xlsx` (`PhpSpreadsheet` con `setReadDataOnly(true)`), tope estricto de 250 filas de datos, flujo de previsualización (`previewBatchImport`) con detección de materias similares y confirmación atómica (`commitBatchImport`). Véanse los detalles normativos completos en [ADR-053](ADR-053_Catalogo_Normalizado_Materias_y_Fusion_Fuzzy.md) y [ADR-055](ADR-055_Alineacion_Rutas_Questions_Productividad_Batch_y_Blindaje_Backend.md).

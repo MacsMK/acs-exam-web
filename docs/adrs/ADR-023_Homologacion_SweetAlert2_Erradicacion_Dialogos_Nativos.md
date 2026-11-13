@@ -80,3 +80,9 @@ Todos los botones interactivos (`<x-button>`) y enlaces de navegación se ajusta
 - **Requerimientos:** `RF-AUT-002`, `RF-GRU-001`, `RF-BAN-003`, `RF-EXA-002`, `RF-EXA-024`.
 - **Manuales:** `MPW-V2` (§7.8, §8.7, Tabla 20), `MC-V2` (§5.1).
 - **Pruebas de Certificación:** `tests/Feature/FrontendViewRenderingTest.php`.
+
+---
+
+## 5. Actualización de Alineación (Anillo 2 — Banco de Reactivos y Materias)
+- Las operaciones destructivas y de confirmación masiva introducidas en el Banco de Reactivos (eliminación de reactivos, eliminación de paráfrasis, fusión de materias similares y confirmación de lotes tras previsualización de importación CSV/XLSX) mantienen la prohibición absoluta de `window.confirm()`, `window.alert()` y `window.prompt()`.
+- Los errores de dominio devueltos por el backend mediante `DomainException` (por ejemplo, bloqueo de borrado lógico cuando un reactivo tiene vínculos activos o publicados, o límites de paráfrasis) se exponen vía `$errors` / mensajes flash en sesión para ser presentados al docente mediante alertas/toasts institucionales SweetAlert2 en la capa UI (`Anillo 2 Paso 3`).

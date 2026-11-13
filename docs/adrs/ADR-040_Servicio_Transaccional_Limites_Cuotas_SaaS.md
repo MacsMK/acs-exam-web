@@ -62,3 +62,10 @@ El servicio se inyecta en:
 - Cumplimiento pleno de `RF-SUS-001..015`, `RF-SUS-010`, `RW-01..04`, `RNF-SEG-003` y `RNF-SEG-004`.
 - Protección infranqueable contra abusos del nivel freemium.
 - Cobertura completa de pruebas unitarias y de integración en [`SubscriptionLimitServiceTest`](file:///home/laambws/Escritorio/acs-exam-web/tests/Feature/SubscriptionLimitServiceTest.php).
+
+---
+
+## 4. Actualización de Alineación (Anillo 2 — Bloqueo Pesimista TOCTOU y Cuotas en Duplicación/Lote)
+- **Eliminación de condición de carrera TOCTOU (`[ALTA-03]`):** `SubscriptionLimitService::ensureCanCreateQuestionsLocked()` adquiere bloqueo `lockForUpdate()` sobre la fila `User` del docente dentro de la transacción de base de datos antes de contabilizar y validar la cuota disponible.
+- **Regla diferenciada Freemium vs Planes de Pago:** En plan Freemium (`$package === null`, tope 50) se mantiene el conteo histórico (`withoutGlobalScopes()`) incluyendo borrados lógicos para evitar el reinicio de cuota; en planes de pago (`$package !== null`) se contabilizan únicamente reactivos activos (`whereNull('deleted_at')`).
+- **Nuevos puntos de intercepción y resumen KPI:** Se aplicó verificación de cuota en `QuestionBankService::duplicateQuestion()`, `createQuestionBatch()` y `commitBatchImport()`, y se expuso `getQuestionQuotaSummary(User $teacher)` para los indicadores de capacidad en el Banco de Reactivos.

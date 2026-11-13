@@ -6,6 +6,8 @@
     'searchValue' => request('search', ''),
     'placeholder' => 'Buscar reactivo, alumno o examen…',
     'clearUrl' => request()->url(),
+    'clearKeys' => ['search', 'filter', 'type', 'group_id', 'subject', 'status', 'date'],
+    'hasActiveFilters' => null,
     'autoSubmit' => false,
 ])
 
@@ -51,7 +53,17 @@
                 Buscar
             </x-button>
 
-            @if (request()->hasAny([$searchName, 'filter', 'type', 'group_id', 'subject', 'status', 'date']))
+            @php
+                $activeClearKeys = array_values(array_unique(array_merge(
+                    [$searchName],
+                    is_array($clearKeys) ? $clearKeys : []
+                )));
+                $showClearAction = $hasActiveFilters !== null
+                    ? (bool) $hasActiveFilters
+                    : request()->anyFilled($activeClearKeys);
+            @endphp
+
+            @if ($showClearAction)
                 <x-button href="{{ $clearUrl }}" variant="neutral" size="md">
                     <x-icon name="filter" class="w-4 h-4 mr-1.5 text-slate-400" />
                     Limpiar filtros

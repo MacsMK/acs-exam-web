@@ -440,6 +440,11 @@ A partir del Sprint 2 y Sprint 3, las decisiones de arquitectura se gestionan me
   - [ADR-051](adrs/ADR-051_Renderizado_Reactivo_Cliente_Alpine_vs_Blade_Forelse.md): Renderizado Reactivo en Cliente con Alpine.js en Catálogos Docentes y Centralización de Cierre Semestral (`MPW-V2 §5.2.2`, `RF-GRU-001`, `RF-GRU-018`).
   - [ADR-052](adrs/ADR-052_Normalizacion_UI_UX_Detalle_Grupo_Periodos_Evaluacion_y_SweetAlert2.md): Normalización UI/UX del Detalle de Grupo, Periodos de Evaluación y Adopción de SweetAlert2 (`MPW-V2 §5.2.2`, `§7`, `§8`, `RF-CAL-001..005`, `RW-28..36`).
 
+* **Bloque VI — Consolidación del Banco de Reactivos, Materias Normalizadas y Blindaje de Evaluación (Anillo 2)**
+  - [ADR-053](adrs/ADR-053_Catalogo_Normalizado_Materias_y_Fusion_Fuzzy.md): Catálogo Normalizado de Materias (`acs_subjects`), Sugerencias Fuzzy y Fusión Transaccional (`Dictamen B4`).
+  - [ADR-054](adrs/ADR-054_Trazabilidad_Inmutable_Parafrasis_y_Biyectividad_Matching.md): IDs Opacos en Relación de Columnas (`[CRÍTICA-02]`), Biyectividad Estricta (`[CRÍTICA-03]`) y Snapshot Inmutable de Paráfrasis (`[ALTA-09]`, `[MEDIA-05]`).
+  - [ADR-055](adrs/ADR-055_Alineacion_Rutas_Questions_Productividad_Batch_y_Blindaje_Backend.md): Alineación de Rutas `questions/*`, Productividad Batch/XLSX (`previewBatchImport`/`CWE-1236`), Corrección `Tabla 17` y Blindaje COW/TOCTOU/IDOR (`[CRÍTICA-01]`, `[ALTA-03]`, `[ALTA-08]`, `[MEDIA-01]`, `[MEDIA-02]`).
+
 Consulta el [Catálogo Maestro de ADRs en `docs/adrs/README.md`](adrs/README.md) para el detalle técnico completo de cada decisión.
 
 ---

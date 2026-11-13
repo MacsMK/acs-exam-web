@@ -9,24 +9,33 @@ declare(strict_types=1);
  * Archivo:     ExamAssemblyService.php
  * Ubicación:   app/Services/ExamAssemblyService.php
  * Descripción: Creación de examen, sorteo aleatorio del banco de preguntas
- *              para un apartado (RW-13) y nuevo sorteo de un reactivo puntual
- *              (RW-14) con integridad transaccional.
+ *              para un apartado (RW-13) filtrado por tipo, asignatura y linaje
+ *              Copy-On-Write, y nuevo sorteo puntual (RW-14) transaccional.
  * ============================================================================
  */
 
 namespace App\Services;
 
-use App\Models\Exam;
-use App\Models\ExamQuestion;
-use App\Models\ExamSection;
-use App\Models\Question;
-use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
+use App\Models\Exam;
+use App\Models\ExamQuestion;
+use App\Models\ExamSection;
+use App\Models\Group;
+use App\Models\Question;
+use App\Models\Subject;
+use App\Models\User;
+use App\Repositories\Contracts\QuestionRepositoryInterface;
+
 class ExamAssemblyService
 {
+    public function __construct(
+        private readonly QuestionRepositoryInterface $questionRepository,
+    ) {
+    }
+
     /**
      * Crea un examen en borrador y sincroniza sus grupos asignados dentro de
      * una transacción.
@@ -51,8 +60,13 @@ class ExamAssemblyService
                 'is_published' => false,
             ]);
 
-            if (! empty($data['group_ids'])) {
-                $exam->groups()->sync($data['group_ids']);
+            if (! empty($data['group_ids']) && is_array($data['group_ids'])) {
+                $ownedGroupIds = Group::where('teacher_id', $teacher->id)
+                    ->whereIn('id', array_map('intval', $data['group_ids']))
+                    ->pluck('id')
+                    ->all();
+
+                $exam->groups()->sync($ownedGroupIds);
             }
 
             return $exam;
@@ -60,17 +74,31 @@ class ExamAssemblyService
     }
 
     /**
-     * Crea un apartado y sortea sus reactivos dentro de una transacción.
+     * Crea un apartado con su filtro opcional de materia normalizada y sortea
+     * sus reactivos dentro de una transacción.
      *
      * @param array<string, mixed> $data
      */
     public function createSectionAndDraw(Exam $exam, array $data): ExamSection
     {
+        if ($exam->is_published) {
+            throw ValidationException::withMessages([
+                'exam' => ['No se puede modificar un examen publicado.'],
+            ]);
+        }
+
         return DB::transaction(function () use ($exam, $data): ExamSection {
+            $cleanSubject = Subject::cleanDisplayName($data['subject_tag'] ?? null);
+            $subject = $cleanSubject !== null
+                ? $this->questionRepository->resolveOrCreateSubject((int) $exam->teacher_id, $cleanSubject)
+                : null;
+
             $section = ExamSection::create([
                 'exam_id' => $exam->id,
                 'title' => $data['title'],
                 'question_type' => $data['question_type'],
+                'subject_tag' => $subject?->name ?? $cleanSubject,
+                'subject_id' => $subject?->id,
                 'requested_quantity' => (int) $data['requested_quantity'],
                 'sort_order' => $exam->sections()->count(),
             ]);
@@ -94,20 +122,18 @@ class ExamAssemblyService
         ?string $subjectTag = null
     ): array {
         $alreadyUsedIds = ExamQuestion::where('exam_id', $exam->id)
-            ->pluck('question_id');
+            ->pluck('question_id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->all();
 
-        $query = Question::where('teacher_id', $exam->teacher_id)
-            ->where('question_type', $questionType)
-            ->whereNotIn('id', $alreadyUsedIds);
-
-        if ($subjectTag !== null && $subjectTag !== '') {
-            $query->where('subject_tag', $subjectTag);
-        }
-
-        $candidates = $query
-            ->inRandomOrder()
-            ->limit($quantity)
-            ->pluck('id');
+        $candidates = $this->questionRepository->getRandomCandidatesForSection(
+            (int) $exam->teacher_id,
+            $questionType,
+            $alreadyUsedIds,
+            $quantity,
+            $subjectTag,
+            null
+        );
 
         if ($candidates->count() < $quantity) {
             throw ValidationException::withMessages([
@@ -117,11 +143,12 @@ class ExamAssemblyService
             ]);
         }
 
-        return $candidates->all();
+        return $candidates->pluck('id')->map(static fn (mixed $id): int => (int) $id)->all();
     }
 
     /**
-     * Acepta una propuesta y guarda el apartado con sus reactivos.
+     * Acepta una propuesta validando propiedad docente, tipo de reactivo [MEDIA-02],
+     * linaje Copy-On-Write y persistiendo la materia normalizada del apartado.
      *
      * @param array<int, int> $questionIds
      */
@@ -138,6 +165,7 @@ class ExamAssemblyService
             ]);
         }
 
+        $questionIds = array_values(array_map('intval', $questionIds));
         if ($questionIds === [] || count($questionIds) !== count(array_unique($questionIds))) {
             throw ValidationException::withMessages([
                 'question_ids' => ['La propuesta está vacía o contiene preguntas repetidas.'],
@@ -149,15 +177,17 @@ class ExamAssemblyService
             $title,
             $questionType,
             $questionIds,
+            $subjectTag,
         ): ExamSection {
             $questions = Question::where('teacher_id', $exam->teacher_id)
+                ->where('question_type', $questionType)
                 ->whereIn('id', $questionIds)
                 ->get()
                 ->keyBy('id');
 
             if ($questions->count() !== count($questionIds)) {
                 throw ValidationException::withMessages([
-                    'question_ids' => ['Algunos reactivos ya no están disponibles en el banco.'],
+                    'question_ids' => ['Algunos reactivos ya no están disponibles o no corresponden al tipo del apartado.'],
                 ]);
             }
 
@@ -171,10 +201,17 @@ class ExamAssemblyService
                 ]);
             }
 
+            $cleanSubject = Subject::cleanDisplayName($subjectTag);
+            $subject = $cleanSubject !== null
+                ? $this->questionRepository->resolveOrCreateSubject((int) $exam->teacher_id, $cleanSubject)
+                : null;
+
             $section = ExamSection::create([
                 'exam_id' => $exam->id,
                 'title' => $title,
                 'question_type' => $questionType,
+                'subject_tag' => $subject?->name ?? $cleanSubject,
+                'subject_id' => $subject?->id,
                 'requested_quantity' => count($questionIds),
                 'sort_order' => $exam->sections()->count(),
             ]);
@@ -197,28 +234,32 @@ class ExamAssemblyService
     }
 
     /**
-     * Sortea requested_quantity preguntas del tipo del apartado, del banco
-     * del propio docente, evitando repetir reactivos ya usados en el
-     * examen, y las acepta como acs_exam_question.
+     * Sortea requested_quantity preguntas del tipo y materia del apartado del banco
+     * del propio docente, evitando repetir reactivos o linajes COW ya usados.
      */
     public function drawQuestionsForSection(ExamSection $section): void
     {
         $section->loadMissing('exam');
         $exam = $section->exam;
 
-        $alreadyUsedIds = ExamQuestion::where('exam_id', $exam->id)->pluck('question_id');
+        $alreadyUsedIds = ExamQuestion::where('exam_id', $exam->id)
+            ->pluck('question_id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->all();
 
-        $candidates = Question::where('teacher_id', $exam->teacher_id)
-            ->where('question_type', $section->question_type)
-            ->whereNotIn('id', $alreadyUsedIds)
-            ->inRandomOrder()
-            ->limit($section->requested_quantity)
-            ->get();
+        $candidates = $this->questionRepository->getRandomCandidatesForSection(
+            (int) $exam->teacher_id,
+            (string) $section->question_type,
+            $alreadyUsedIds,
+            (int) $section->requested_quantity,
+            $section->subject_tag,
+            $section->subject_id
+        );
 
         if ($candidates->count() < $section->requested_quantity) {
             throw ValidationException::withMessages([
                 'requested_quantity' => [
-                    "El banco solo tiene {$candidates->count()} reactivos de tipo {$section->question_type} disponibles, se pidieron {$section->requested_quantity}.",
+                    "El banco solo tiene {$candidates->count()} reactivos de tipo {$section->question_type} disponibles para los filtros seleccionados; se pidieron {$section->requested_quantity}.",
                 ],
             ]);
         }
@@ -239,8 +280,8 @@ class ExamAssemblyService
 
     /**
      * Nuevo sorteo de un reactivo puntual dentro de su apartado (RW-14):
-     * lo sustituye por otro candidato del mismo tipo que no esté ya en el
-     * examen.
+     * lo sustituye por otro candidato del mismo tipo y materia que no esté ya en el
+     * examen ni comparta linaje Copy-On-Write.
      */
     public function reshuffleQuestion(ExamQuestion $examQuestion): ExamQuestion
     {
@@ -249,19 +290,22 @@ class ExamAssemblyService
         $exam = $examQuestion->exam;
 
         $alreadyUsedIds = ExamQuestion::where('exam_id', $exam->id)
-            ->where('id', '!=', $examQuestion->id)
             ->pluck('question_id')
-            ->push($examQuestion->question_id);
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->all();
 
-        $replacement = Question::where('teacher_id', $exam->teacher_id)
-            ->where('question_type', $section->question_type)
-            ->whereNotIn('id', $alreadyUsedIds)
-            ->inRandomOrder()
-            ->first();
+        $replacement = $this->questionRepository->getRandomCandidatesForSection(
+            (int) $exam->teacher_id,
+            (string) $section->question_type,
+            $alreadyUsedIds,
+            1,
+            $section->subject_tag,
+            $section->subject_id
+        )->first();
 
         if (! $replacement) {
             throw ValidationException::withMessages([
-                'question_id' => ['No hay otro reactivo del mismo tipo disponible en el banco para sustituir este.'],
+                'question_id' => ['No hay otro reactivo del mismo tipo y materia disponible en el banco para sustituir este.'],
             ]);
         }
 

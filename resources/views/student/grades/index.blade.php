@@ -37,75 +37,69 @@
     {{-- Tarjetas métricas de desempeño --}}
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {{-- Tarjeta 1: Promedio General --}}
-        <div class="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-acode-tech hover:shadow-md">
-            <div class="flex items-start justify-between">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
+        <div class="group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:border-acode-tech hover:shadow-md">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
                     <x-nav-icon name="grades" class="h-6 w-6" />
                 </div>
-                <span class="rounded-full bg-acode-tech/10 px-2.5 py-0.5 text-xs font-semibold text-acode-tech">
-                    Escala 0-10
-                </span>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-slate-700">Promedio general</span>
+                    <span class="rounded-full bg-acode-tech/10 px-2 py-0.5 text-[11px] font-semibold text-acode-tech">Escala 0-10</span>
+                </div>
             </div>
 
-            <p class="mt-4 text-3xl font-bold text-acode-primary">
-                {{ number_format((float) ($averageScore ?? 0.0), 1) }}
-            </p>
-
-            <p class="mt-1 text-sm font-semibold text-slate-700">
-                Promedio general
-            </p>
-
-            <p class="mt-1 text-xs text-slate-500">
-                Calculado con base en tus exámenes calificados.
-            </p>
+            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <p class="text-3xl font-extrabold text-acode-primary tracking-tight">
+                    {{ number_format((float) ($averageScore ?? 0.0), 1) }}
+                </p>
+                <p class="text-xs text-slate-500">
+                    En exámenes calificados
+                </p>
+            </div>
         </div>
 
         {{-- Tarjeta 2: Evaluaciones Aprobadas --}}
-        <div class="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-acode-accent hover:shadow-md">
-            <div class="flex items-start justify-between">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                    <x-icon name="success" class="h-6 w-6" />
+        <div class="group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:border-acode-accent hover:shadow-md">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                    <x-icon name="success" class="h-6 w-6 text-emerald-600" />
                 </div>
-                <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-                    Aprobados
-                </span>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-slate-700">Exámenes aprobados</span>
+                    <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Aprobados</span>
+                </div>
             </div>
 
-            <p class="mt-4 text-3xl font-bold text-acode-primary">
-                {{ $passedCount ?? 0 }}
-            </p>
-
-            <p class="mt-1 text-sm font-semibold text-slate-700">
-                Exámenes aprobados
-            </p>
-
-            <p class="mt-1 text-xs text-slate-500">
-                Evaluaciones con calificación mínima aprobatoria (>= 6.0).
-            </p>
+            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <p class="text-3xl font-extrabold text-acode-primary tracking-tight">
+                    {{ $passedCount ?? 0 }}
+                </p>
+                <p class="text-xs text-slate-500">
+                    Calificación &ge; 6.0
+                </p>
+            </div>
         </div>
 
         {{-- Tarjeta 3: Evaluaciones Presentadas --}}
-        <div class="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-acode-warning hover:shadow-md">
-            <div class="flex items-start justify-between">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                    <x-icon name="reportBar" class="h-6 w-6" />
+        <div class="group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:border-acode-warning hover:shadow-md">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                    <x-icon name="reportBar" class="h-6 w-6 text-amber-600" />
                 </div>
-                <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
-                    Historial
-                </span>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-slate-700">Evaluaciones presentadas</span>
+                    <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Historial</span>
+                </div>
             </div>
 
-            <p class="mt-4 text-3xl font-bold text-acode-primary">
-                {{ $totalEvaluations ?? $recentAttempts->count() ?? 0 }}
-            </p>
-
-            <p class="mt-1 text-sm font-semibold text-slate-700">
-                Evaluaciones presentadas
-            </p>
-
-            <p class="mt-1 text-xs text-slate-500">
-                Intentos registrados en tu historial académico.
-            </p>
+            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <p class="text-3xl font-extrabold text-acode-primary tracking-tight">
+                    {{ $totalEvaluations ?? $recentAttempts->count() ?? 0 }}
+                </p>
+                <p class="text-xs text-slate-500">
+                    Intentos registrados
+                </p>
+            </div>
         </div>
     </div>
 

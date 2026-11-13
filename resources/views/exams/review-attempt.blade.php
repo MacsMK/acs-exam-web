@@ -119,10 +119,15 @@ Fecha Creación: 08/11/2026
                     @endif
                 </div>
 
-                {{-- Enunciado --}}
+                {{-- Enunciado servido al alumno (snapshot exacto si aplicó paráfrasis) --}}
                 <div class="text-sm text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-1">Enunciado:</span>
-                    <p class="whitespace-pre-line leading-relaxed">{{ $question->stem }}</p>
+                    <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Enunciado:</span>
+                        @if ($answer?->question_paraphrase_id !== null)
+                            <x-badge variant="info">Enunciado con paráfrasis anti-copia</x-badge>
+                        @endif
+                    </div>
+                    <p class="whitespace-pre-line leading-relaxed">{{ $answer?->served_stem_snapshot ?: $question->stem }}</p>
                 </div>
 
                 {{-- Respuesta del Alumno --}}
