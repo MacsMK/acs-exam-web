@@ -8,10 +8,12 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     GroupController.php
  * Ubicación:   app/Http/Controllers/Api/V1/GroupController.php
- * Descripción: api.v1.groups.* (MPM-V4 Tabla 12, MPW-V2 §6.1, §6.3) para la
+ * Descripción: api.v1.groups.* (MPM-V3 Tabla 12, MPW-V2 §6.1, §6.3) para la
  *              app móvil: listar grupos (según rol), unirse por folio o QR,
  *              verificar pertenencia por QR/folio, listar alumnos de un grupo
- *              y salir de un grupo (alumno).
+ *              y salir de un grupo (alumno). Cada grupo incluye su materia, el
+ *              nombre del docente y, para el alumno, la fecha en que se unió
+ *              (ADR-056).
  * ============================================================================
  */
 
@@ -25,6 +27,7 @@ use App\Services\GroupEnrollmentService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class GroupController extends Controller
 {
@@ -41,8 +44,8 @@ class GroupController extends Controller
         $user = $request->user();
 
         $groups = $user->role === 'teacher'
-            ? $user->groupsAsTeacher()->withCount('students')->get()
-            : $user->groupsAsStudent()->where('acs_groups.is_closed', false)->withCount('students')->get();
+            ? $user->groupsAsTeacher()->with('teacher')->withCount('students')->get()
+            : $user->groupsAsStudent()->where('acs_groups.is_closed', false)->with('teacher')->withCount('students')->get();
 
         return ApiResponse::success($groups->map(fn (Group $group) => $this->payload($group))->all());
     }
@@ -50,17 +53,27 @@ class GroupController extends Controller
     /**
      * api.v1.groups.join. Acepta `folio` O `qr_payload` mediante
      * GroupJoinRequest y delega la inscripción a GroupEnrollmentService.
+     * Responde con el grupo tal como aparece en api.v1.groups.index,
+     * incluida la fecha de ingreso que se acaba de registrar.
      */
     public function join(GroupJoinRequest $request): JsonResponse
     {
+        $student = $request->user();
+
         $group = $this->groupEnrollmentService->joinByFolio(
-            $request->user(),
+            $student,
             $request->resolvedFolio(),
             'folio',
         );
 
+        $joinedGroup = $student->groupsAsStudent()
+            ->where('acs_groups.id', $group->id)
+            ->with('teacher')
+            ->withCount('students')
+            ->first();
+
         return ApiResponse::success(
-            $this->payload($group),
+            $this->payload($joinedGroup ?? $group->load('teacher')),
             'Te uniste al grupo.',
         );
     }
@@ -109,15 +122,24 @@ class GroupController extends Controller
     }
 
     /**
+     * Datos de un grupo para la app (ADR-056). `teacher` debe venir
+     * cargado. `joined_at` solo existe cuando el grupo se obtuvo desde la
+     * relación del alumno (tabla acs_group_student); para el docente es null.
+     *
      * @return array<string, mixed>
      */
     private function payload(Group $group): array
     {
+        $joinedAt = $group->relationLoaded('pivot') ? $group->pivot->getAttribute('joined_at') : null;
+
         return [
             'id' => (string) $group->id,
             'name' => $group->name,
             'folio' => $group->access_folio,
             'students_count' => $group->students_count ?? $group->students()->count(),
+            'subject' => $group->subject,
+            'teacher_name' => $group->teacher?->full_name,
+            'joined_at' => $joinedAt === null ? null : Carbon::parse($joinedAt),
         ];
     }
 }
