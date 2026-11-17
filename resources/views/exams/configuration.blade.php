@@ -38,7 +38,7 @@
     @endif
 
     @if ($errors->any())
-        <div class="rounded-lg border border-[#DC2626]/30 bg-red-50 p-4 text-sm text-[#DC2626]" role="alert">
+        <div class="rounded-lg border border-acode-danger/30 bg-red-50 p-4 text-sm text-acode-danger" role="alert">
             <p class="font-semibold">Revisa los siguientes datos:</p>
             <ul class="mt-2 list-disc space-y-1 pl-5">
                 @foreach ($errors->all() as $error)
@@ -61,13 +61,13 @@
                             <label for="title" class="mb-2 block text-sm font-medium text-slate-800">Nombre del examen</label>
                             <input id="title" name="title" type="text" required maxlength="150" value="{{ old('title', $exam->title) }}" @disabled($isPublished)
                                    class="h-12 w-full rounded-lg border border-slate-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech">
-                            @error('title') <p class="mt-1 text-xs text-[#DC2626]">{{ $message }}</p> @enderror
+                            @error('title') <p class="mt-1 text-xs text-acode-danger">{{ $message }}</p> @enderror
                         </div>
                         <div>
                             <label for="description" class="mb-2 block text-sm font-medium text-slate-800">Descripción e instrucciones</label>
                             <textarea id="description" name="description" rows="4" @disabled($isPublished)
                                       class="w-full rounded-lg border border-slate-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech">{{ old('description', $exam->description) }}</textarea>
-                            @error('description') <p class="mt-1 text-xs text-[#DC2626]">{{ $message }}</p> @enderror
+                            @error('description') <p class="mt-1 text-xs text-acode-danger">{{ $message }}</p> @enderror
                         </div>
                     </div>
                 </section>
@@ -130,7 +130,7 @@
                 <section class="rounded-xl border border-slate-200 bg-white p-6">
                     <h2 class="text-lg font-semibold text-acode-primary">Puntos y tiempo por pregunta</h2>
                     <p class="mt-2 text-sm text-slate-500">Ajusta la ponderación y el tiempo individual de cada reactivo. La suma de puntos debe ser 100.</p>
-                    @error('questions') <p class="mt-3 text-sm font-medium text-[#DC2626]">{{ $message }}</p> @enderror
+                    @error('questions') <p class="mt-3 text-sm font-medium text-acode-danger">{{ $message }}</p> @enderror
                     <div class="mt-5 overflow-x-auto">
                         <table class="w-full min-w-[480px] text-left text-sm">
                             <thead class="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
