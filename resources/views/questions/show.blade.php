@@ -453,14 +453,17 @@
                             <h3 class="text-sm font-semibold text-acode-primary">Nueva Variante de Redacción</h3>
                             <p class="text-xs text-slate-600">Conserva la misma respuesta correcta pero formula el problema con diferente redacción o contexto (3 a 500 caracteres).</p>
                         </div>
-                        <button
+                        <x-button
                             type="button"
-                            @click="openNewForm = false"
-                            class="text-slate-500 hover:text-acode-primary p-1 rounded-lg hover:bg-white transition"
+                            variant="neutral"
+                            size="sm"
+                            :icon-only="true"
+                            x-on:click="openNewForm = false"
+                            title="Cerrar formulario de paráfrasis"
                             aria-label="Cerrar formulario de paráfrasis"
                         >
                             <x-icon name="xMark" class="w-4 h-4" />
-                        </button>
+                        </x-button>
                     </div>
 
                     {{-- Enunciado original de referencia --}}

@@ -222,19 +222,27 @@
                 <div class="relative">
                     <x-form.input
                         id="group-search"
-                        type="search"
+                        type="text"
+                        enterkeyhint="search"
+                        autocomplete="off"
                         prefixIcon="search"
                         x-model="search"
                         placeholder="Buscar por grupo, asignatura o folio..."
-                        class="pr-9"
+                        class="pr-11"
                     />
-                    <x-icon-button
-                        icon="xMark"
-                        label="Limpiar búsqueda"
+                    <x-button
+                        type="button"
+                        variant="neutral"
+                        size="md"
+                        :icon-only="true"
+                        title="Limpiar búsqueda"
+                        aria-label="Limpiar búsqueda"
                         x-show="search.length > 0"
                         x-on:click="search = ''"
-                        class="absolute inset-y-0 right-2 my-auto h-7"
-                    />
+                        class="absolute inset-y-0 right-2 my-auto"
+                    >
+                        <x-icon name="xMark" class="w-4 h-4" />
+                    </x-button>
                 </div>
             </div>
 
@@ -415,13 +423,17 @@
                         <x-table.td>
                             <div class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1">
                                 <span class="font-mono text-xs font-bold text-acode-primary select-all" x-text="group.folio || 'N/D'"></span>
-                                <x-icon-button
-                                    icon="copy"
-                                    label="Copiar folio"
-                                    variant="tech"
+                                <x-button
+                                    type="button"
+                                    variant="neutral"
                                     size="sm"
+                                    :icon-only="true"
+                                    title="Copiar folio"
+                                    aria-label="Copiar folio"
                                     x-on:click="copyFolio(group.folio)"
-                                />
+                                >
+                                    <x-icon name="copy" class="w-3.5 h-3.5" />
+                                </x-button>
                             </div>
                         </x-table.td>
 
@@ -537,12 +549,17 @@
                 <h3 id="qr-modal-title" class="text-base font-bold text-acode-primary tracking-tight truncate pr-2">
                     Código QR y Folio · <span x-text="selectedGroup?.name || 'Grupo escolar'"></span>
                 </h3>
-                <x-icon-button
-                    icon="xMark"
-                    label="Cerrar ventana"
-                    size="lg"
+                <x-button
+                    type="button"
+                    variant="neutral"
+                    size="md"
+                    :icon-only="true"
+                    title="Cerrar ventana"
+                    aria-label="Cerrar ventana"
                     x-on:click="closeQr()"
-                />
+                >
+                    <x-icon name="xMark" class="w-5 h-5" />
+                </x-button>
             </div>
 
             {{-- Cuerpo del modal --}}

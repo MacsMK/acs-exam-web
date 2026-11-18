@@ -5,6 +5,7 @@
     'options' => [],         // [valor => etiqueta] o [['value' => ..., 'label' => ..., 'icon' => ...], ...]
     'variant' => 'pills',    // pills (filtros) o segmented (cambio de vista)
     'label' => null,         // texto accesible del grupo
+    'select' => null,        // opcional: función de Alpine.js que recibe el valor (p. ej. setViewMode) en lugar de asignar directo
 ])
 @php
     $items = collect($options)->map(function ($option, $key): array {
@@ -31,7 +32,7 @@
     @foreach ($items as $item)
         <button
             type="button"
-            @click="{{ $model }} = @js($item['value'])"
+            @click="{{ $select ? $select . '(' . \Illuminate\Support\Js::from($item['value']) . ')' : $model . ' = ' . \Illuminate\Support\Js::from($item['value']) }}"
             :class="{{ $model }} === @js($item['value']) ? @js($activeClass) : @js($inactiveClass)"
             :aria-pressed="({{ $model }} === @js($item['value'])).toString()"
             @if ($item['icon']) title="{{ $item['label'] }}" @endif

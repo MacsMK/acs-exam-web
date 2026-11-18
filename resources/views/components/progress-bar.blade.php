@@ -20,6 +20,8 @@
         'danger' => 'bg-acode-danger',
         default => 'bg-acode-tech',
     };
+    // Tailwind no genera la fracción con numerador 0 (w-0/100), por eso 0 % usa w-0.
+    $widthClass = $percent === 0 ? 'w-0' : "w-{$percent}/100";
 @endphp
 <div
     role="progressbar"
@@ -29,5 +31,5 @@
     @if ($label) aria-label="{{ $label }}" @endif
     {{ $attributes->merge(['class' => 'w-full overflow-hidden rounded-full bg-slate-100 ' . $heightClass]) }}
 >
-    <div class="h-full rounded-full transition-all duration-500 {{ $fillClass }} w-{{ $percent }}/100"></div>
+    <div class="h-full rounded-full transition-all duration-500 {{ $fillClass }} {{ $widthClass }}"></div>
 </div>

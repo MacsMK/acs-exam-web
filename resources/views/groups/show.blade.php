@@ -122,13 +122,17 @@
                     <div class="inline-flex items-center gap-2 rounded-xl bg-acode-surface px-3 py-1.5 border border-slate-200/80">
                         <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Folio de acceso:</span>
                         <span class="font-mono text-sm font-bold text-acode-primary select-all">{{ $group->access_folio }}</span>
-                        <x-icon-button
-                            icon="copy"
-                            label="Copiar folio"
-                            variant="tech"
+                        <x-button
+                            type="button"
+                            variant="neutral"
                             size="sm"
+                            :icon-only="true"
+                            title="Copiar folio"
+                            aria-label="Copiar folio"
                             x-on:click="copyFolio()"
-                        />
+                        >
+                            <x-icon name="copy" class="w-3.5 h-3.5" />
+                        </x-button>
                     </div>
                 </div>
 

@@ -359,26 +359,16 @@
                         </x-form.select>
                     </form>
 
-                    <div class="inline-flex items-center rounded-lg border border-slate-200 bg-white p-1 shadow-sm" role="group" aria-label="Cambiar vista del catálogo">
-                        <button
-                            type="button"
-                            @click="setViewMode('cards')"
-                            class="h-8 px-3 rounded-md text-xs font-semibold transition flex items-center gap-1.5"
-                            :class="viewMode === 'cards' ? 'bg-acode-primary text-white shadow-sm' : 'text-slate-600 hover:bg-acode-surface'"
-                        >
-                            <x-icon name="squares" class="w-4 h-4" />
-                            Tarjetas
-                        </button>
-                        <button
-                            type="button"
-                            @click="setViewMode('table')"
-                            class="h-8 px-3 rounded-md text-xs font-semibold transition flex items-center gap-1.5"
-                            :class="viewMode === 'table' ? 'bg-acode-primary text-white shadow-sm' : 'text-slate-600 hover:bg-acode-surface'"
-                        >
-                            <x-icon name="table" class="w-4 h-4" />
-                            Tabla compacta
-                        </button>
-                    </div>
+                    <x-toggle-group
+                        model="viewMode"
+                        select="setViewMode"
+                        variant="segmented"
+                        label="Cambiar vista del catálogo"
+                        :options="[
+                            ['value' => 'cards', 'label' => 'Tarjetas', 'icon' => 'squares'],
+                            ['value' => 'table', 'label' => 'Tabla compacta', 'icon' => 'table'],
+                        ]"
+                    />
                 </div>
             </div>
         </section>

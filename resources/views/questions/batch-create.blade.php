@@ -325,16 +325,19 @@
                                             placeholder="Texto de la opción"
                                             required
                                         />
-                                        <button
+                                        <x-button
                                             type="button"
-                                            @click="removeOption(rIdx, oIdx)"
-                                            :disabled="row.options.length <= 2"
-                                            class="h-8 w-8 inline-flex items-center justify-center rounded-lg text-acode-danger hover:bg-acode-danger/10 disabled:opacity-30 shrink-0 transition"
-                                            aria-label="Eliminar opción"
+                                            variant="danger"
+                                            size="sm"
+                                            :icon-only="true"
+                                            x-on:click="removeOption(rIdx, oIdx)"
+                                            x-bind:disabled="row.options.length <= 2"
+                                            class="shrink-0"
                                             title="Eliminar opción"
+                                            aria-label="Eliminar opción"
                                         >
                                             <x-icon name="xMark" class="w-4 h-4" />
-                                        </button>
+                                        </x-button>
                                     </div>
                                 </template>
                             </div>
