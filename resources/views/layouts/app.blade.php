@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 {{--
     ============================================================================
     A-CODE SOLUTIONS - ANALIZAMOS, DISEÑAMOS, TRANSFORMAMOS
@@ -6,9 +5,10 @@
     Archivo:     app.blade.php
     Ubicación:   resources/views/layouts/app.blade.php
     Descripción: Layout maestro de la plataforma.
-                 Navegación lateral docente y navegación para estudiantes.
+                 Navegación lateral docente, administración y estudiantes.
     ============================================================================
 --}}
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8">
@@ -17,7 +17,8 @@
     <title>@yield('title', 'A-Code Solutions') · Plataforma de Exámenes</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <script src="https://cdn.tailwindcss.com/3.4.13"></script>
     <script>
@@ -25,16 +26,24 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Inter', 'ui-sans-serif', 'system-ui']
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                        mono: ['Fira Code', 'ui-monospace', 'SFMono-Regular', 'monospace'],
                     },
                     colors: {
                         acode: {
                             primary: '#142B4A',
+                            'primary-dark': '#0E1F36',
+                            navy: '#142B4A',
                             tech: '#2563A6',
+                            'tech-dark': '#1D4F85',
                             accent: '#16A6A1',
+                            'accent-dark': '#11807C',
                             warning: '#F4B942',
+                            'warning-dark': '#D97706',
                             surface: '#E9F0F5',
                             danger: '#DC2626',
+                            'danger-dark': '#B91C1C',
+                            ink: '#0F172A',
                         },
                     },
                 },
@@ -50,7 +59,7 @@
     </style>
 </head>
 
-<body class="min-h-screen bg-acode-surface font-sans text-slate-700">
+<body class="min-h-screen bg-acode-surface font-sans text-sm text-slate-700 antialiased">
 
 @auth
     <div x-data="{ sidebarOpen: false, profileOpen: false }"
@@ -70,7 +79,7 @@
                 :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'">
 
                 <div class="flex min-h-24 items-center justify-between border-b border-white/10 px-6 py-5">
-                    <a href="{{ auth()->user()->role === 'super_admin' ? route('admin.teachers.index') : route('dashboard') }}" class="min-w-0">
+                    <a href="{{ auth()->user()->role === 'super_admin' ? route('admin.teachers.index') : (auth()->user()->role === 'teacher' && ! auth()->user()->isVerifiedTeacher() ? route('teacher.verification.status') : route('dashboard')) }}" class="min-w-0">
                         <p class="text-base font-bold leading-tight text-white">
                             Evaluador de Exámenes
                         </p>
@@ -103,6 +112,13 @@
                            {{ request()->routeIs('admin.teachers.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
                             <x-nav-icon name="groups" />
                             <span>Gestión de Docentes</span>
+                        </a>
+
+                        <a href="{{ route('admin.invitations.index') }}"
+                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
+                           {{ request()->routeIs('admin.invitations.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                            <x-icon name="key" class="h-5 w-5" />
+                            <span>Códigos de Invitación</span>
                         </a>
                     @elseif (auth()->user()->role === 'student')
                         <a href="{{ route('dashboard') }}"
@@ -140,54 +156,74 @@
                             <span>Unirme a un grupo</span>
                         </a>
                     @else
-                        <a href="{{ route('dashboard') }}"
-                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
-                           {{ request()->routeIs('dashboard') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
-                            <x-nav-icon name="home" />
-                            Inicio
-                        </a>
-
-                        <a href="{{ route('groups.index') }}"
-                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
-                           {{ request()->routeIs('groups.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
-                            <x-nav-icon name="groups" />
-                            Grupos
-                        </a>
-
-                        <a href="{{ route('questions.index') }}"
-                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
-                           {{ request()->routeIs('questions.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
-                            <x-nav-icon name="questions" />
-                            Banco de preguntas
-                        </a>
-
-                        <a href="{{ route('exams.index') }}"
-                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
-                           {{ request()->routeIs('exams.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
-                            <x-nav-icon name="exams" />
-                            Exámenes
-                        </a>
-
-                        {{-- Secciones docentes activas --}}
-                        @foreach ([
-                            ['route' => 'teacher.reviews.index', 'active' => 'teacher.reviews.*', 'label' => 'Revisión', 'icon' => 'review'],
-                            ['route' => 'teacher.gradebook.hub', 'active' => 'teacher.gradebook.*', 'label' => 'Calificaciones', 'icon' => 'grades'],
-                            ['route' => 'teacher.subscription.index', 'active' => 'teacher.subscription.*', 'label' => 'Suscripción', 'icon' => 'subscription'],
-                            ['route' => 'teacher.ai-credits.index', 'active' => 'teacher.ai-credits.*', 'label' => 'Créditos de IA', 'icon' => 'ai-credits'],
-                        ] as $item)
-
-                            <a href="{{ route($item['route']) }}"
-                            class="flex items-center justify-between gap-2 rounded-lg px-4 py-3 transition
-                            {{ request()->routeIs($item['active'])
-                                ? 'bg-acode-tech font-semibold text-white'
-                                : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
-
-                                <span class="flex min-w-0 items-center gap-3">
-                                    <x-nav-icon :name="$item['icon']" />
-                                    <span>{{ $item['label'] }}</span>
-                                </span>
+                        @if (auth()->user()->isVerifiedTeacher())
+                            <a href="{{ route('dashboard') }}"
+                               class="flex items-center gap-3 rounded-lg px-4 py-3 transition
+                               {{ request()->routeIs('dashboard') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <x-nav-icon name="home" />
+                                Inicio
                             </a>
-                        @endforeach
+
+                            <a href="{{ route('groups.index') }}"
+                               class="flex items-center gap-3 rounded-lg px-4 py-3 transition
+                               {{ request()->routeIs('groups.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <x-nav-icon name="groups" />
+                                Grupos
+                            </a>
+
+                            <a href="{{ route('questions.index') }}"
+                               class="flex items-center gap-3 rounded-lg px-4 py-3 transition
+                               {{ request()->routeIs('questions.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <x-nav-icon name="questions" />
+                                Banco de preguntas
+                            </a>
+
+                            <a href="{{ route('exams.index') }}"
+                               class="flex items-center gap-3 rounded-lg px-4 py-3 transition
+                               {{ request()->routeIs('exams.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <x-nav-icon name="exams" />
+                                Exámenes
+                            </a>
+
+                            {{-- Secciones docentes activas --}}
+                            @foreach ([
+                                ['route' => 'teacher.reviews.index', 'active' => 'teacher.reviews.*', 'label' => 'Revisión', 'icon' => 'review'],
+                                ['route' => 'teacher.gradebook.hub', 'active' => 'teacher.gradebook.*', 'label' => 'Calificaciones', 'icon' => 'grades'],
+                                ['route' => 'teacher.subscription.index', 'active' => 'teacher.subscription.*', 'label' => 'Suscripción', 'icon' => 'subscription'],
+                                ['route' => 'teacher.ai-credits.index', 'active' => 'teacher.ai-credits.*', 'label' => 'Créditos de IA', 'icon' => 'ai-credits'],
+                            ] as $item)
+
+                                <a href="{{ route($item['route']) }}"
+                                class="flex items-center justify-between gap-2 rounded-lg px-4 py-3 transition
+                                {{ request()->routeIs($item['active'])
+                                    ? 'bg-acode-tech font-semibold text-white'
+                                    : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+
+                                    <span class="flex min-w-0 items-center gap-3">
+                                        <x-nav-icon :name="$item['icon']" />
+                                        <span>{{ $item['label'] }}</span>
+                                    </span>
+                                </a>
+                            @endforeach
+                        @else
+                            <a href="{{ route('teacher.verification.status') }}"
+                               class="flex items-center justify-between gap-2 rounded-lg px-4 py-3 transition
+                               {{ request()->routeIs('teacher.verification.*') ? 'bg-acode-tech font-semibold text-white' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <span class="flex min-w-0 items-center gap-3">
+                                    <x-icon name="shield" class="h-5 w-5" />
+                                    <span class="truncate">Verificación de cuenta</span>
+                                </span>
+                                @if (auth()->user()->isRejectedTeacherVerification())
+                                    <span class="shrink-0 rounded-full bg-acode-danger px-2 py-0.5 text-[10px] font-bold text-white">
+                                        Acción requerida
+                                    </span>
+                                @else
+                                    <span class="shrink-0 rounded-full bg-acode-warning px-2 py-0.5 text-[10px] font-bold text-acode-primary">
+                                        Pendiente
+                                    </span>
+                                @endif
+                            </a>
+                        @endif
                     @endif
                 </nav>
 
@@ -259,7 +295,7 @@
                                 </p>
                             </div>
 
-                            @if (auth()->user()->role === 'teacher')
+                            @if (auth()->user()->role === 'teacher' && auth()->user()->isVerifiedTeacher())
                                 {{-- Acceso al perfil docente --}}
                                 <a href="{{ route('teacher.profile.index') }}"
                                 class="flex min-h-11 items-center gap-3 px-4 py-3 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
@@ -277,6 +313,12 @@
                                     </svg>
 
                                     <span>Mi perfil</span>
+                                </a>
+                            @elseif (auth()->user()->role === 'teacher')
+                                <a href="{{ route('teacher.verification.status') }}"
+                                class="flex min-h-11 items-center gap-3 px-4 py-3 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
+                                    <x-icon name="shield" class="h-5 w-5" />
+                                    <span>Verificación de cuenta</span>
                                 </a>
                             @elseif (auth()->user()->role === 'student')
                                 <a href="{{ route('student.groups.index') }}"
@@ -369,7 +411,7 @@
                         </div>
                     @endif
 
-                    @if ($errors->any() && !request()->routeIs('exams.create', 'questions.create', 'questions.edit', 'questions.batch.create'))
+                    @if ($errors->any() && !request()->routeIs('exams.*', 'questions.create', 'questions.edit', 'questions.batch.create'))
                         <div class="mb-6 rounded-lg border border-acode-danger/30 bg-acode-danger/10 px-4 py-3 text-sm text-acode-danger">
                             <p class="mb-1 font-semibold">Revisa lo siguiente:</p>
                             <ul class="list-inside list-disc space-y-0.5">

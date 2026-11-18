@@ -9,17 +9,14 @@ declare(strict_types=1);
  * Archivo:     GradeCalculatorService.php
  * Ubicación:   app/Services/GradeCalculatorService.php
  * Descripción: Aplica la fórmula matemática de un periodo de evaluación
- *              (acs_evaluation_periods.formula) a los componentes
- *              capturados de un alumno (Listado: "...mediante fórmula
- *              matemática asignada por el docente dar el promedio o
- *              calificación final"). Fórmula soportada: suma de términos
- *              "componente*peso" separados por "+", ej.
- *              "exams*0.6+homework*0.3+project*0.1". Se evalúa con bcmath,
- *              sin eval() de PHP, para no ejecutar código arbitrario.
+ *              (acs_evaluation_periods.formula) y normaliza la calificación
+ *              de un examen base-100 hacia escala 0-10 u 0-100 (ADR-056).
  * ============================================================================
  */
 
 namespace App\Services;
+
+use App\Models\Exam;
 
 class GradeCalculatorService
 {
@@ -42,5 +39,18 @@ class GradeCalculatorService
         }
 
         return (float) round((float) $total, 2);
+    }
+
+    /**
+     * Normaliza el puntaje bruto ganado al rango de la escala configurada en el
+     * examen cuando la suma de ponderaciones del examen equivale a 100.00 (ADR-056).
+     */
+    public function normalizeScoreForExam(float $rawPointsEarned, Exam $exam, float $totalExamWeight): float
+    {
+        if ($exam->grading_scale === '0-10' && abs($totalExamWeight - 100.0) <= 0.05) {
+            return round($rawPointsEarned / 10.0, 2);
+        }
+
+        return round($rawPointsEarned, 2);
     }
 }

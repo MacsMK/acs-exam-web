@@ -12,7 +12,7 @@ declare(strict_types=1);
  * Requerimiento:  RF-AUT (confirmar código específico en DE-01 con Eli;
  *                 ver Formato BD-01 folio BD01-2026-001)
  * Autor:          Equipo de Base de Datos (A-Code Solutions)
- * Versión:        2.1.0
+ * Versión:        2.2.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_users (MBD-V4 Tabla 20). Sirve
  *                 indistintamente a super_admin, teacher y student
@@ -25,6 +25,10 @@ declare(strict_types=1);
  *                 two_factor_verified_at; se agrega is_active; se agregan
  *                 las relaciones con suscripción de docente, grupos y
  *                 aceptaciones de privacidad.
+ *
+ *                 CAMBIOS v2.2.0: agrega la relación teacherVerification y
+ *                 helpers de estado de acreditación docente manteniendo
+ *                 teacher_verification_status fuera de $fillable por seguridad.
  * ============================================================================
  */
 
@@ -85,22 +89,14 @@ class User extends Authenticatable
     ];
 
     /**
-     * Conversión de atributos (MPW-V2 §2.3.2: método casts(), no la
-     * propiedad estática $casts, conforme al estándar de Laravel 11).
+     * Valores por defecto de atributos en memoria para mantener paridad con
+     * los defaults de PostgreSQL (evita valores null antes de refresh()).
      *
-     * @return array<string, string>
+     * @var array<string, mixed>
      */
-    protected function casts(): array
-    {
-        return [
-            'password' => 'hashed',
-            'is_active' => 'boolean',
-            'email_verified_at' => 'datetime',
-            'phone_verified_at' => 'datetime',
-            'two_factor_expires_at' => 'datetime',
-            'two_factor_verified_at' => 'datetime',
-        ];
-    }
+    protected $attributes = [
+        'teacher_verification_status' => TeacherVerification::STATUS_APPROVED,
+    ];
 
     /**
      * Suscripción vigente del docente (acs_teacher_subscriptions). Solo
@@ -204,6 +200,119 @@ class User extends Authenticatable
     public function teacherSubscriptions(): HasMany
     {
         return $this->hasMany(TeacherSubscription::class, 'teacher_id')->latest('id');
+    }
+
+    /**
+     * Expediente de acreditación de identidad docente (acs_teacher_verifications).
+     *
+     * @return HasOne<TeacherVerification>
+     */
+    public function teacherVerification(): HasOne
+    {
+        return $this->hasOne(TeacherVerification::class, 'user_id');
+    }
+
+    /**
+     * Historial de transacciones de pago del docente (acs_payment_transactions).
+     *
+     * @return HasMany<PaymentTransaction>
+     */
+    public function paymentTransactions(): HasMany
+    {
+        return $this->hasMany(PaymentTransaction::class, 'teacher_id')->latest('id');
+    }
+
+    /**
+     * Última transacción de pago registrada para este docente.
+     *
+     * @return HasOne<PaymentTransaction>
+     */
+    public function latestPaymentTransaction(): HasOne
+    {
+        return $this->hasOne(PaymentTransaction::class, 'teacher_id')->latestOfMany();
+    }
+
+    /**
+     * Indica si el usuario cuenta con acreditación docente aprobada o no
+     * requiere verificación por no tener rol docente.
+     *
+     * @return bool
+     */
+    public function isVerifiedTeacher(): bool
+    {
+        return $this->role !== 'teacher'
+            || $this->teacher_verification_status === TeacherVerification::STATUS_APPROVED;
+    }
+
+    /**
+     * Indica si el usuario es docente con solicitud de verificación pendiente.
+     *
+     * @return bool
+     */
+    public function isPendingTeacherVerification(): bool
+    {
+        return $this->role === 'teacher'
+            && $this->teacher_verification_status === TeacherVerification::STATUS_PENDING;
+    }
+
+    /**
+     * Indica si el usuario es docente cuya solicitud de verificación fue rechazada.
+     *
+     * @return bool
+     */
+    public function isRejectedTeacherVerification(): bool
+    {
+        return $this->role === 'teacher'
+            && $this->teacher_verification_status === TeacherVerification::STATUS_REJECTED;
+    }
+
+    /**
+     * Determina si el docente verificado aún debe completar el onboarding de
+     * selección de plan y suscripción post-verificación.
+     *
+     * @return bool
+     */
+    public function needsPlanOnboarding(): bool
+    {
+        if ($this->role !== 'teacher' || ! $this->isVerifiedTeacher()) {
+            return false;
+        }
+
+        if ($this->exists) {
+            $this->loadMissing(['teacherVerification', 'subscription']);
+        }
+
+        $verification = $this->teacherVerification;
+
+        if ($verification === null || $verification->plan_onboarding_completed_at !== null) {
+            return false;
+        }
+
+        $sub = $this->subscription;
+
+        if ($sub !== null && $sub->payment_status === 'paid' && ($sub->expires_at === null || $sub->expires_at->isFuture())) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Conversión de atributos (MPW-V2 §2.3.2 y Tabla 6 Bloque 16: método
+     * casts(), no la propiedad estática $casts, conforme al estándar Laravel 11).
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'password' => 'hashed',
+            'is_active' => 'boolean',
+            'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
+            'two_factor_expires_at' => 'datetime',
+            'two_factor_verified_at' => 'datetime',
+        ];
     }
 
     /**

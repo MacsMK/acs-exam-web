@@ -97,6 +97,55 @@ interface QuestionRepositoryInterface
     ): Collection;
 
     /**
+     * Calcula el inventario de reactivos disponibles del docente agrupado por tipo
+     * y materia normalizada, excluyendo los IDs ya usados y sus linajes Copy-On-Write.
+     *
+     * @param int             $teacherId           Identificador del docente autor.
+     * @param array<int, int> $excludedQuestionIds Identificadores de reactivos ya incluidos en el examen.
+     * @return array{
+     *     total: int,
+     *     by_type: array{multiple_choice: int, matching: int, open: int, code: int},
+     *     by_subject_id: array<int, int>,
+     *     by_subject_tag: array<string, int>,
+     *     by_type_and_subject: array<string, int>,
+     *     subjects: list<array{subject_id: int|null, name: string, normalized_name: string, total: int}>
+     * }
+     */
+    public function getAvailableInventoryForTeacher(int $teacherId, array $excludedQuestionIds = []): array;
+
+    /**
+     * Obtiene reactivos disponibles del banco del docente paginados para selección manual,
+     * excluyendo los IDs ya incluidos y todo su linaje Copy-On-Write.
+     *
+     * @param int                  $teacherId   Identificador del docente autor.
+     * @param array<int, int>      $excludedIds Identificadores de reactivos ya utilizados en el examen.
+     * @param array<string, mixed> $filters     Filtros opcionales (question_type, subject_id, subject_tag, search, sort_by).
+     * @param int                  $perPage     Registros por página en SQL.
+     * @return LengthAwarePaginator<Question>
+     */
+    public function getAvailableCandidatesPaginated(
+        int $teacherId,
+        array $excludedIds,
+        array $filters = [],
+        int $perPage = 12
+    ): LengthAwarePaginator;
+
+    /**
+     * Filtra una lista ordenada de IDs candidatos conservando únicamente los reactivos
+     * activos del docente que estén libres de colisión Copy-On-Write, preservando el orden.
+     *
+     * @param int             $teacherId    Identificador del docente autor.
+     * @param array<int, int> $candidateIds Identificadores candidatos a validar.
+     * @param array<int, int> $excludedIds  Identificadores ya incluidos en el examen.
+     * @return array<int, int>
+     */
+    public function filterAvailableQuestionIds(
+        int $teacherId,
+        array $candidateIds,
+        array $excludedIds = []
+    ): array;
+
+    /**
      * Crea un reactivo raíz vinculándolo transaccionalmente con su variante polimórfica.
      *
      * @param int                  $teacherId    Identificador del docente autor.

@@ -67,7 +67,10 @@ class StudentResultService
         return StudentAttempt::where('student_id', $student->id)
             ->inCurrentGroupsOfStudent($student->id)
             ->where('status', 'submitted')
-            ->whereNull('final_score')
+            ->where(static function ($query): void {
+                $query->whereNull('final_score')
+                    ->orWhereHas('exam', static fn ($examQuery) => $examQuery->where('result_visibility_mode', 'hidden'));
+            })
             ->with('exam')
             ->get()
             ->map(fn (StudentAttempt $attempt): array => [
@@ -183,12 +186,23 @@ class StudentResultService
     }
 
     /**
-     * La evaluación definitiva está pendiente mientras el intento enviado no
-     * tenga calificación final (RF-EVA-010: respuestas por evaluar).
+     * La evaluación definitiva está pendiente mientras el examen oculte los
+     * resultados o mientras el intento enviado no tenga calificación final
+     * (RF-EVA-010, ADR-050, ADR-056).
      */
     public function isPending(StudentAttempt $attempt): bool
     {
-        return $attempt->status === 'submitted' && $attempt->final_score === null;
+        if ($attempt->status !== 'submitted') {
+            return false;
+        }
+
+        $attempt->loadMissing('exam');
+
+        if ($attempt->exam?->result_visibility_mode === 'hidden') {
+            return true;
+        }
+
+        return $attempt->final_score === null;
     }
 
     /**
@@ -196,11 +210,16 @@ class StudentResultService
      */
     public function reviewIsAvailable(StudentAttempt $attempt): bool
     {
-        if ($attempt->final_score === null) {
+        $attempt->loadMissing('exam');
+        $exam = $attempt->exam;
+
+        if ($exam?->result_visibility_mode === 'hidden') {
             return false;
         }
 
-        $exam = $attempt->exam;
+        if ($attempt->final_score === null) {
+            return false;
+        }
 
         return $exam->ends_at === null
             || now()->gt($exam->ends_at->copy()->addSeconds(self::ACCESS_CLOSE_TOLERANCE_SECONDS));

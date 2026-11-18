@@ -52,8 +52,17 @@
                             {{ $index + 1 }}
                         </span>
                         <div>
-                            <h2 class="font-bold text-base text-acode-primary leading-snug">{{ $q['title'] }}</h2>
-                            <p class="text-xs text-slate-400 mt-0.5">Tipo: <span class="capitalize">{{ $q['question_type'] }}</span></p>
+                            <h2 class="font-semibold text-base text-acode-primary leading-6">{{ $q['title'] }}</h2>
+                            @php
+                                $qTypeLabel = match ($q['question_type'] ?? null) {
+                                    'multiple_choice' => 'Opción múltiple',
+                                    'matching' => 'Relación de columnas',
+                                    'open' => 'Pregunta abierta',
+                                    'code' => 'Código fuente',
+                                    default => '—',
+                                };
+                            @endphp
+                            <p class="text-xs text-slate-500 mt-0.5">Tipo: <span>{{ $qTypeLabel }}</span></p>
                         </div>
                     </div>
 
@@ -84,15 +93,15 @@
                     {{-- Respuesta del alumno --}}
                     <div class="rounded-lg border border-slate-200 p-4 bg-white">
                         <p class="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Tu respuesta</p>
-                        <div class="text-xs font-mono text-slate-800 whitespace-pre-wrap bg-slate-50 p-3 rounded border border-slate-100 min-h-16">
+                        <div class="text-[13px] font-mono text-acode-ink whitespace-pre-wrap bg-slate-100 p-3 rounded border border-slate-200 min-h-16">
                             {{ is_array($q['student_answer']) ? json_encode($q['student_answer'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : ($q['student_answer'] ?? 'Sin respuesta registrada') }}
                         </div>
                     </div>
 
                     {{-- Solución canónica --}}
-                    <div class="rounded-lg border border-emerald-200 p-4 bg-emerald-50/40">
-                        <p class="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-2">Solución de referencia autorizada</p>
-                        <div class="text-xs font-mono text-emerald-950 whitespace-pre-wrap bg-white/90 p-3 rounded border border-emerald-200/60 min-h-16">
+                    <div class="rounded-lg border border-slate-300 border-l-4 border-l-acode-accent p-4 bg-slate-100">
+                        <p class="text-xs font-bold text-acode-primary uppercase tracking-wider mb-2">Solución de referencia autorizada</p>
+                        <div class="text-[13px] font-mono text-acode-ink whitespace-pre-wrap bg-white p-3 rounded border border-slate-200 min-h-16">
                             {{ is_array($q['reference_solution']) ? json_encode($q['reference_solution'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : ($q['reference_solution'] ?? 'Consulte al docente') }}
                         </div>
                     </div>

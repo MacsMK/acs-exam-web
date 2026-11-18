@@ -1,280 +1,558 @@
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/configuration.blade.php (MPW-V2 §4.1.2, §7, §8, ADR-043, ADR-056) --}}
 @extends('layouts.app')
 
-@section('title', 'Configuración: '.$exam->title)
+@section('title', 'Configuración: ' . $exam->title)
 
 @section('content')
-@php
-    $examQuestions = $exam->sections->flatMap(fn ($section) => $section->examQuestions)->values();
-    $totalPoints = $examQuestions->sum(fn ($item) => (float) $item->points_weight);
-    $totalTime = $examQuestions->sum('time_limit_seconds');
-    $isPublished = (bool) $exam->is_published;
-@endphp
-<div class="mx-auto max-w-6xl space-y-6">
-    <a href="{{ route('exams.assemble', $exam) }}" class="inline-flex items-center gap-2 text-sm font-semibold text-acode-tech hover:underline">
-        <span aria-hidden="true">←</span> Volver a Preguntas
-    </a>
+    @php
+        $examQuestions = $exam->sections->sortBy('sort_order')->flatMap(fn ($section) => $section->examQuestions->sortBy('sort_order'))->values();
+        $initialPoints = round((float) ($totalPoints ?? $examQuestions->sum('points_weight')), 2);
+        $totalTime = (int) $examQuestions->sum('time_limit_seconds');
+        $isPublished = (bool) $exam->is_published;
+        $hasAttempts = (bool) ($hasAttempts ?? (((int) ($exam->student_attempts_count ?? 0)) > 0));
+        $isReadOnly = $isPublished && ($exam->hasStartedWindow() || $exam->isWindowClosed());
+        $lockScale = $hasAttempts || $isReadOnly;
 
-    <header>
-        <p class="text-xs font-semibold uppercase tracking-wide text-acode-tech">Etapa 3 de 4 · Configuración</p>
-        <h1 class="mt-1 text-2xl font-bold text-acode-primary">Configurar examen</h1>
-        <p class="mt-2 text-sm text-slate-500">Ajusta la calificación, el orden, los tiempos y las ponderaciones antes de continuar.</p>
-    </header>
+        $assignedGroupIds = $exam->groups->pluck('id')->map(static fn (mixed $id): int => (int) $id)->all();
+        $selectedGroupIds = array_map('intval', (array) old('group_ids', $assignedGroupIds));
 
-    <div class="rounded-xl border border-slate-200 bg-white p-5">
-        <div class="grid grid-cols-4 gap-2">
-            @foreach (['Datos', 'Preguntas', 'Configuración', 'Revisión'] as $index => $label)
-                <div class="flex flex-col items-center gap-2 text-center">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold {{ $index === 2 ? 'bg-acode-primary text-white' : ($index < 2 ? 'bg-acode-accent text-white' : 'bg-slate-100 text-slate-500') }}">
-                        {{ $index < 2 ? '✓' : $index + 1 }}
-                    </span>
-                    <span class="text-xs {{ $index === 2 ? 'font-semibold text-acode-primary' : 'text-slate-500' }}">{{ $label }}</span>
+        $initialStartsAt = old('starts_at', $exam->starts_at?->format('Y-m-d\TH:i') ?? '');
+        $initialEndsAt = old('ends_at', $exam->ends_at?->format('Y-m-d\TH:i') ?? '');
+        $initialScale = old('grading_scale', $exam->grading_scale);
+        $initialVisibility = old('result_visibility_mode', $exam->result_visibility_mode);
+        $initialRandomize = (string) old('randomize_question_order', $exam->randomize_question_order ? '1' : '0');
+
+        $visibilityModes = [
+            'final_score' => [
+                'title' => 'Calificación final inmediata',
+                'desc' => 'El alumno visualiza su nota final al entregar (y tras recoteje si incluye preguntas abiertas o de código).',
+            ],
+            'estimated_score' => [
+                'title' => 'Puntaje preliminar estimado',
+                'desc' => 'Muestra una estimación numérica preliminar sin exponer retroalimentación de IA (ADR-050).',
+            ],
+            'objective_only_pending' => [
+                'title' => 'Solo puntaje objetivo (pendiente docente)',
+                'desc' => 'Muestra únicamente puntos objetivos y marca los reactivos abiertos como pendientes de evaluación docente.',
+            ],
+            'hidden' => [
+                'title' => 'Resultados ocultos hasta liberación',
+                'desc' => 'Oculta calificación y desglose hasta que liberes los resultados manualmente.',
+            ],
+        ];
+    @endphp
+
+    <div
+        class="mx-auto max-w-7xl space-y-6"
+        x-data="{
+            gradingScale: @js($initialScale),
+            visibilityMode: @js($initialVisibility),
+            randomizeOrder: @js($initialRandomize),
+            startsAt: @js($initialStartsAt),
+            endsAt: @js($initialEndsAt),
+            selectedGroups: @js($selectedGroupIds),
+            totalWeight: @js($initialPoints),
+            totalTimeSeconds: @js($totalTime),
+            hasQuestions: @js($examQuestions->isNotEmpty()),
+
+            init() {
+                this.recalculate();
+            },
+
+            toggleGroup(groupId) {
+                const id = Number(groupId);
+                if (this.selectedGroups.includes(id)) {
+                    this.selectedGroups = this.selectedGroups.filter((g) => g !== id);
+                } else {
+                    this.selectedGroups.push(id);
+                }
+            },
+
+            recalculate() {
+                const pointInputs = [...document.querySelectorAll('[data-points-input]')];
+                const timeInputs = [...document.querySelectorAll('[data-time-input]')];
+
+                const totalCents = pointInputs.reduce((sum, input) => {
+                    return sum + Math.round((Number(input.value) || 0) * 100);
+                }, 0);
+
+                this.totalWeight = Number((totalCents / 100).toFixed(2));
+                this.totalTimeSeconds = timeInputs.reduce((sum, input) => {
+                    return sum + Math.max(0, parseInt(input.value || '0', 10));
+                }, 0);
+
+                const stepperBadge = document.getElementById('stepper-points-badge');
+                if (stepperBadge) {
+                    const span = stepperBadge.querySelector('span:last-child');
+                    if (span) {
+                        span.textContent = `${this.totalWeight.toFixed(2)} / 100.00 pts`;
+                    }
+                }
+            },
+
+            distributeEqually() {
+                const pointInputs = [...document.querySelectorAll('[data-points-input]')];
+                const count = pointInputs.length;
+                if (count === 0) return;
+
+                const baseCents = Math.floor(10000 / count);
+                const remainderCents = 10000 - (baseCents * count);
+
+                pointInputs.forEach((input, idx) => {
+                    const cents = idx === count - 1 ? baseCents + remainderCents : baseCents;
+                    input.value = (cents / 100).toFixed(2);
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                });
+
+                this.recalculate();
+            },
+
+            get isWeightExact() {
+                return this.hasQuestions && Math.abs(this.totalWeight - 100.0) <= 0.01;
+            },
+
+            get progressPercent() {
+                return Math.min(100, Math.max(0, this.totalWeight));
+            },
+
+            get progressColorClass() {
+                if (this.totalWeight > 100.01) return 'bg-acode-danger';
+                if (this.isWeightExact) return 'bg-acode-accent';
+                return 'bg-acode-warning';
+            },
+
+            get formattedTime() {
+                const mins = Math.floor(this.totalTimeSeconds / 60);
+                const secs = this.totalTimeSeconds % 60;
+                return `${mins} min ${secs} s`;
+            }
+        }"
+    >
+        {{-- Encabezado --}}
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+                <a href="{{ route('exams.assemble', $exam) }}" class="inline-flex items-center gap-1.5 text-sm font-semibold text-acode-tech hover:underline">
+                    <x-icon name="arrowLeft" class="w-4 h-4" />
+                    Volver a Armar reactivos
+                </a>
+                <h1 class="mt-2 text-2xl sm:text-3xl font-bold text-acode-primary tracking-tight">
+                    Pesos y reglas de aplicación
+                </h1>
+                <p class="mt-1 text-sm text-slate-500">
+                    Distribuye los 100.00 puntos entre los reactivos, asigna grupos y define la visibilidad de resultados.
+                </p>
+            </div>
+        </div>
+
+        @include('exams.partials._stepper', ['currentStep' => 3, 'exam' => $exam, 'totalPoints' => $initialPoints])
+
+        @if ($isReadOnly)
+            <div class="rounded-xl border border-acode-warning/60 bg-acode-warning/15 px-4 py-3 text-sm text-acode-primary flex items-start gap-2.5">
+                <x-icon name="lock" class="w-5 h-5 shrink-0 text-acode-warning-dark mt-0.5" />
+                <div>
+                    <p class="font-semibold">Configuración en modo solo lectura</p>
+                    <p class="text-xs text-slate-700 mt-0.5">
+                        Este examen ya está publicado y su ventana inició o concluyó. No es posible alterar ponderaciones ni reglas activas.
+                    </p>
                 </div>
-            @endforeach
-        </div>
-    </div>
+            </div>
+        @endif
 
-    @if ($isPublished)
-        <div class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">Este examen está publicado. Su configuración es de solo lectura.</div>
-    @endif
+        @if ($errors->any())
+            <div class="rounded-xl border border-acode-danger/30 bg-acode-danger/10 px-4 py-3 text-sm text-acode-danger" role="alert">
+                <p class="font-semibold mb-1">Revisa los siguientes puntos:</p>
+                <ul class="list-inside list-disc space-y-0.5">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
 
-    @if ($errors->any())
-        <div class="rounded-lg border border-[#DC2626]/30 bg-red-50 p-4 text-sm text-[#DC2626]" role="alert">
-            <p class="font-semibold">Revisa los siguientes datos:</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5">
-                @foreach ($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
-        </div>
-    @endif
+        <form id="exam-configuration-form" method="POST" action="{{ route('exams.configuration.update', $exam) }}" class="space-y-6">
+            @csrf
+            @method('PUT')
+            <input type="hidden" name="require_webcam" value="0">
 
-    <form method="POST" action="{{ route('exams.configuration.update', $exam) }}" class="space-y-6">
-        @csrf
-        @method('PUT')
+            @if ($lockScale)
+                <input type="hidden" name="grading_scale" value="{{ $exam->grading_scale }}">
+            @endif
 
-        <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-            <div class="space-y-6 min-w-0">
-                <section class="rounded-xl border border-slate-200 bg-white p-6">
-                    <h2 class="text-lg font-semibold text-acode-primary">Datos generales</h2>
-                    <div class="mt-5 space-y-4">
-                        <div>
-                            <label for="title" class="mb-2 block text-sm font-medium text-slate-800">Nombre del examen</label>
-                            <input id="title" name="title" type="text" required maxlength="150" value="{{ old('title', $exam->title) }}" @disabled($isPublished)
-                                   class="h-12 w-full rounded-lg border border-slate-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech">
-                            @error('title') <p class="mt-1 text-xs text-[#DC2626]">{{ $message }}</p> @enderror
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {{-- Columna Principal --}}
+                <div class="lg:col-span-8 space-y-6">
+                    {{-- 1. Matriz de Ponderación Base 100.00 y Tiempos --}}
+                    <x-card padding="p-0" class="overflow-hidden">
+                        <div class="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <h2 class="text-lg font-bold text-acode-primary">1. Matriz de ponderaciones (base 100.00 pts)</h2>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    Asigna el valor decimal (<code class="font-mono">0.01</code>) y el tiempo límite por reactivo. La suma total debe ser exactamente <strong>100.00</strong> puntos.
+                                </p>
+                            </div>
+
+                            @if (! $isReadOnly && $examQuestions->isNotEmpty())
+                                <x-button type="button" variant="secondary" size="sm" @click="distributeEqually()">
+                                    Distribuir 100 pts equitativamente
+                                </x-button>
+                            @endif
                         </div>
-                        <div>
-                            <label for="description" class="mb-2 block text-sm font-medium text-slate-800">Descripción e instrucciones</label>
-                            <textarea id="description" name="description" rows="4" @disabled($isPublished)
-                                      class="w-full rounded-lg border border-slate-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-acode-tech">{{ old('description', $exam->description) }}</textarea>
-                            @error('description') <p class="mt-1 text-xs text-[#DC2626]">{{ $message }}</p> @enderror
-                        </div>
-                    </div>
-                </section>
 
-                <section class="rounded-xl border border-slate-200 bg-white p-6">
-                    <h2 class="text-lg font-semibold text-acode-primary">Calificación y resultados</h2>
-                    <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div>
-                            <label for="grading_scale" class="mb-2 block text-sm font-medium text-slate-800">Escala de calificación</label>
-                            <select id="grading_scale" name="grading_scale" @disabled($isPublished) class="h-12 w-full rounded-lg border border-slate-300 px-3 text-sm focus:ring-2 focus:ring-acode-tech">
-                                <option value="0-10" @selected(old('grading_scale', $exam->grading_scale) === '0-10')>0 a 10</option>
-                                <option value="0-100" @selected(old('grading_scale', $exam->grading_scale) === '0-100')>0 a 100</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="result_visibility_mode" class="mb-2 block text-sm font-medium text-slate-800">Visibilidad de resultados</label>
-                            <select id="result_visibility_mode" name="result_visibility_mode" @disabled($isPublished) class="h-12 w-full rounded-lg border border-slate-300 px-3 text-sm focus:ring-2 focus:ring-acode-tech">
-                                <option value="final_score" @selected(old('result_visibility_mode', $exam->result_visibility_mode) === 'final_score')>Calificación final</option>
-                                <option value="hidden" @selected(old('result_visibility_mode', $exam->result_visibility_mode) === 'hidden')>Ocultar resultados</option>
-                                @if (in_array($exam->result_visibility_mode, ['estimated_score', 'objective_only_pending'], true))
-                                    <option value="{{ $exam->result_visibility_mode }}" @selected(old('result_visibility_mode', $exam->result_visibility_mode) === $exam->result_visibility_mode)>Configuración heredada (pendiente de revisión)</option>
-                                @endif
-                            </select>
-                            <p class="mt-2 text-xs text-slate-500">Las modalidades de resultados provisionales siguen pendientes de validación.</p>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="rounded-xl border border-slate-200 bg-white p-6">
-                    <h2 class="text-lg font-semibold text-acode-primary">Opciones de aplicación</h2>
-                    <div class="mt-5 space-y-5">
-                        <div>
-                            <p class="mb-2 block text-sm font-medium text-slate-800">Orden de las preguntas</p>
-                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                @foreach ([0 => ['Fijo', 'Conservar el orden de los reactivos'], 1 => ['Aleatorio', 'Mezclar los reactivos al aplicar']] as $value => $option)
-                                    <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-4 hover:border-acode-tech">
-                                        <input type="radio" name="randomize_question_order" value="{{ $value }}" @checked((int) old('randomize_question_order', $exam->randomize_question_order) === $value) @disabled($isPublished) class="mt-1 text-acode-tech focus:ring-acode-tech">
-                                        <span><strong class="block text-sm text-acode-primary">{{ $option[0] }}</strong><span class="mt-1 block text-xs text-slate-500">{{ $option[1] }}</span></span>
-                                    </label>
-                                @endforeach
+                        <div class="px-6 pt-4">
+                            {{-- Barra de progreso tricolor en tiempo real --}}
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2">
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="font-semibold text-slate-600">Suma total asignada</span>
+                                    <span
+                                        class="font-mono text-sm font-bold"
+                                        :class="isWeightExact ? 'text-acode-accent' : (totalWeight > 100.01 ? 'text-acode-danger' : 'text-acode-warning-dark')"
+                                        x-text="`${totalWeight.toFixed(2)} / 100.00 pts`"
+                                    ></span>
+                                </div>
+                                <div class="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden">
+                                    <div
+                                        class="h-full rounded-full transition-all duration-200"
+                                        :class="progressColorClass"
+                                        :style="{ width: progressPercent + '%' }"
+                                    ></div>
+                                </div>
+                                @error('questions')
+                                    <p class="text-xs font-medium text-acode-danger">{{ $message }}</p>
+                                @enderror
                             </div>
                         </div>
-                        <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                            <p class="text-sm font-semibold text-acode-primary">Modalidad actual: secuencial</p>
-                            <p class="mt-1 text-xs text-slate-600">Se presenta una pregunta a la vez y no se puede regresar. La modalidad libre aún no está disponible.</p>
-                        </div>
-                        <div>
-                            <label for="max_allowed_incidents" class="mb-2 block text-sm font-medium text-slate-800">Número máximo de incidencias</label>
-                            <input id="max_allowed_incidents" name="max_allowed_incidents" type="number" min="0" required value="{{ old('max_allowed_incidents', $exam->max_allowed_incidents) }}" @disabled($isPublished)
-                                   class="h-12 w-full max-w-xs rounded-lg border border-slate-300 px-3 text-sm focus:ring-2 focus:ring-acode-tech">
-                        </div>
-                        <label class="flex items-start gap-3 text-sm text-slate-700">
-                            <input type="hidden" name="require_webcam" value="0" @disabled($isPublished)>
-                            <input type="checkbox" name="require_webcam" value="1" @checked(old('require_webcam', $exam->require_webcam)) @disabled($isPublished) class="mt-1 rounded border-slate-300 text-acode-tech">
-                            <span><strong class="block text-acode-primary">Solicitar cámara web</strong>Mantener la configuración de cámara del examen.</span>
-                        </label>
-                    </div>
-                </section>
 
-                <section class="rounded-xl border border-slate-200 bg-white p-6">
-                    <h2 class="text-lg font-semibold text-acode-primary">Puntos y tiempo por pregunta</h2>
-                    <p class="mt-2 text-sm text-slate-500">Ajusta la ponderación y el tiempo individual de cada reactivo. La suma de puntos debe ser 100.</p>
-                    @error('questions') <p class="mt-3 text-sm font-medium text-[#DC2626]">{{ $message }}</p> @enderror
-                    <div class="mt-5 overflow-x-auto">
-                        <table class="w-full min-w-[480px] text-left text-sm">
-                            <thead class="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                <tr><th class="px-3 py-3">Pregunta</th><th class="px-3 py-3 w-32">Puntos</th><th class="px-3 py-3 w-36">Tiempo (seg.)</th></tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-100">
-                                @forelse ($exam->sections->sortBy('sort_order') as $section)
-                                    <tr class="bg-slate-50/70"><th colspan="3" class="px-3 py-3 font-semibold text-acode-primary">{{ $section->title }}</th></tr>
-                                    @foreach ($section->examQuestions->sortBy('sort_order') as $examQuestion)
+                        <div class="p-6 overflow-x-auto">
+                            <div class="overflow-hidden rounded-xl border border-slate-200">
+                                <table class="w-full min-w-[520px] text-left text-sm border-collapse">
+                                    <thead class="bg-acode-primary text-xs font-semibold uppercase tracking-wider text-white">
                                         <tr>
-                                            <td class="px-3 py-3 text-slate-700">
-                                                <span class="font-medium">Pregunta {{ $loop->iteration }}</span>
-                                                <span class="mt-1 block text-xs text-slate-500">{{ \Illuminate\Support\Str::limit($examQuestion->question?->stem ?? 'Reactivo '.$examQuestion->question_id, 85) }}</span>
-                                            </td>
-                                            <td class="px-3 py-3">
-                                                    <input type="number" name="questions[{{ $examQuestion->id }}][points_weight]" min="0" max="100" step="0.01" required data-points-input @disabled($isPublished)
-                                                        value="{{ old('questions.'.$examQuestion->id.'.points_weight', $examQuestion->points_weight) }}" aria-label="Puntos de la pregunta {{ $examQuestion->id }}"
-                                                        class="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:ring-2 focus:ring-acode-tech">
-                                            </td>
-                                            <td class="px-3 py-3">
-                                                    <input type="number" name="questions[{{ $examQuestion->id }}][time_limit_seconds]" min="1" step="1" required data-time-input @disabled($isPublished)
-                                                       value="{{ old('questions.'.$examQuestion->id.'.time_limit_seconds', $examQuestion->time_limit_seconds) }}" aria-label="Tiempo de la pregunta {{ $examQuestion->id }}"
-                                                       class="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:ring-2 focus:ring-acode-tech">
-                                            </td>
+                                            <th class="px-4 py-3">Reactivo</th>
+                                            <th class="px-4 py-3 w-36">Puntos (0.01)</th>
+                                            <th class="px-4 py-3 w-36">Tiempo (seg.)</th>
                                         </tr>
-                                    @endforeach
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-200 bg-white">
+                                        @forelse ($exam->sections->sortBy('sort_order') as $section)
+                                            <tr class="bg-acode-surface">
+                                                <th colspan="3" class="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-acode-primary">
+                                                    {{ $section->title }}
+                                                </th>
+                                            </tr>
+                                            @forelse ($section->examQuestions->sortBy('sort_order') as $examQuestion)
+                                                <tr class="even:bg-slate-50/60 hover:bg-blue-50/70 transition-colors">
+                                                    <td class="px-4 py-3">
+                                                        <p class="font-semibold text-acode-primary text-sm">
+                                                            {{ $loop->iteration }}. {{ $examQuestion->question?->title ?? 'Reactivo #' . $examQuestion->question_id }}
+                                                        </p>
+                                                        <p class="text-xs text-slate-500 mt-0.5 line-clamp-1">
+                                                            {{ \Illuminate\Support\Str::limit($examQuestion->question?->stem ?? '', 90) }}
+                                                        </p>
+                                                    </td>
+                                                    <td class="px-4 py-3">
+                                                        <input
+                                                            type="number"
+                                                            name="questions[{{ $examQuestion->id }}][points_weight]"
+                                                            min="0.01"
+                                                            max="100"
+                                                            step="0.01"
+                                                            required
+                                                            data-points-input
+                                                            @input="recalculate()"
+                                                            @disabled($isReadOnly)
+                                                            value="{{ old('questions.' . $examQuestion->id . '.points_weight', number_format((float) $examQuestion->points_weight, 2, '.', '')) }}"
+                                                            aria-label="Puntos del reactivo {{ $examQuestion->id }}"
+                                                            class="h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 font-mono text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-acode-tech disabled:bg-slate-100"
+                                                        >
+                                                    </td>
+                                                    <td class="px-4 py-3">
+                                                        <input
+                                                            type="number"
+                                                            name="questions[{{ $examQuestion->id }}][time_limit_seconds]"
+                                                            min="1"
+                                                            step="1"
+                                                            required
+                                                            data-time-input
+                                                            @input="recalculate()"
+                                                            @disabled($isReadOnly)
+                                                            value="{{ old('questions.' . $examQuestion->id . '.time_limit_seconds', (int) $examQuestion->time_limit_seconds) }}"
+                                                            aria-label="Tiempo límite del reactivo {{ $examQuestion->id }}"
+                                                            class="h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 font-mono text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-acode-tech disabled:bg-slate-100"
+                                                        >
+                                                    </td>
+                                                </tr>
+                                            @empty
+                                                <tr>
+                                                    <td colspan="3" class="px-4 py-4 text-xs text-slate-500">
+                                                        Este apartado no tiene reactivos.
+                                                    </td>
+                                                </tr>
+                                            @endforelse
+                                        @empty
+                                            <tr>
+                                                <td colspan="3" class="py-6">
+                                                    <x-empty-state
+                                                        icon="document"
+                                                        title="No hay reactivos asignados"
+                                                        message="Regresa a la Etapa 2 para sortear o seleccionar reactivos del banco."
+                                                    >
+                                                        <x-button :href="route('exams.assemble', $exam)" variant="primary" size="sm">
+                                                            Volver a Armar reactivos
+                                                        </x-button>
+                                                    </x-empty-state>
+                                                </td>
+                                            </tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </x-card>
+
+                    {{-- 2. Datos generales y Ventana horaria --}}
+                    <x-card title="2. Título, instrucciones y ventana de aplicación" subtitle="Ajusta los horarios de inicio y cierre del examen.">
+                        <div class="space-y-4">
+                            <x-form.group name="title" label="Título del examen" :required="true">
+                                <x-form.input name="title" value="{{ old('title', $exam->title) }}" maxlength="150" required :disabled="$isReadOnly" />
+                            </x-form.group>
+
+                            <x-form.group name="description" label="Descripción e instrucciones">
+                                <x-form.textarea name="description" rows="3" :disabled="$isReadOnly">{{ old('description', $exam->description) }}</x-form.textarea>
+                            </x-form.group>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                                <x-form.group name="starts_at" label="Fecha y hora de inicio" :required="true">
+                                    <x-form.input type="datetime-local" name="starts_at" x-model="startsAt" :disabled="$isReadOnly" required />
+                                </x-form.group>
+
+                                <x-form.group name="ends_at" label="Fecha y hora de cierre" :required="true">
+                                    <x-form.input type="datetime-local" name="ends_at" x-model="endsAt" :disabled="$isReadOnly" required />
+                                </x-form.group>
+                            </div>
+                        </div>
+                    </x-card>
+
+                    {{-- 3. Grupos asignados --}}
+                    <x-card title="3. Grupos escolares asignados" subtitle="Selecciona los grupos que presentarán esta evaluación.">
+                        @if ($groups->isEmpty())
+                            <x-empty-state
+                                icon="userGroup"
+                                title="Sin grupos disponibles"
+                                message="Crea un grupo escolar abierto para poder asignarlo antes de publicar."
+                            >
+                                <x-button :href="route('groups.create')" variant="primary" size="sm">
+                                    Crear grupo
+                                </x-button>
+                            </x-empty-state>
+                        @else
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                @forelse ($groups as $group)
+                                    <label
+                                        class="flex items-start gap-3 rounded-xl border p-3.5 cursor-pointer transition select-none"
+                                        :class="selectedGroups.includes({{ $group->id }}) ? 'border-acode-tech bg-acode-surface/80' : 'border-slate-200 bg-white hover:border-slate-300'"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            name="group_ids[]"
+                                            value="{{ $group->id }}"
+                                            :checked="selectedGroups.includes({{ $group->id }})"
+                                            @change="toggleGroup({{ $group->id }})"
+                                            @disabled($isReadOnly)
+                                            class="mt-1 h-4 w-4 rounded border-slate-300 text-acode-tech focus:ring-acode-tech"
+                                        >
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <span class="font-bold text-sm text-acode-primary truncate">{{ $group->name }}</span>
+                                                <x-badge :variant="$group->is_closed ? 'neutral' : 'accent'">
+                                                    {{ $group->is_closed ? 'Cerrado' : 'Activo' }}
+                                                </x-badge>
+                                            </div>
+                                            <p class="text-xs text-slate-500 mt-0.5 truncate">
+                                                {{ $group->subject ?: 'Sin asignatura' }} · {{ (int) ($group->students_count ?? 0) }} alumnos
+                                            </p>
+                                        </div>
+                                    </label>
                                 @empty
-                                    <tr><td colspan="3" class="px-3 py-5 text-center text-slate-500">Todavía no hay apartados ni preguntas. Vuelve a la Etapa 2.</td></tr>
+                                    <p class="text-xs text-slate-500">No hay grupos disponibles.</p>
                                 @endforelse
-                            </tbody>
-                        </table>
-                    </div>
-                    <p class="mt-3 text-xs text-slate-500">El tiempo sobrante de una pregunta no se acumula para la siguiente.</p>
-                </section>
+                            </div>
+                        @endif
 
-                <section class="rounded-xl border border-slate-200 bg-white p-6">
-                    <h2 class="text-lg font-semibold text-acode-primary">Programación y grupos</h2>
-                    <p class="mt-2 text-sm text-slate-500">Estos datos se conservarán como fueron registrados. La edición de fechas queda pendiente de validar la zona horaria.</p>
-                    <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div class="rounded-lg bg-slate-50 p-4"><p class="text-xs text-slate-500">Fecha de inicio registrada</p><p class="mt-1 font-semibold text-acode-primary">{{ $exam->starts_at?->format('d/m/Y H:i') ?? 'Sin fecha' }}</p></div>
-                        <div class="rounded-lg bg-slate-50 p-4"><p class="text-xs text-slate-500">Fecha de término registrada</p><p class="mt-1 font-semibold text-acode-primary">{{ $exam->ends_at?->format('d/m/Y H:i') ?? 'Sin fecha' }}</p></div>
-                    </div>
-                    <p class="mt-3 text-xs text-slate-500">Horarios mostrados tal como los interpreta Laravel. La zona horaria sigue pendiente de validación.</p>
-                    <p class="mb-2 mt-5 text-sm font-medium text-slate-800">Grupos asignados</p>
-                    @forelse ($exam->groups as $group)
-                        <span class="mb-2 mr-2 inline-flex rounded-full bg-acode-tech/10 px-3 py-1 text-xs font-semibold text-acode-tech">{{ $group->name }}</span>
-                    @empty
-                        <p class="text-sm text-slate-500">No hay grupos asignados.</p>
-                    @endforelse
-                </section>
-            </div>
+                        @error('group_ids')
+                            <p class="mt-2 text-xs font-medium text-acode-danger">{{ $message }}</p>
+                        @enderror
+                        @error('group_ids.*')
+                            <p class="mt-2 text-xs font-medium text-acode-danger">{{ $message }}</p>
+                        @enderror
+                    </x-card>
 
-            <aside class="rounded-xl border border-slate-200 bg-white p-6 lg:sticky lg:top-6">
-                <h2 class="text-lg font-semibold text-acode-primary">Resumen del examen</h2>
-                <div class="mt-5 space-y-4">
-                    <div class="rounded-lg bg-slate-50 p-4">
-                        <p class="text-xs font-medium text-slate-500">Ponderación actual</p>
-                        <p class="mt-1 text-2xl font-bold text-acode-primary"><span id="points-total">{{ number_format($totalPoints, 2) }}</span><span class="text-base font-medium text-slate-500">/ 100</span></p>
-                        <p id="points-status" class="mt-1 text-xs {{ abs($totalPoints - 100) < 0.001 ? 'text-teal-700' : 'text-amber-700' }}"> {{ abs($totalPoints - 100) < 0.001 ? 'Suma actual completa' : 'Ajusta los puntos hasta sumar 100' }}</p>
-                    </div>
-                    <div class="flex justify-between gap-3 border-b border-slate-100 pb-3 text-sm"><span class="text-slate-500">Preguntas</span><strong class="text-acode-primary">{{ $examQuestions->count() }}</strong></div>
-                    <div class="flex justify-between gap-3 border-b border-slate-100 pb-3 text-sm"><span class="text-slate-500">Apartados</span><strong class="text-acode-primary">{{ $exam->sections->count() }}</strong></div>
-                    <div class="flex justify-between gap-3 text-sm"><span class="text-slate-500">Tiempo asignado</span><strong class="text-acode-primary"><span id="time-total">{{ floor($totalTime / 60) }} min {{ $totalTime % 60 }} s</span></strong></div>
-                    <p class="text-xs text-slate-500">El resumen se actualiza mientras editas. Los cambios se guardan al continuar.</p>
+                    {{-- 4. Escala, Visibilidad y Seguridad --}}
+                    <x-card title="4. Escala, visibilidad y proctoring pasivo" subtitle="Define la conversión de escala y el comportamiento al entregar.">
+                        <div class="space-y-6">
+                            <div>
+                                <div class="flex items-center justify-between gap-2 mb-2">
+                                    <p class="text-[13px] font-medium text-slate-800">Escala de calificación</p>
+                                    @if ($hasAttempts)
+                                        <x-badge variant="warning">Bloqueada: ya existen intentos</x-badge>
+                                    @endif
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <label
+                                        class="flex items-start gap-3 rounded-xl border p-4 transition {{ $lockScale ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer' }}"
+                                        :class="gradingScale === '0-10' ? 'border-acode-tech bg-acode-surface/70' : 'border-slate-200'"
+                                    >
+                                        <input type="radio" name="grading_scale" value="0-10" x-model="gradingScale" @disabled($lockScale) class="mt-1 text-acode-tech">
+                                        <div>
+                                            <span class="block text-sm font-bold text-acode-primary">Escala 0 a 10</span>
+                                            <span class="block text-xs text-slate-500 mt-0.5">
+                                                La suma de 100.00 pts se divide automáticamente entre 10 al calcular la calificación final (ej. 85.00 → 8.50).
+                                            </span>
+                                        </div>
+                                    </label>
+
+                                    <label
+                                        class="flex items-start gap-3 rounded-xl border p-4 transition {{ $lockScale ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer' }}"
+                                        :class="gradingScale === '0-100' ? 'border-acode-tech bg-acode-surface/70' : 'border-slate-200'"
+                                    >
+                                        <input type="radio" name="grading_scale" value="0-100" x-model="gradingScale" @disabled($lockScale) class="mt-1 text-acode-tech">
+                                        <div>
+                                            <span class="block text-sm font-bold text-acode-primary">Escala 0 a 100</span>
+                                            <span class="block text-xs text-slate-500 mt-0.5">
+                                                La puntuación obtenida sobre 100.00 puntos se conserva sin conversión.
+                                            </span>
+                                        </div>
+                                    </label>
+                                </div>
+                                @error('grading_scale')
+                                    <p class="mt-1.5 text-xs font-medium text-acode-danger">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <div>
+                                <p class="text-[13px] font-medium text-slate-800 mb-2">Visibilidad de resultados</p>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    @foreach ($visibilityModes as $modeKey => $modeInfo)
+                                        <label
+                                            class="flex items-start gap-3 rounded-xl border p-3.5 cursor-pointer transition"
+                                            :class="visibilityMode === @js($modeKey) ? 'border-acode-tech bg-acode-surface/70' : 'border-slate-200 hover:border-slate-300'"
+                                        >
+                                            <input type="radio" name="result_visibility_mode" value="{{ $modeKey }}" x-model="visibilityMode" @disabled($isReadOnly) class="mt-1 text-acode-tech">
+                                            <div>
+                                                <span class="block text-sm font-bold text-acode-primary">{{ $modeInfo['title'] }}</span>
+                                                <span class="block text-xs text-slate-500 mt-0.5 leading-relaxed">{{ $modeInfo['desc'] }}</span>
+                                            </div>
+                                        </label>
+                                    @endforeach
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                                <div>
+                                    <p class="text-[13px] font-medium text-slate-800 mb-2">Orden de preguntas</p>
+                                    <div class="space-y-2">
+                                        <label class="flex items-start gap-2.5 rounded-xl border border-slate-200 p-3 cursor-pointer">
+                                            <input type="radio" name="randomize_question_order" value="1" x-model="randomizeOrder" @disabled($isReadOnly) class="mt-0.5 text-acode-tech">
+                                            <span class="text-xs">
+                                                <strong class="block text-acode-primary">Aleatorio</strong>
+                                                <span class="text-slate-500">Baraja preguntas por intento.</span>
+                                            </span>
+                                        </label>
+                                        <label class="flex items-start gap-2.5 rounded-xl border border-slate-200 p-3 cursor-pointer">
+                                            <input type="radio" name="randomize_question_order" value="0" x-model="randomizeOrder" @disabled($isReadOnly) class="mt-0.5 text-acode-tech">
+                                            <span class="text-xs">
+                                                <strong class="block text-acode-primary">Fijo por apartados</strong>
+                                                <span class="text-slate-500">Mantiene secuencia de secciones y reactivos.</span>
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <x-form.group name="max_allowed_incidents" label="Incidencias anti-trampa permitidas" :required="true">
+                                    <x-form.input
+                                        type="number"
+                                        name="max_allowed_incidents"
+                                        min="0"
+                                        step="1"
+                                        required
+                                        :disabled="$isReadOnly"
+                                        value="{{ old('max_allowed_incidents', $exam->max_allowed_incidents) }}"
+                                    />
+                                </x-form.group>
+                            </div>
+
+                            <div class="rounded-xl border border-acode-tech/25 bg-acode-surface/80 p-4 flex items-start gap-3">
+                                <x-icon name="shield" class="w-5 h-5 text-acode-tech shrink-0 mt-0.5" />
+                                <div class="text-xs text-slate-600 leading-relaxed">
+                                    <p class="font-bold text-acode-primary">Proctoring pasivo activo (ADR-043 · LFPDPPP)</p>
+                                    <p class="mt-0.5">Se detectan cambios de pestaña/app y expiración server-side por reactivo sin capturar cámara web ni datos biométricos.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </x-card>
                 </div>
-            </aside>
-        </div>
 
-        <div class="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-between">
-            <a href="{{ route('exams.assemble', $exam) }}" class="rounded-lg border border-slate-300 px-5 py-3 text-center text-sm font-semibold text-acode-primary hover:bg-slate-50">Volver a Preguntas</a>
-            @unless ($isPublished)
-                <button type="submit" id="save-configuration" class="rounded-lg bg-acode-primary px-5 py-3 text-sm font-semibold text-white hover:opacity-90">Guardar y continuar a Revisión</button>
-            @else
-                <a href="{{ route('exams.review', $exam) }}" class="rounded-lg bg-acode-primary px-5 py-3 text-center text-sm font-semibold text-white">Ir a Revisión</a>
-            @endunless
-        </div>
-    </form>
-</div>
+                {{-- Columna Derecha Sticky --}}
+                <aside class="lg:col-span-4 space-y-5 lg:sticky lg:top-24">
+                    <x-card title="Resumen de configuración" subtitle="Se actualiza en vivo mientras editas.">
+                        <div class="space-y-4">
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Ponderación total</p>
+                                <p class="mt-1 font-mono text-2xl font-bold text-acode-primary">
+                                    <span x-text="totalWeight.toFixed(2)"></span>
+                                    <span class="text-sm font-medium text-slate-500">/ 100.00</span>
+                                </p>
+                                <p class="mt-1 text-xs font-semibold" :class="isWeightExact ? 'text-acode-accent' : 'text-acode-warning-dark'">
+                                    <span x-text="isWeightExact ? 'Suma exacta completada' : 'Ajusta o distribuye los puntos hasta sumar 100.00'"></span>
+                                </p>
+                            </div>
 
-@unless ($isPublished)
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const scale = document.getElementById('grading_scale');
-    const points = [...document.querySelectorAll('[data-points-input]')];
-    const times = [...document.querySelectorAll('[data-time-input]')];
+                            <dl class="space-y-2.5 text-xs">
+                                <div class="flex justify-between border-b border-slate-100 pb-2">
+                                    <dt class="text-slate-500">Apartados</dt>
+                                    <dd class="font-bold text-acode-primary">{{ $exam->sections->count() }}</dd>
+                                </div>
+                                <div class="flex justify-between border-b border-slate-100 pb-2">
+                                    <dt class="text-slate-500">Reactivos</dt>
+                                    <dd class="font-bold text-acode-primary">{{ $examQuestions->count() }}</dd>
+                                </div>
+                                <div class="flex justify-between border-b border-slate-100 pb-2">
+                                    <dt class="text-slate-500">Tiempo total asignado</dt>
+                                    <dd class="font-mono font-bold text-acode-primary" x-text="formattedTime"></dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-slate-500">Grupos seleccionados</dt>
+                                    <dd class="font-bold text-acode-primary" x-text="selectedGroups.length + ' grupo(s)'"></dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </x-card>
 
-    const totalLabel = document.getElementById('points-total');
-    const statusLabel = document.getElementById('points-status');
-    const timeLabel = document.getElementById('time-total');
-    const saveButton = document.getElementById('save-configuration');
+                    <div class="rounded-xl border border-slate-200 bg-white p-4 space-y-3 shadow-sm">
+                        @if ($isReadOnly)
+                            <x-button :href="route('exams.review', $exam)" variant="primary" size="lg" class="w-full">
+                                Abrir resumen y publicación
+                            </x-button>
+                        @else
+                            <x-button
+                                type="submit"
+                                id="save-configuration"
+                                variant="primary"
+                                size="lg"
+                                class="w-full"
+                                x-bind:disabled="!isWeightExact"
+                            >
+                                <x-icon name="save" class="w-4 h-4" />
+                                Guardar y continuar a Revisión
+                            </x-button>
 
-    function updateSummary() {
-        const integersOnly = scale.value === '0-100';
-
-        points.forEach(input => {
-            input.step = integersOnly ? '1' : '0.01';
-        });
-
-        const validPoints = points.length > 0 &&
-            points.every(input =>
-                input.value !== '' && input.validity.valid
-            );
-
-        const totalCents = points.reduce((sum, input) => {
-            return sum + Math.round((Number(input.value) || 0) * 100);
-        }, 0);
-
-        const total = totalCents / 100;
-        const complete = validPoints && totalCents === 10000;
-
-        totalLabel.textContent = total.toFixed(2);
-
-        statusLabel.textContent = complete
-            ? 'Suma actual completa'
-            : integersOnly
-                ? 'La suma debe ser 100 y los puntos deben ser enteros.'
-                : 'Ajusta los puntos hasta sumar 100.';
-
-        statusLabel.classList.toggle('text-teal-700', complete);
-        statusLabel.classList.toggle('text-amber-700', !complete);
-
-        const totalSeconds = times.reduce((sum, input) => {
-            return sum + (Number(input.value) || 0);
-        }, 0);
-
-        timeLabel.textContent =
-            `${Math.floor(totalSeconds / 60)} min ${totalSeconds % 60} s`;
-
-        const validTimes = times.length === points.length &&
-            times.every(input => input.value !== '' && input.validity.valid);
-
-        saveButton.disabled = !complete || !validTimes;
-        saveButton.classList.toggle('opacity-50', saveButton.disabled);
-        saveButton.classList.toggle('cursor-not-allowed', saveButton.disabled);
-    }
-
-    [...points, ...times].forEach(input => {
-        input.addEventListener('input', updateSummary);
-    });
-
-    scale.addEventListener('change', updateSummary);
-
-    updateSummary();
-});
-</script>
-@endunless
+                            <div class="flex justify-center">
+                                <x-unsaved-changes form-id="exam-configuration-form" :cancel-url="route('exams.assemble', $exam)" />
+                            </div>
+                        @endif
+                    </div>
+                </aside>
+            </div>
+        </form>
+    </div>
 @endsection

@@ -1,307 +1,824 @@
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/assemble.blade.php (MPW-V2 §4.1.2, §7, §8, RW-12..14, ADR-027) --}}
 @extends('layouts.app')
 
-@section('title', 'Preguntas: '.$exam->title)
+@section('title', 'Armar reactivos: ' . $exam->title)
 
 @section('content')
-<div class="mx-auto max-w-6xl space-y-6">
-    <a href="{{ route('exams.index') }}" class="inline-flex items-center gap-2 text-sm font-semibold text-acode-tech transition hover:underline">
-        <span aria-hidden="true">←</span> Volver a mis exámenes
-    </a>
-
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-            <h1 class="text-2xl font-bold text-acode-primary">{{ $exam->title }}</h1>
-            @if ($exam->description)
-                <p class="mt-2 text-sm text-slate-500">{{ $exam->description }}</p>
-            @endif
-        </div>
-        @if ($exam->is_published)
-            <span class="inline-flex self-start rounded-full bg-acode-accent/10 px-3 py-1 text-xs font-semibold text-acode-accent">Publicado</span>
-        @else
-            <span class="inline-flex self-start rounded-full bg-acode-warning/20 px-3 py-1 text-xs font-semibold text-acode-primary">Borrador</span>
-        @endif
-    </div>
-
-    {{-- Indicador de etapas --}}
-    <div class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-        <div class="grid grid-cols-4 gap-1 sm:gap-2">
-            @foreach ([['Datos', true], ['Preguntas', false], ['Config.', false], ['Revisión', false]] as $index => [$label, $completed])
-                <div class="flex flex-col items-center gap-1.5 text-center">
-                    <div class="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full text-xs sm:text-sm font-bold {{ $index === 1 ? 'bg-acode-primary text-white shadow-sm' : ($completed ? 'bg-acode-accent text-white' : 'bg-slate-100 text-slate-500') }}">
-                        {{ $completed ? '✓' : $index + 1 }}
-                    </div>
-                    <span class="text-[11px] sm:text-xs truncate {{ $index === 1 ? 'font-bold text-acode-primary' : 'text-slate-500' }}">{{ $label }}</span>
-                </div>
-            @endforeach
-        </div>
-    </div>
-
     @php
-        $totalQuestions = $exam->sections->sum(fn ($section) => $section->examQuestions->count());
         $questionTypes = [
             'multiple_choice' => 'Opción múltiple',
             'matching' => 'Relación de columnas',
             'open' => 'Pregunta abierta',
             'code' => 'Programación',
         ];
+        $typeVariants = [
+            'multiple_choice' => 'info',
+            'matching' => 'accent',
+            'open' => 'warning',
+            'code' => 'primary',
+        ];
+
+        $totalQuestions = $exam->sections->sum(fn ($section) => $section->examQuestions->count());
+        $totalSeconds = (int) $exam->sections->sum(fn ($section) => $section->examQuestions->sum('time_limit_seconds'));
+        $hasProposal = is_array($proposal) && ! empty($proposal['question_ids']);
+
+        $hasManualFilters = filled($manualFilters['search'] ?? null)
+            || filled($manualFilters['question_type'] ?? null)
+            || filled($manualFilters['subject_tag'] ?? null)
+            || filled($manualFilters['subject_id'] ?? null)
+            || request()->has('page');
+
+        $defaultTab = ($hasManualFilters || $errors->has('question_ids') || $errors->has('exam_section_id') || $errors->has('new_section_title'))
+            ? 'manual'
+            : 'draw';
+
+        $inventorySubjects = collect($bankInventory['subjects'] ?? []);
+        $inventoryNamesLower = $inventorySubjects->map(fn (array $item): string => mb_strtolower($item['name']))->all();
+        $extraSubjects = collect($subjects ?? [])->filter(
+            fn (string $name): bool => ! in_array(mb_strtolower($name), $inventoryNamesLower, true)
+        );
     @endphp
 
-    {{-- Resumen --}}
-    <div class="grid grid-cols-2 gap-4">
-        <div class="rounded-xl border border-slate-200 bg-white p-4">
-            <p class="text-xs font-medium text-slate-500">Apartados creados</p>
-            <p class="mt-1 text-2xl font-bold text-acode-primary">{{ $exam->sections->count() }}</p>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-4">
-            <p class="text-xs font-medium text-slate-500">Reactivos seleccionados</p>
-            <p class="mt-1 text-2xl font-bold text-acode-primary">{{ $totalQuestions }}</p>
-        </div>
-    </div>
+    <div
+        class="mx-auto max-w-7xl space-y-6"
+        x-data="{
+            activeTab: @js($defaultTab),
+            bankInventory: @js($bankInventory),
+            drawType: @js(old('question_type', 'multiple_choice')),
+            selectedSubjectKey: @js(old('subject_id') ? 'id:' . old('subject_id') : ''),
+            selectedSubjectTagInput: @js(old('subject_tag', '')),
+            requestedQty: @js((int) old('requested_quantity', 5)),
+            manualTargetMode: @js($exam->sections->isNotEmpty() && old('exam_section_id') !== '' ? 'existing' : 'new'),
+            selectedManualIds: @js(array_map('strval', (array) old('question_ids', []))),
+            editingSectionId: null,
 
-    {{-- Opciones de armado --}}
-    <section>
-        <h2 class="mb-3 text-lg font-semibold text-acode-primary">¿Cómo quieres agregar preguntas?</h2>
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div class="rounded-xl border border-acode-tech bg-white p-5">
-                <div class="mb-3 flex items-center gap-3">
-                    <div class="flex h-11 w-11 items-center justify-center rounded-lg bg-acode-tech/10 text-xl text-acode-tech">☷</div>
-                    <h3 class="font-semibold text-acode-primary">Mi banco de preguntas</h3>
-                </div>
-                <p class="text-sm leading-relaxed text-slate-500">Crea apartados y selecciona automáticamente reactivos existentes de tu banco, sin repetir preguntas dentro del examen.</p>
-                <p class="mt-4 text-xs font-semibold text-acode-accent">Disponible · Sorteo automático</p>
+            get resolvedSubjectId() {
+                if (this.selectedSubjectKey.startsWith('id:')) {
+                    return this.selectedSubjectKey.slice(3);
+                }
+                return '';
+            },
+
+            get resolvedSubjectTag() {
+                if (this.selectedSubjectKey.startsWith('tag:')) {
+                    const opt = this.$refs.subjectSelect?.selectedOptions?.[0];
+                    return opt?.dataset?.label || '';
+                }
+                if (this.selectedSubjectKey.startsWith('raw:')) {
+                    return this.selectedSubjectKey.slice(4);
+                }
+                if (this.selectedSubjectKey.startsWith('id:')) {
+                    const opt = this.$refs.subjectSelect?.selectedOptions?.[0];
+                    return opt?.dataset?.label || '';
+                }
+                return '';
+            },
+
+            get availableCount() {
+                if (!this.selectedSubjectKey) {
+                    return Number(this.bankInventory?.by_type?.[this.drawType] ?? 0);
+                }
+                if (this.selectedSubjectKey.startsWith('id:')) {
+                    const key = `${this.drawType}::${this.selectedSubjectKey}`;
+                    if (this.bankInventory?.by_type_and_subject?.[key] !== undefined) {
+                        return Number(this.bankInventory.by_type_and_subject[key]);
+                    }
+                    const opt = this.$refs.subjectSelect?.selectedOptions?.[0];
+                    const norm = opt?.dataset?.normalized || '';
+                    return Number(this.bankInventory?.by_type_and_subject?.[`${this.drawType}::${norm}`] ?? 0);
+                }
+                if (this.selectedSubjectKey.startsWith('tag:')) {
+                    const norm = this.selectedSubjectKey.slice(4);
+                    return Number(this.bankInventory?.by_type_and_subject?.[`${this.drawType}::${norm}`] ?? 0);
+                }
+                return 0;
+            },
+
+            syncMaxQuantity() {
+                const maxAvail = this.availableCount;
+                if (maxAvail > 0 && this.requestedQty > maxAvail) {
+                    this.requestedQty = maxAvail;
+                }
+            },
+
+            confirmAction(formId, title, text, confirmLabel = 'Eliminar', isDanger = true) {
+                if (typeof AcodeAlert !== 'undefined') {
+                    AcodeAlert.confirm({
+                        title: title,
+                        text: text,
+                        confirmButtonText: confirmLabel,
+                        cancelButtonText: 'Cancelar',
+                        isDanger: isDanger,
+                        onConfirm: () => {
+                            const form = document.getElementById(formId);
+                            if (form) form.submit();
+                        },
+                    });
+                    return;
+                }
+                if (confirm(title + '\n' + text)) {
+                    const form = document.getElementById(formId);
+                    if (form) form.submit();
+                }
+            }
+        }"
+    >
+        {{-- Encabezado --}}
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+                <a href="{{ route('exams.index') }}" class="inline-flex items-center gap-1.5 text-sm font-semibold text-acode-tech hover:underline">
+                    <x-icon name="arrowLeft" class="w-4 h-4" />
+                    Volver a mis exámenes
+                </a>
+                <h1 class="mt-2 text-2xl sm:text-3xl font-bold text-acode-primary tracking-tight">
+                    {{ $exam->title }}
+                </h1>
+                @if ($exam->description)
+                    <p class="mt-1 text-sm text-slate-500 max-w-3xl">{{ $exam->description }}</p>
+                @endif
             </div>
-            <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5">
-                <div class="mb-3 flex items-center gap-3">
-                    <div class="flex h-11 w-11 items-center justify-center rounded-lg bg-acode-accent/10 text-xl text-acode-accent">✦</div>
-                    <h3 class="font-semibold text-acode-primary">Generar preguntas con IA</h3>
-                </div>
-                <p class="text-sm leading-relaxed text-slate-500">En una próxima versión podrás generar nuevas preguntas mediante IA y revisarlas antes de incorporarlas.</p>
-                <button type="button" disabled class="mt-4 cursor-not-allowed rounded-lg border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-500">Próximamente</button>
+
+            <div class="flex items-center gap-2 shrink-0">
+                <x-button :href="route('exams.edit', $exam)" variant="neutral" size="sm">
+                    <x-icon name="edit" class="w-3.5 h-3.5" />
+                    Editar datos y grupos
+                </x-button>
             </div>
         </div>
-    </section>
 
-    {{-- Apartados ya guardados --}}
-    <section class="space-y-4">
-        <div>
-            <h2 class="text-lg font-semibold text-acode-primary">Apartados del examen</h2>
-            <p class="mt-1 text-sm text-slate-500">Revisa las preguntas seleccionadas para cada apartado.</p>
-        </div>
-        @forelse ($exam->sections as $section)
-            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div class="flex flex-col gap-2 border-b border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h3 class="font-semibold text-acode-primary">{{ $section->title }}</h3>
-                        <p class="mt-1 text-xs text-slate-500">{{ $questionTypes[$section->question_type] ?? 'Tipo de reactivo' }}</p>
-                    </div>
-                    <span class="self-start rounded-full bg-acode-tech/10 px-3 py-1 text-xs font-semibold text-acode-tech">{{ $section->examQuestions->count() }} de {{ $section->requested_quantity }} reactivos</span>
-                </div>
-                <div class="divide-y divide-slate-100">
-                    @forelse ($section->examQuestions as $examQuestion)
-                        <div class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                            <div class="flex min-w-0 items-start gap-3">
-                                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-acode-primary">{{ $loop->iteration }}</span>
-                                <div class="min-w-0">
-                                    <p class="break-words text-sm font-medium text-slate-800">{{ $examQuestion->question?->title ?? 'Reactivo no disponible' }}</p>
-                                    <p class="mt-1 text-xs text-slate-500">Ponderación: {{ $examQuestion->points_weight }} puntos</p>
-                                </div>
-                            </div>
-                        </div>
-                    @empty
-                        <p class="px-5 py-5 text-sm text-slate-500">Este apartado no tiene reactivos asignados.</p>
-                    @endforelse
-                </div>
-            </div>
-        @empty
-            <div class="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
-                <p class="font-semibold text-acode-primary">Todavía no hay apartados</p>
-                <p class="mt-2 text-sm text-slate-500">Agrega el primer apartado utilizando preguntas de tu banco.</p>
-            </div>
-        @endforelse
-    </section>
+        @include('exams.partials._stepper', ['currentStep' => 2, 'exam' => $exam])
 
-    {{-- Mensajes --}}
-    @if ($errors->any())
-        <div class="rounded-xl border border-[#DC2626]/20 bg-[#DC2626]/5 p-4" role="alert">
-            <p class="mb-2 text-sm font-semibold text-[#DC2626]">Revisa la información del apartado</p>
-            <ul class="list-disc space-y-1 pl-5 text-sm text-[#DC2626]">
-                @foreach ($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
-        </div>
-    @endif
-
-    @unless ($exam->is_published)
-        {{-- Propuesta pendiente: los IDs se obtienen únicamente de la sesión en el controlador --}}
-        @if (is_array($proposal) && !empty($proposal['question_ids']))
-            <section class="rounded-xl border border-acode-tech bg-white p-5 sm:p-6">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                        <h2 class="text-lg font-semibold text-acode-primary">Revisar propuesta de preguntas</h2>
-                        <p class="mt-1 text-sm text-slate-500">Esta selección es provisional. No se guardará en el examen hasta que la aceptes.</p>
-                    </div>
-                    <span class="self-start rounded-full bg-acode-tech/10 px-3 py-1 text-xs font-semibold text-acode-tech">Pendiente de aceptación</span>
-                </div>
-                <div class="mt-4 rounded-lg bg-slate-50 p-4 text-sm text-slate-700">
-                    <p><strong>Apartado:</strong> {{ $proposal['title'] ?? '' }}</p>
-                    <p class="mt-1"><strong>Tipo:</strong> {{ $questionTypes[$proposal['question_type'] ?? ''] ?? 'No disponible' }}</p>
-                    <p class="mt-1"><strong>Tema:</strong> {{ ($proposal['subject_tag'] ?? null) ?: 'Todos los temas' }}</p>
-                    <p class="mt-1"><strong>Cantidad:</strong> {{ count($proposal['question_ids']) }} reactivos</p>
-                </div>
-                <ol class="mt-4 divide-y divide-slate-100 rounded-lg border border-slate-200">
-                    @forelse ($proposedQuestions as $question)
-                        <li class="flex items-start gap-3 px-4 py-3">
-                            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-acode-primary">{{ $loop->iteration }}</span>
-                            <div class="min-w-0">
-                                <p class="break-words text-sm font-medium text-slate-800">{{ $question->title }}</p>
-                                <p class="mt-1 text-xs text-slate-500">Ponderación inicial: {{ $question->default_points }} puntos · Tiempo inicial: {{ $question->default_time_seconds }} segundos</p>
-                            </div>
-                        </li>
-                    @empty
-                        <li class="px-4 py-4 text-sm text-acode-danger">Las preguntas de esta propuesta ya no están disponibles. Cancela la propuesta y genera otra.</li>
-                    @endforelse
-                </ol>
-                <div class="mt-5 flex flex-wrap items-center gap-3">
-                    <form method="POST" action="{{ route('exams.proposals.accept', $exam) }}">
-                        @csrf
-                        <x-button variant="primary" type="submit">Aceptar propuesta</x-button>
-                    </form>
-                    <form method="POST" action="{{ route('exams.proposals.generate', $exam) }}">
-                        @csrf
-                        <input type="hidden" name="title" value="{{ $proposal['title'] ?? '' }}">
-                        <input type="hidden" name="question_type" value="{{ $proposal['question_type'] ?? '' }}">
-                        <input type="hidden" name="subject_tag" value="{{ $proposal['subject_tag'] ?? '' }}">
-                        <input type="hidden" name="requested_quantity" value="{{ $proposal['requested_quantity'] ?? count($proposal['question_ids']) }}">
-                        <x-button variant="secondary" type="submit">Reintentar sorteo</x-button>
-                    </form>
-                    <form method="POST" action="{{ route('exams.proposals.discard', $exam) }}">
-                        @csrf
-                        <x-button variant="neutral" type="submit">Cancelar propuesta</x-button>
-                    </form>
-                </div>
-                <p class="mt-3 text-xs text-slate-500">Al reintentar sorteo se genera otra selección aleatoria con los mismos filtros. Algunas preguntas podrían coincidir.</p>
-            </section>
-        @else
-            {{-- Formulario de generación --}}
-            <section class="rounded-xl border border-slate-200 bg-white p-6 md:p-8">
-                <div class="border-b border-slate-200 pb-5">
-                    <h2 class="text-lg font-semibold text-acode-primary">
-                        Agregar apartado
-                    </h2>
-                    <p class="mt-2 text-sm text-slate-500">
-                        Configura los filtros y revisa una propuesta antes de guardar las preguntas.
+        @if (! $canEditStructure)
+            <div class="rounded-xl border border-acode-warning/60 bg-acode-warning/15 px-4 py-3 text-sm text-acode-primary flex items-start gap-2.5">
+                <x-icon name="lock" class="w-5 h-5 shrink-0 text-acode-warning-dark mt-0.5" />
+                <div>
+                    <p class="font-semibold">Estructura bloqueada por integridad académica</p>
+                    <p class="text-xs text-slate-700 mt-0.5">
+                        Este examen ya registra intentos de estudiantes o su aplicación publicada ya inició/concluyó, por lo que no puedes agregar, quitar ni re-sortear reactivos.
                     </p>
                 </div>
+            </div>
+        @endif
 
-                <form method="POST"
-                    action="{{ route('exams.proposals.generate', $exam) }}"
-                    class="mt-6 space-y-5">
-                    @csrf
+        @if ($errors->any())
+            <div class="rounded-xl border border-acode-danger/30 bg-acode-danger/10 px-4 py-3 text-sm text-acode-danger" role="alert">
+                <p class="font-semibold mb-1">Revisa los siguientes mensajes:</p>
+                <ul class="list-inside list-disc space-y-0.5">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
 
-                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-12">
-                        <div class="lg:col-span-4">
-                            <label for="section-title"
-                                class="mb-2 block text-sm font-semibold text-slate-800">
-                                Nombre del apartado
-                            </label>
-                            <input
-                                id="section-title"
-                                type="text"
-                                name="title"
-                                value="{{ old('title') }}"
-                                maxlength="100"
-                                required
-                                placeholder="Ej. Fundamentos"
-                                class="h-12 w-full rounded-lg border border-slate-300 px-4 text-sm
-                                    focus:outline-none focus:ring-2 focus:ring-acode-tech">
-                        </div>
-
-                        <div class="lg:col-span-3">
-                            <label for="section-type"
-                                class="mb-2 block text-sm font-semibold text-slate-800">
-                                Tipo de reactivo
-                            </label>
-                            <select
-                                id="section-type"
-                                name="question_type"
-                                required
-                                class="h-12 w-full rounded-lg border border-slate-300 px-3 text-sm
-                                    focus:outline-none focus:ring-2 focus:ring-acode-tech">
-                                @foreach ($questionTypes as $type => $label)
-                                    <option value="{{ $type }}"
-                                            @selected(old('question_type', 'multiple_choice') === $type)>
-                                        {{ $label }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div class="lg:col-span-3">
-                            <label for="section-subject"
-                                class="mb-2 block text-sm font-semibold text-slate-800">
-                                Tema
-                            </label>
-                            <select
-                                id="section-subject"
-                                name="subject_tag"
-                                class="h-12 w-full rounded-lg border border-slate-300 px-3 text-sm
-                                    focus:outline-none focus:ring-2 focus:ring-acode-tech">
-                                <option value="">Todos los temas</option>
-                                @foreach ($subjectTags as $subjectTag)
-                                    <option value="{{ $subjectTag }}"
-                                            @selected(old('subject_tag') === $subjectTag)>
-                                        {{ $subjectTag }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div class="lg:col-span-2">
-                            <label for="section-quantity"
-                                class="mb-2 block text-sm font-semibold text-slate-800">
-                                Cantidad
-                            </label>
-                            <input
-                                id="section-quantity"
-                                type="number"
-                                name="requested_quantity"
-                                min="1"
-                                value="{{ old('requested_quantity', 5) }}"
-                                required
-                                class="h-12 w-full rounded-lg border border-slate-300 px-3 text-sm
-                                    focus:outline-none focus:ring-2 focus:ring-acode-tech">
-                        </div>
-                    </div>
-
-                    <p class="text-xs leading-relaxed text-slate-500">
-                        Las preguntas se seleccionan aleatoriamente del banco privado del docente,
-                        sin repetir las que ya están asignadas a este examen.
-                        La propuesta no se guarda hasta que la aceptes.
-                    </p>
-
-                    <div class="flex justify-end">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {{-- Columna Izquierda: Constructor Dual (Sorteo Inteligente + Selección Manual) --}}
+            <div class="lg:col-span-5 space-y-5">
+                <x-card padding="p-0" class="overflow-hidden">
+                    {{-- Selector de Pestañas del Constructor Dual --}}
+                    <div class="grid grid-cols-2 border-b border-slate-200 bg-slate-50" role="tablist" aria-label="Modo de asignación de reactivos">
                         <button
-                            type="submit"
-                            class="rounded-lg bg-acode-primary px-6 py-3 text-sm font-semibold
-                                text-white transition hover:opacity-90">
-                            Generar propuesta de preguntas
+                            type="button"
+                            role="tab"
+                            @click="activeTab = 'draw'"
+                            :aria-selected="(activeTab === 'draw').toString()"
+                            class="px-4 py-3.5 text-xs sm:text-sm font-bold transition border-b-2 flex items-center justify-center gap-2"
+                            :class="activeTab === 'draw' ? 'border-acode-primary bg-white text-acode-primary' : 'border-transparent text-slate-500 hover:text-acode-primary'"
+                        >
+                            <x-icon name="filter" class="w-4 h-4 text-acode-tech" />
+                            <span>Sorteo inteligente</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            role="tab"
+                            @click="activeTab = 'manual'"
+                            :aria-selected="(activeTab === 'manual').toString()"
+                            class="px-4 py-3.5 text-xs sm:text-sm font-bold transition border-b-2 flex items-center justify-center gap-2"
+                            :class="activeTab === 'manual' ? 'border-acode-primary bg-white text-acode-primary' : 'border-transparent text-slate-500 hover:text-acode-primary'"
+                        >
+                            <x-icon name="check" class="w-4 h-4 text-acode-accent" />
+                            <span>Selección manual</span>
+                            <span class="rounded-full bg-acode-surface px-2 py-0.5 text-xs font-mono text-acode-primary">
+                                {{ $manualCandidates->total() }}
+                            </span>
                         </button>
                     </div>
-                </form>
-            </section>
-        @endif
-    @endunless
 
-    {{-- Navegación --}}
-    <div class="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-        @unless ($exam->is_published)
-            @if (is_array($proposal) && !empty($proposal['question_ids']))
-                <p class="text-sm text-slate-500">Acepta o descarta la propuesta pendiente antes de continuar.</p>
-            @else
-                <a href="{{ route('exams.configuration', $exam) }}" class="inline-flex items-center justify-center gap-2 rounded-lg bg-acode-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90">Continuar a Configuración <span aria-hidden="true">→</span></a>
-            @endif
-        @endunless
+                    {{-- Pestaña A: Sorteo Inteligente --}}
+                    <div x-show="activeTab === 'draw'" class="p-5 space-y-5">
+                        @if ($hasProposal)
+                            <div class="rounded-xl border-2 border-acode-tech bg-acode-surface/60 p-4 space-y-4">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div>
+                                        <span class="text-xs font-semibold uppercase tracking-wider text-acode-tech">Previsualización de propuesta</span>
+                                        <h2 class="text-base font-semibold text-acode-primary mt-0.5">
+                                            {{ $proposal['title'] ?? 'Apartado propuesto' }}
+                                        </h2>
+                                        <p class="text-xs text-slate-600 mt-0.5">
+                                            {{ $questionTypes[$proposal['question_type'] ?? ''] ?? 'Reactivos' }}
+                                            · {{ ($proposal['subject_tag'] ?? null) ?: 'Todas las materias' }}
+                                            · <strong>{{ count($proposal['question_ids']) }} reactivo(s)</strong>
+                                        </p>
+                                    </div>
+                                    <x-badge variant="info">Pendiente</x-badge>
+                                </div>
+
+                                <ol class="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white max-h-64 overflow-y-auto">
+                                    @forelse ($proposedQuestions as $proposed)
+                                        <li class="px-3.5 py-2.5 flex items-start gap-2.5 text-xs">
+                                            <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-acode-surface font-bold text-acode-primary">
+                                                {{ $loop->iteration }}
+                                            </span>
+                                            <div class="min-w-0 flex-1">
+                                                <p class="font-semibold text-acode-primary break-words">{{ $proposed->title }}</p>
+                                                <p class="text-xs text-slate-500 mt-0.5">
+                                                    {{ $proposed->default_points }} pts base · {{ $proposed->default_time_seconds }} s
+                                                </p>
+                                            </div>
+                                        </li>
+                                    @empty
+                                        <li class="px-3.5 py-3 text-xs text-acode-danger">
+                                            Los reactivos de esta propuesta ya no están disponibles. Cancela la propuesta e intenta de nuevo.
+                                        </li>
+                                    @endforelse
+                                </ol>
+
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <form method="POST" action="{{ route('exams.proposals.accept', $exam) }}">
+                                        @csrf
+                                        <x-button type="submit" variant="primary" size="sm" :disabled="! $canEditStructure">
+                                            <x-icon name="check" class="w-4 h-4" />
+                                            Aceptar propuesta
+                                        </x-button>
+                                    </form>
+
+                                    <form method="POST" action="{{ route('exams.proposals.generate', $exam) }}">
+                                        @csrf
+                                        <input type="hidden" name="title" value="{{ $proposal['title'] ?? '' }}">
+                                        <input type="hidden" name="question_type" value="{{ $proposal['question_type'] ?? '' }}">
+                                        <input type="hidden" name="subject_id" value="{{ $proposal['subject_id'] ?? '' }}">
+                                        <input type="hidden" name="subject_tag" value="{{ $proposal['subject_tag'] ?? '' }}">
+                                        <input type="hidden" name="requested_quantity" value="{{ $proposal['requested_quantity'] ?? count($proposal['question_ids']) }}">
+                                        <x-button type="submit" variant="secondary" size="sm" :disabled="! $canEditStructure">
+                                            Reintentar sorteo
+                                        </x-button>
+                                    </form>
+
+                                    <form method="POST" action="{{ route('exams.proposals.discard', $exam) }}">
+                                        @csrf
+                                        <x-button type="submit" variant="neutral" size="sm">
+                                            Cancelar
+                                        </x-button>
+                                    </form>
+                                </div>
+                            </div>
+                        @endif
+
+                        <form method="POST" action="{{ route('exams.proposals.generate', $exam) }}" class="space-y-4">
+                            @csrf
+                            <input type="hidden" name="subject_id" :value="resolvedSubjectId">
+                            <input type="hidden" name="subject_tag" :value="resolvedSubjectTag">
+
+                            <div>
+                                <h2 class="text-base font-bold text-acode-primary">Sortear nuevo apartado</h2>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    Selecciona tipo y materia con conteo real de disponibilidad sin duplicar linajes Copy-On-Write.
+                                </p>
+                            </div>
+
+                            <x-form.group name="title" label="Nombre del apartado" :required="true">
+                                <x-form.input
+                                    name="title"
+                                    value="{{ old('title') }}"
+                                    maxlength="150"
+                                    required
+                                    :disabled="! $canEditStructure"
+                                    placeholder="Ej. Fundamentos de Algoritmos"
+                                />
+                            </x-form.group>
+
+                            <x-form.group name="question_type" label="Tipo de reactivo" :required="true">
+                                <x-form.select
+                                    name="question_type"
+                                    x-model="drawType"
+                                    @change="syncMaxQuantity()"
+                                    :disabled="! $canEditStructure"
+                                >
+                                    @foreach ($questionTypes as $typeValue => $typeLabel)
+                                        <option value="{{ $typeValue }}">
+                                            {{ $typeLabel }} ({{ (int) ($bankInventory['by_type'][$typeValue] ?? 0) }} disp.)
+                                        </option>
+                                    @endforeach
+                                </x-form.select>
+                            </x-form.group>
+
+                            <x-form.group name="subject_filter_ui" label="Materia del banco">
+                                <x-form.select
+                                    id="subject_filter_ui"
+                                    x-ref="subjectSelect"
+                                    x-model="selectedSubjectKey"
+                                    @change="syncMaxQuantity()"
+                                    :disabled="! $canEditStructure"
+                                >
+                                    <option value="">Todas las materias ({{ (int) ($bankInventory['total'] ?? 0) }} disp.)</option>
+                                    @foreach ($inventorySubjects as $invSubject)
+                                        @php
+                                            $optKey = ! empty($invSubject['subject_id'])
+                                                ? 'id:' . $invSubject['subject_id']
+                                                : 'tag:' . $invSubject['normalized_name'];
+                                        @endphp
+                                        <option
+                                            value="{{ $optKey }}"
+                                            data-label="{{ $invSubject['name'] }}"
+                                            data-normalized="{{ $invSubject['normalized_name'] }}"
+                                        >
+                                            {{ $invSubject['name'] }} ({{ (int) $invSubject['total'] }} disp.)
+                                        </option>
+                                    @endforeach
+                                    @foreach ($extraSubjects as $extraName)
+                                        <option value="raw:{{ $extraName }}" data-label="{{ $extraName }}">
+                                            {{ $extraName }} (0 disp.)
+                                        </option>
+                                    @endforeach
+                                </x-form.select>
+                            </x-form.group>
+
+                            {{-- Indicador en vivo de inventario disponible --}}
+                            <div
+                                class="rounded-xl border px-3.5 py-3 text-xs flex flex-col gap-2"
+                                :class="availableCount > 0 ? 'border-acode-accent/40 bg-acode-accent/10 text-acode-primary' : 'border-acode-warning/60 bg-acode-warning/15 text-acode-primary'"
+                            >
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="font-semibold">Disponibles para este filtro:</span>
+                                    <span class="font-mono text-sm font-bold" x-text="availableCount + ' reactivos'"></span>
+                                </div>
+
+                                <template x-if="availableCount === 0">
+                                    <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-acode-warning/40">
+                                        <span>No hay reactivos libres con estos criterios.</span>
+                                        <x-button :href="route('questions.create')" variant="warning" size="sm">
+                                            <x-icon name="add" class="w-3.5 h-3.5" />
+                                            Crear reactivos
+                                        </x-button>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <x-form.group name="requested_quantity" label="Cantidad a sortear" :required="true">
+                                <x-form.input
+                                    type="number"
+                                    name="requested_quantity"
+                                    min="1"
+                                    x-bind:max="Math.max(1, availableCount)"
+                                    x-model.number="requestedQty"
+                                    :disabled="! $canEditStructure"
+                                    required
+                                />
+                            </x-form.group>
+
+                            <x-button
+                                type="submit"
+                                variant="primary"
+                                size="md"
+                                class="w-full"
+                                x-bind:disabled="{{ $canEditStructure ? 'availableCount === 0' : 'true' }}"
+                            >
+                                <x-icon name="add" class="w-4 h-4" />
+                                Crear propuesta de sorteo
+                            </x-button>
+                        </form>
+                    </div>
+
+                    {{-- Pestaña B: Selección Manual (siempre presente en el DOM con x-show) --}}
+                    <div x-show="activeTab === 'manual'" class="p-5 space-y-4">
+                        <div>
+                            <h2 class="text-base font-bold text-acode-primary">Selección manual desde banco</h2>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                Marca reactivos específicos disponibles (ya se excluyen los usados en este examen y sus versiones Copy-On-Write).
+                            </p>
+                        </div>
+
+                        {{-- Filtros GET del banco manual --}}
+                        <form method="GET" action="{{ route('exams.assemble', $exam) }}" class="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                            <x-form.input
+                                type="text"
+                                name="search"
+                                size="sm"
+                                value="{{ $manualFilters['search'] ?? '' }}"
+                                placeholder="Buscar por título o enunciado…"
+                            />
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <x-form.select
+                                    name="question_type"
+                                    size="sm"
+                                    aria-label="Filtrar candidatos por tipo"
+                                >
+                                    <option value="">Todos los tipos</option>
+                                    @foreach ($questionTypes as $typeValue => $typeLabel)
+                                        <option value="{{ $typeValue }}" @selected(($manualFilters['question_type'] ?? '') === $typeValue)>
+                                            {{ $typeLabel }}
+                                        </option>
+                                    @endforeach
+                                </x-form.select>
+
+                                <x-form.select
+                                    name="subject_tag"
+                                    size="sm"
+                                    aria-label="Filtrar candidatos por materia"
+                                >
+                                    <option value="">Todas las materias</option>
+                                    @foreach ($subjects as $subjectName)
+                                        <option value="{{ $subjectName }}" @selected(($manualFilters['subject_tag'] ?? '') === $subjectName)>
+                                            {{ $subjectName }}
+                                        </option>
+                                    @endforeach
+                                </x-form.select>
+                            </div>
+                            <div class="flex items-center justify-between gap-2">
+                                <x-button type="submit" variant="secondary" size="sm">
+                                    <x-icon name="search" class="w-3.5 h-3.5" />
+                                    Buscar
+                                </x-button>
+                                @if ($hasManualFilters)
+                                    <a href="{{ route('exams.assemble', $exam) }}" class="text-xs font-semibold text-acode-tech hover:underline">
+                                        Limpiar filtros
+                                    </a>
+                                @endif
+                            </div>
+                        </form>
+
+                        {{-- Formulario POST para adjuntar reactivos seleccionados --}}
+                        <form method="POST" action="{{ route('exams.questions.manual.store', $exam) }}" class="space-y-4">
+                            @csrf
+
+                            <div class="rounded-xl border border-slate-200 bg-white p-3.5 space-y-3">
+                                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Apartado destino</p>
+
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        @click="manualTargetMode = 'new'"
+                                        class="h-8 rounded-lg px-3 text-xs font-semibold border transition"
+                                        :class="manualTargetMode === 'new' ? 'bg-acode-primary text-white border-acode-primary' : 'bg-white text-slate-700 border-slate-300 hover:bg-acode-surface'"
+                                    >
+                                        Crear apartado
+                                    </button>
+                                    @if ($exam->sections->isNotEmpty())
+                                        <button
+                                            type="button"
+                                            @click="manualTargetMode = 'existing'"
+                                            class="h-8 rounded-lg px-3 text-xs font-semibold border transition"
+                                            :class="manualTargetMode === 'existing' ? 'bg-acode-primary text-white border-acode-primary' : 'bg-white text-slate-700 border-slate-300 hover:bg-acode-surface'"
+                                        >
+                                            Apartado existente
+                                        </button>
+                                    @endif
+                                </div>
+
+                                <div x-show="manualTargetMode === 'new'">
+                                    <x-form.input
+                                        type="text"
+                                        name="new_section_title"
+                                        size="sm"
+                                        value="{{ old('new_section_title') }}"
+                                        maxlength="120"
+                                        x-bind:disabled="manualTargetMode !== 'new' || {{ $canEditStructure ? 'false' : 'true' }}"
+                                        placeholder="Título del nuevo apartado (ej. Problemas prácticos)"
+                                    />
+                                </div>
+
+                                @if ($exam->sections->isNotEmpty())
+                                    <div x-show="manualTargetMode === 'existing'">
+                                        <x-form.select
+                                            name="exam_section_id"
+                                            size="sm"
+                                            x-bind:disabled="manualTargetMode !== 'existing' || {{ $canEditStructure ? 'false' : 'true' }}"
+                                        >
+                                            <option value="">Selecciona un apartado del mismo tipo…</option>
+                                            @foreach ($exam->sections as $secOption)
+                                                <option value="{{ $secOption->id }}" @selected((string) old('exam_section_id') === (string) $secOption->id)>
+                                                    {{ $secOption->title }} ({{ $questionTypes[$secOption->question_type] ?? $secOption->question_type }})
+                                                </option>
+                                            @endforeach
+                                        </x-form.select>
+                                    </div>
+                                @endif
+                            </div>
+
+                            <div class="space-y-2 max-h-[28rem] overflow-y-auto pr-1">
+                                @forelse ($manualCandidates as $candidate)
+                                    <label
+                                        class="flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition hover:border-acode-tech/60"
+                                        :class="selectedManualIds.includes('{{ $candidate->id }}') ? 'border-acode-tech bg-acode-surface/70' : 'border-slate-200 bg-white'"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            name="question_ids[]"
+                                            value="{{ $candidate->id }}"
+                                            x-model="selectedManualIds"
+                                            @disabled(! $canEditStructure)
+                                            class="mt-1 h-4 w-4 rounded-md border-slate-300 text-acode-tech focus:ring-acode-tech"
+                                        >
+                                        <div class="min-w-0 flex-1 space-y-1">
+                                            <div class="flex flex-wrap items-center gap-1.5">
+                                                <x-badge :variant="$typeVariants[$candidate->question_type] ?? 'neutral'">
+                                                    {{ $questionTypes[$candidate->question_type] ?? $candidate->question_type }}
+                                                </x-badge>
+                                                <x-badge variant="neutral">
+                                                    {{ $candidate->subject?->name ?? $candidate->subject_tag ?? 'Sin materia' }}
+                                                </x-badge>
+                                                <span class="text-xs font-mono text-slate-500 ml-auto">
+                                                    {{ (int) ($candidate->paraphrases_count ?? 0) }} paráfrasis
+                                                </span>
+                                            </div>
+                                            <p class="text-sm font-semibold text-acode-primary leading-5">
+                                                {{ $candidate->title }}
+                                            </p>
+                                            <p class="text-xs text-slate-500 line-clamp-2">
+                                                {{ \Illuminate\Support\Str::limit($candidate->stem, 115) }}
+                                            </p>
+                                        </div>
+                                    </label>
+                                @empty
+                                    <x-empty-state
+                                        icon="document"
+                                        title="Sin reactivos disponibles"
+                                        message="No hay candidatos libres en tu banco para los filtros aplicados."
+                                    >
+                                        <x-button :href="route('questions.create')" variant="primary" size="sm">
+                                            <x-icon name="add" class="w-4 h-4" />
+                                            Crear reactivo
+                                        </x-button>
+                                    </x-empty-state>
+                                @endforelse
+                            </div>
+
+                            @if ($manualCandidates->hasPages())
+                                <div class="pt-2 flex justify-end">
+                                    {{ $manualCandidates->links() }}
+                                </div>
+                            @endif
+
+                            <x-button
+                                type="submit"
+                                variant="primary"
+                                size="md"
+                                class="w-full"
+                                x-bind:disabled="{{ $canEditStructure ? 'selectedManualIds.length === 0' : 'true' }}"
+                            >
+                                <x-icon name="add" class="w-4 h-4" />
+                                <span x-text="selectedManualIds.length > 0 ? `Agregar ${selectedManualIds.length} reactivo(s) al examen` : 'Selecciona reactivos para agregar'"></span>
+                            </x-button>
+                        </form>
+                    </div>
+                </x-card>
+            </div>
+
+            {{-- Columna Derecha: Estructura del Examen --}}
+            <div class="lg:col-span-7 space-y-5">
+                {{-- Barra de métricas y avance a Etapa 3 --}}
+                <x-card padding="p-5">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div class="grid grid-cols-3 gap-4 flex-1">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Apartados</p>
+                                <p class="text-xl font-bold text-acode-primary tabular-nums">{{ $exam->sections->count() }}</p>
+                            </div>
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Reactivos</p>
+                                <p class="text-xl font-bold text-acode-primary tabular-nums">{{ $totalQuestions }}</p>
+                            </div>
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Tiempo est.</p>
+                                <p class="text-xl font-bold text-acode-tech font-mono tabular-nums">
+                                    {{ floor($totalSeconds / 60) }}m {{ $totalSeconds % 60 }}s
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="shrink-0">
+                            @if ($totalQuestions > 0 && ! $hasProposal)
+                                <x-button :href="route('exams.configuration', $exam)" variant="primary" size="md">
+                                    Continuar a Configuración →
+                                </x-button>
+                            @else
+                                <x-button
+                                    type="button"
+                                    variant="primary"
+                                    size="md"
+                                    :disabled="true"
+                                    title="{{ $hasProposal ? 'Acepta o cancela la propuesta pendiente antes de continuar.' : 'Agrega al menos 1 reactivo antes de configurar pesos.' }}"
+                                >
+                                    Continuar a Configuración →
+                                </x-button>
+                            @endif
+                        </div>
+                    </div>
+                    @if ($totalQuestions === 0)
+                        <p class="mt-3 pt-3 border-t border-slate-100 text-xs text-acode-warning-dark font-medium">
+                            Agrega al menos 1 reactivo mediante sorteo o selección manual para habilitar la Etapa 3 (Pesos y reglas).
+                        </p>
+                    @elseif ($hasProposal)
+                        <p class="mt-3 pt-3 border-t border-slate-100 text-xs text-acode-tech font-medium">
+                            Tienes una propuesta pendiente en el panel izquierdo; acéptala o cancélala antes de continuar.
+                        </p>
+                    @endif
+                </x-card>
+
+                {{-- Tarjetas por Apartado --}}
+                <div class="space-y-4">
+                    @forelse ($exam->sections as $section)
+                        <x-card padding="p-0" class="overflow-hidden">
+                            <div class="border-b border-slate-100 bg-slate-50/90 px-5 py-4 space-y-3">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <h3 class="text-base font-semibold text-acode-primary leading-6">{{ $section->title }}</h3>
+                                            <x-badge :variant="$typeVariants[$section->question_type] ?? 'neutral'">
+                                                {{ $questionTypes[$section->question_type] ?? $section->question_type }}
+                                            </x-badge>
+                                            @if ($section->subject?->name || $section->subject_tag)
+                                                <x-badge variant="neutral">
+                                                    {{ $section->subject?->name ?? $section->subject_tag }}
+                                                </x-badge>
+                                            @endif
+                                        </div>
+                                        <p class="text-xs text-slate-500 mt-1">
+                                            {{ $section->examQuestions->count() }} reactivo(s) asignado(s)
+                                        </p>
+                                    </div>
+
+                                    @if ($canEditStructure)
+                                        <div class="flex items-center gap-1.5 shrink-0">
+                                            <x-button
+                                                type="button"
+                                                variant="neutral"
+                                                size="sm"
+                                                @click="editingSectionId = (editingSectionId === {{ $section->id }} ? null : {{ $section->id }})"
+                                            >
+                                                <x-icon name="edit" class="w-3.5 h-3.5" />
+                                                Editar
+                                            </x-button>
+
+                                            <form
+                                                id="delete-section-{{ $section->id }}"
+                                                method="POST"
+                                                action="{{ route('exams.sections.destroy', [$exam, $section]) }}"
+                                                class="inline"
+                                            >
+                                                @csrf
+                                                @method('DELETE')
+                                                <x-button
+                                                    type="button"
+                                                    variant="danger"
+                                                    size="sm"
+                                                    @click="confirmAction(
+                                                        'delete-section-{{ $section->id }}',
+                                                        '¿Eliminar apartado?',
+                                                        'Se eliminará el apartado ' + {{ \Illuminate\Support\Js::from($section->title) }} + ' junto con sus reactivos asignados en este examen.',
+                                                        'Eliminar',
+                                                        true
+                                                    )"
+                                                >
+                                                    <x-icon name="delete" class="w-3.5 h-3.5" />
+                                                    Eliminar
+                                                </x-button>
+                                            </form>
+                                        </div>
+                                    @endif
+                                </div>
+
+                                {{-- Edición inline del apartado --}}
+                                @if ($canEditStructure)
+                                    <form
+                                        x-show="editingSectionId === {{ $section->id }}"
+                                        x-cloak
+                                        method="POST"
+                                        action="{{ route('exams.sections.update', [$exam, $section]) }}"
+                                        class="pt-3 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end"
+                                    >
+                                        @csrf
+                                        @method('PUT')
+                                        <div class="sm:col-span-5">
+                                            <label class="block text-[13px] font-medium text-slate-800 mb-1">Título del apartado</label>
+                                            <x-form.input
+                                                type="text"
+                                                name="title"
+                                                size="sm"
+                                                value="{{ $section->title }}"
+                                                maxlength="150"
+                                                required
+                                            />
+                                        </div>
+                                        <div class="sm:col-span-4">
+                                            <label class="block text-[13px] font-medium text-slate-800 mb-1">Materia (opcional)</label>
+                                            <x-form.input
+                                                type="text"
+                                                name="subject_tag"
+                                                size="sm"
+                                                value="{{ $section->subject?->name ?? $section->subject_tag }}"
+                                                maxlength="100"
+                                            />
+                                        </div>
+                                        <div class="sm:col-span-3 flex items-center gap-1.5">
+                                            <x-button type="submit" variant="primary" size="sm" class="flex-1">
+                                                Guardar
+                                            </x-button>
+                                            <x-button type="button" variant="neutral" size="sm" @click="editingSectionId = null">
+                                                Cancelar
+                                            </x-button>
+                                        </div>
+                                    </form>
+                                @endif
+                            </div>
+
+                            <div class="divide-y divide-slate-100">
+                                @forelse ($section->examQuestions as $examQuestion)
+                                    @php
+                                        $q = $examQuestion->question;
+                                    @endphp
+                                    <div class="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-blue-50/50 transition">
+                                        <div class="flex items-start gap-3 min-w-0">
+                                            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-acode-surface text-xs font-bold text-acode-primary">
+                                                {{ $loop->iteration }}
+                                            </span>
+                                            <div class="min-w-0">
+                                                <p class="text-sm font-semibold text-acode-primary break-words">
+                                                    {{ $q?->title ?? 'Reactivo no disponible' }}
+                                                </p>
+                                                @if ($q?->stem)
+                                                    <p class="text-xs text-slate-600 mt-0.5 line-clamp-2">
+                                                        {{ \Illuminate\Support\Str::limit($q->stem, 130) }}
+                                                    </p>
+                                                @endif
+                                                <div class="mt-1.5 flex flex-wrap items-center gap-2 text-xs font-mono text-slate-500">
+                                                    <span class="font-semibold text-acode-primary">{{ number_format((float) $examQuestion->points_weight, 2) }} pts</span>
+                                                    <span>·</span>
+                                                    <span>{{ (int) $examQuestion->time_limit_seconds }} s</span>
+                                                    @if ($q?->subject?->name || $q?->subject_tag)
+                                                        <span>·</span>
+                                                        <span class="font-sans text-slate-600">{{ $q?->subject?->name ?? $q?->subject_tag }}</span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        @if ($canEditStructure)
+                                            <div class="flex items-center gap-1.5 shrink-0">
+                                                <form method="POST" action="{{ route('exams.questions.reshuffle', [$exam, $examQuestion]) }}" class="inline">
+                                                    @csrf
+                                                    <x-button type="submit" variant="neutral" size="sm" title="Sustituir por otro reactivo conservando peso y tiempo (RW-14)">
+                                                        Reintentar
+                                                    </x-button>
+                                                </form>
+
+                                                <form
+                                                    id="remove-eq-{{ $examQuestion->id }}"
+                                                    method="POST"
+                                                    action="{{ route('exams.questions.destroy', [$exam, $examQuestion]) }}"
+                                                    class="inline"
+                                                >
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <x-button
+                                                        type="button"
+                                                        variant="danger"
+                                                        size="sm"
+                                                        @click="confirmAction(
+                                                            'remove-eq-{{ $examQuestion->id }}',
+                                                            '¿Eliminar reactivo del apartado?',
+                                                            'El reactivo ' + {{ \Illuminate\Support\Js::from($q?->title ?? 'seleccionado') }} + ' se removerá de este apartado (seguirá en tu banco).',
+                                                            'Eliminar',
+                                                            true
+                                                        )"
+                                                    >
+                                                        Eliminar
+                                                    </x-button>
+                                                </form>
+                                            </div>
+                                        @endif
+                                    </div>
+                                @empty
+                                    <div class="p-6">
+                                        <x-empty-state
+                                            icon="document"
+                                            title="Apartado sin reactivos"
+                                            message="Agrega reactivos desde la pestaña de Selección manual o elimina este apartado."
+                                        />
+                                    </div>
+                                @endforelse
+                            </div>
+                        </x-card>
+                    @empty
+                        <x-empty-state
+                            icon="document"
+                            title="Todavía no hay apartados en este examen"
+                            message="Usa el Sorteo inteligente o la Selección manual del panel izquierdo para construir los apartados de tu evaluación."
+                        />
+                    @endforelse
+                </div>
+            </div>
+        </div>
     </div>
-</div>
 @endsection

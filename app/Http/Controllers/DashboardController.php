@@ -9,12 +9,13 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        DashboardController.php
  * Ubicación:      app/Http/Controllers/DashboardController.php
- * Requerimiento:  RF-AUT-002, RF-REP-001, RW-02 (Panel Operativo Post-Login, MPW-V2 §7.9)
+ * Requerimiento:  RF-AUT-002, RF-REP-001, RW-02, ADR-057 (Panel Post-Login)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.2.0
  * Fecha Creación: 08/11/2026
  * Descripción:    Controlador del panel de resumen operativo post-login para
- *                 docentes y alumnos con métricas agregadas normalizadas (MPW-V2 §7.9).
+ *                 superadministradores, docentes verificados y alumnos con
+ *                 redirección automática a acreditación para docentes pendientes.
  * ============================================================================
  */
 
@@ -24,7 +25,9 @@ use App\Models\Exam;
 use App\Models\StudentAttempt;
 use App\Models\User;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 /**
  * Controlador del panel de resumen operativo post-login (Módulo 2, MPW-V2 §7.9).
@@ -33,7 +36,13 @@ use Illuminate\Http\Request;
  */
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request): \Illuminate\Http\Response|\Illuminate\Http\RedirectResponse|View
+    /**
+     * Enruta al usuario autenticado a su panel según rol y estado de acreditación.
+     *
+     * @param Request $request Solicitud HTTP del usuario autenticado.
+     * @return Response|RedirectResponse|View
+     */
+    public function __invoke(Request $request): Response|RedirectResponse|View
     {
         /** @var User $user */
         $user = $request->user();
@@ -43,6 +52,14 @@ class DashboardController extends Controller
         }
 
         if ($user->role === 'teacher') {
+            if (! $user->isVerifiedTeacher()) {
+                return redirect()->route('teacher.verification.status');
+            }
+
+            if ($user->needsPlanOnboarding()) {
+                return redirect()->route('teacher.subscription.index', ['onboarding' => 1]);
+            }
+
             return $this->teacherDashboard($user);
         }
 
@@ -51,6 +68,9 @@ class DashboardController extends Controller
 
     /**
      * Métricas agregadas y colecciones operativas para el panel docente (§7.9).
+     *
+     * @param User $teacher Cuenta docente verificada.
+     * @return View
      */
     private function teacherDashboard(User $teacher): View
     {
@@ -100,6 +120,9 @@ class DashboardController extends Controller
 
     /**
      * Métricas agregadas y colecciones operativas para el panel del alumno (§7.9).
+     *
+     * @param User $student Cuenta de alumno autenticada.
+     * @return View
      */
     private function studentDashboard(User $student): View
     {

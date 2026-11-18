@@ -26,6 +26,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 use App\Models\Group;
+use App\Models\Scopes\TenantTeacherScope;
 use App\Models\User;
 use App\Repositories\Contracts\GroupRepositoryInterface;
 
@@ -64,6 +65,37 @@ class EloquentGroupRepository implements GroupRepositoryInterface
             ->forTeacher($teacherId)
             ->withCount(['students', 'exams'])
             ->latest()
+            ->get();
+    }
+
+    /**
+     * Obtiene los grupos abiertos del docente (y opcionalmente grupos ya asignados
+     * aunque estén cerrados) con conteo de alumnos precargado para selectores sin N+1.
+     *
+     * @param int             $teacherId       Identificador del docente propietario.
+     * @param array<int, int> $includeGroupIds Identificadores adicionales del docente a incluir.
+     * @return Collection<int, Group>
+     */
+    public function getSelectableForTeacher(int $teacherId, array $includeGroupIds = []): Collection
+    {
+        $extraIds = array_values(array_unique(array_filter(
+            array_map('intval', $includeGroupIds),
+            static fn (int $id): bool => $id > 0
+        )));
+
+        return Group::query()
+            ->withoutGlobalScope(TenantTeacherScope::class)
+            ->forTeacher($teacherId)
+            ->where(static function (Builder $query) use ($extraIds): void {
+                $query->where('is_closed', false);
+
+                if ($extraIds !== []) {
+                    $query->orWhereIn('id', $extraIds);
+                }
+            })
+            ->withCount(['students'])
+            ->orderBy('is_closed')
+            ->orderBy('name')
             ->get();
     }
 

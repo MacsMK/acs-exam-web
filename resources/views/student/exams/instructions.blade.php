@@ -59,16 +59,16 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div class="rounded-lg bg-acode-surface/60 border border-slate-200/60 p-4 text-center">
                 <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Reactivos</p>
-                <p class="text-2xl font-extrabold text-acode-primary mt-1">{{ $questionsCount }}</p>
-                <p class="text-[11px] text-slate-400 mt-0.5">Preguntas a responder</p>
+                <p class="text-[28px] leading-9 font-bold text-acode-primary mt-1 tabular-nums">{{ $questionsCount }}</p>
+                <p class="text-xs text-slate-500 mt-0.5">Preguntas a responder</p>
             </div>
 
             <div class="rounded-lg bg-acode-surface/60 border border-slate-200/60 p-4 text-center">
                 <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Duración Total</p>
-                <p class="text-2xl font-extrabold text-acode-primary mt-1">
+                <p class="text-[28px] leading-9 font-bold text-acode-primary mt-1 tabular-nums">
                     {{ $exam->total_duration_minutes ?? $exam->duration_minutes ?? 60 }} min
                 </p>
-                <p class="text-[11px] text-slate-400 mt-0.5">Control por temporizador</p>
+                <p class="text-xs text-slate-500 mt-0.5">Control por temporizador</p>
             </div>
 
             <div class="rounded-lg bg-acode-surface/60 border border-slate-200/60 p-4 text-center">
@@ -76,18 +76,18 @@
                 <p class="text-lg font-bold text-acode-primary mt-1">
                     {{ $exam->randomize_question_order ? 'Aleatoria' : 'Secuencial' }}
                 </p>
-                <p class="text-[11px] text-slate-400 mt-0.5">1 intento por alumno</p>
+                <p class="text-xs text-slate-500 mt-0.5">1 intento por alumno</p>
             </div>
         </div>
 
         {{-- Reglas y advertencias de supervisión (RW-25 / MPW-V2 §7.7) --}}
-        <div class="rounded-xl border border-amber-200 bg-amber-50/70 p-5 space-y-3">
-            <div class="flex items-center gap-2 text-amber-900 font-semibold text-sm">
-                <x-icon name="warning" class="h-5 w-5 text-amber-600 shrink-0" />
+        <div class="rounded-xl border border-acode-warning/60 bg-acode-warning/15 p-5 space-y-3">
+            <div class="flex items-center gap-2 text-acode-primary font-semibold text-sm">
+                <x-icon name="warning" class="h-5 w-5 text-acode-warning-dark shrink-0" />
                 <span>Condiciones obligatorias para presentar esta evaluación</span>
             </div>
 
-            <ul class="text-xs text-amber-900/90 space-y-2 list-disc list-inside">
+            <ul class="text-xs text-slate-700 space-y-2 list-disc list-inside leading-relaxed">
                 <li><strong>El tiempo corre en el servidor:</strong> Una vez confirmado el inicio, el cronómetro no se detiene ni se puede pausar.</li>
                 <li><strong>Secuencia irreversible:</strong> Cada reactivo debe responderse dentro de su límite temporal. Al agotarse el tiempo o enviar la respuesta, el sistema avanza automáticamente sin posibilidad de retroceso.</li>
                 <li><strong>Supervisión de foco (Anti-fraude):</strong> Cambiar de pestaña, abrir otras aplicaciones o minimizar la ventana será registrado como una incidencia de seguridad.</li>
@@ -107,7 +107,7 @@
             <form method="POST" action="{{ route('attempts.start', $exam) }}" class="w-full sm:w-auto">
                 @csrf
                 <x-button type="submit" variant="primary" size="lg" class="w-full sm:w-auto">
-                    <x-icon name="clock" class="h-5 w-5 mr-2" />
+                    <x-icon name="clock" class="h-5 w-5" />
                     Confirmar e iniciar examen
                 </x-button>
             </form>

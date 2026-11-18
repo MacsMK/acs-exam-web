@@ -1,9 +1,18 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/result-summary.blade.php (MPW-V2 §5.2.2, §5.5, §7.3, §7.8.2, §8.3, RF-EVA-009, Tabla 20) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/result-summary.blade.php (MPW-V2 §4.1.2, §5.2.2, §7.3, §8.3, ADR-050, RF-EVA-009) --}}
 @extends('layouts.app')
 
 @section('title', 'Resultado de Evaluación · ' . $attempt->exam->title)
 
 @section('content')
+    @php
+        $visibilityMode = (string) ($attempt->exam->result_visibility_mode ?? 'hidden');
+        $isHidden = $visibilityMode === 'hidden';
+        $isPendingReview = $attempt->pending_ai_count > 0 || $attempt->final_score === null;
+        $isHundredScale = $attempt->exam->grading_scale === '0-100';
+        $minPassing = $isHundredScale ? 60.0 : 6.0;
+        $preliminaryRaw = (float) ($attempt->objective_score ?? 0) + (float) ($attempt->ai_estimated_score ?? 0);
+    @endphp
+
     <div class="max-w-3xl mx-auto">
         {{-- Encabezado con Título y Estado General --}}
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -19,7 +28,7 @@
 
             <div>
                 <x-button :href="route('student.exams.index')" variant="neutral" size="sm">
-                    <x-icon name="chevronDown" class="w-3.5 h-3.5 rotate-90 mr-1" />
+                    <x-icon name="arrowLeft" class="w-4 h-4" />
                     Volver al listado
                 </x-button>
             </div>
@@ -27,34 +36,61 @@
 
         {{-- Tarjeta de Calificación y Dictamen Normativo --}}
         <x-card class="mb-8 border-slate-200">
-            @if ($attempt->exam->result_visibility_mode === 'hidden')
+            @if ($isHidden)
                 <div class="py-4 text-center">
                     <x-icon name="lock" class="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                    <p class="text-sm font-semibold text-slate-700">Resultado reservado temporalmente</p>
-                    <p class="text-xs text-slate-500 mt-1">El docente titular ha configurado la visualización de calificaciones de forma posterior.</p>
+                    <p class="text-sm font-semibold text-acode-primary">Resultado reservado temporalmente</p>
+                    <p class="text-xs text-slate-500 mt-1">
+                        El docente titular ha configurado la visualización de calificaciones de forma posterior.
+                    </p>
                 </div>
-            @elseif ($attempt->pending_ai_count > 0)
+            @elseif ($isPendingReview && $visibilityMode === 'estimated_score')
+                {{-- Modo estimated_score: muestra puntaje preliminar sin exponer ai_feedback (ADR-050) --}}
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Puntaje Objetivo Registrado</p>
-                        <p class="font-mono text-3xl font-extrabold text-acode-primary">
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                            Calificación preliminar estimada
+                        </p>
+                        <p class="font-mono text-3xl font-bold text-acode-tech tabular-nums">
+                            {{ number_format($preliminaryRaw, 2) }}
+                        </p>
+                        <p class="text-xs text-slate-500 mt-1">
+                            Puntaje objetivo: <strong class="font-mono">{{ number_format((float) $attempt->objective_score, 2) }}</strong>
+                        </p>
+                    </div>
+
+                    <div class="sm:text-right">
+                        <x-badge variant="warning" class="text-xs px-3 py-1 font-semibold">
+                            Pendiente de evaluación docente
+                        </x-badge>
+                        <p class="text-xs text-slate-500 mt-1.5">
+                            Este puntaje preliminar está sujeto a validación definitiva del docente ({{ (int) $attempt->pending_ai_count }} reactivo(s) cualitativo(s)).
+                        </p>
+                    </div>
+                </div>
+            @elseif ($isPendingReview)
+                {{-- Modo objective_only_pending o final_score con recoteje pendiente --}}
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                            Puntaje Objetivo Registrado
+                        </p>
+                        <p class="font-mono text-3xl font-bold text-acode-primary tabular-nums">
                             {{ number_format((float) $attempt->objective_score, 2) }}
                         </p>
                     </div>
 
                     <div class="sm:text-right">
                         <x-badge variant="warning" class="text-xs px-3 py-1 font-semibold">
-                            Pendiente de evaluación docente / IA
+                            Pendiente de evaluación docente
                         </x-badge>
                         <p class="text-xs text-slate-500 mt-1.5">
-                            {{ $attempt->pending_ai_count }} reactivo(s) cualitativo(s) en proceso de revisión.
+                            {{ (int) $attempt->pending_ai_count }} reactivo(s) cualitativo(s) en proceso de revisión docente.
                         </p>
                     </div>
                 </div>
             @else
                 @php
-                    $isHundredScale = $attempt->exam->grading_scale === '0-100';
-                    $minPassing = $isHundredScale ? 60.0 : 6.0;
                     $scoreVal = (float) ($attempt->final_score ?? $attempt->objective_score ?? 0.0);
                     $isPassed = $scoreVal >= $minPassing;
                 @endphp
@@ -62,7 +98,7 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Calificación Definitiva</p>
-                        <p class="font-mono text-4xl font-extrabold {{ $isPassed ? 'text-acode-accent' : 'text-acode-danger' }}">
+                        <p class="font-mono text-4xl font-bold tabular-nums {{ $isPassed ? 'text-acode-accent-dark' : 'text-acode-danger' }}">
                             {{ number_format($scoreVal, 2) }}
                         </p>
                     </div>
@@ -83,14 +119,19 @@
             @endif
         </x-card>
 
-        {{-- Desglose Detallado por Reactivo --}}
-        @if ($attempt->exam->result_visibility_mode !== 'hidden')
+        {{-- Desglose Detallado por Reactivo (si no está oculto) --}}
+        @if (! $isHidden)
             <div class="space-y-4 mb-8">
                 <h2 class="text-lg font-bold text-acode-primary tracking-tight">Desglose de Reactivos</h2>
 
                 <div class="space-y-3">
                     @forelse ($attempt->answers as $index => $answer)
-                        <x-card class="p-4 border-slate-200">
+                        @php
+                            $q = $answer->examQuestion?->question;
+                            $isQualitative = in_array($q?->question_type, ['open', 'code'], true);
+                            $isReviewed = ! $isQualitative || $answer->teacher_recoteje_score !== null || (! $isPendingReview && ! is_null($answer->is_correct));
+                        @endphp
+                        <x-card padding="p-4" class="border-slate-200">
                             <div class="flex items-start justify-between gap-3 mb-2">
                                 <div class="flex items-start gap-2.5">
                                     <span class="w-6 h-6 rounded-full bg-acode-surface flex items-center justify-center font-bold text-xs text-acode-tech shrink-0 mt-0.5">
@@ -98,32 +139,43 @@
                                     </span>
                                     <div>
                                         <p class="text-sm font-semibold text-slate-900 leading-snug">
-                                            {{ $answer->examQuestion->question->title }}
+                                            {{ $q?->title ?? 'Reactivo #' . $answer->exam_question_id }}
                                         </p>
+                                        @php
+                                            $qTypeLabel = match ($q?->question_type) {
+                                                'multiple_choice' => 'Opción múltiple',
+                                                'matching' => 'Relación de columnas',
+                                                'open' => 'Pregunta abierta',
+                                                'code' => 'Código fuente',
+                                                default => '—',
+                                            };
+                                        @endphp
                                         <p class="text-xs text-slate-500 mt-0.5">
-                                            Tipo: <span class="capitalize">{{ $answer->examQuestion->question->question_type }}</span>
+                                            Tipo: <span>{{ $qTypeLabel }}</span>
                                         </p>
                                     </div>
                                 </div>
 
                                 <div class="shrink-0">
-                                    @if (!is_null($answer->is_correct))
+                                    @if ($isQualitative && $answer->teacher_recoteje_score === null)
+                                        {{-- Blindaje normativo ADR-050 / RF-EVA-009: nunca revelar ai_feedback preliminar --}}
+                                        <x-badge variant="warning">Pendiente de evaluación docente</x-badge>
+                                    @elseif ($answer->teacher_recoteje_score !== null)
+                                        <x-badge variant="accent">Revisado por docente</x-badge>
+                                    @elseif (! is_null($answer->is_correct))
                                         @if ($answer->is_correct)
                                             <x-badge variant="accent">Correcto</x-badge>
                                         @else
                                             <x-badge variant="danger">Incorrecto</x-badge>
                                         @endif
-                                    @elseif ($answer->teacher_recoteje_score !== null)
-                                        <x-badge variant="accent">Revisado por docente</x-badge>
                                     @else
-                                        {{-- Blindaje normativo P-136 (RF-EVA-009): no revelar score/feedback preliminar de IA --}}
                                         <x-badge variant="warning">Pendiente de evaluación docente</x-badge>
                                     @endif
                                 </div>
                             </div>
 
                             <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
-                                @if ($answer->is_correct !== null || $answer->teacher_recoteje_score !== null)
+                                @if ($isReviewed && ($answer->is_correct !== null || $answer->teacher_recoteje_score !== null))
                                     <span>Puntos asignados: <strong class="font-mono text-slate-800">{{ number_format((float) $answer->points_awarded, 2) }}</strong></span>
                                 @else
                                     <span class="text-slate-400 italic">Puntos: Pendiente de validación</span>
@@ -147,17 +199,17 @@
             </div>
         @endif
 
-        {{-- Acciones Normativas: Regreso y Revisión de Soluciones (P-172) --}}
+        {{-- Acciones Normativas --}}
         <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
             <x-button :href="route('student.exams.index')" variant="neutral" size="md">
-                <x-icon name="chevronDown" class="w-4 h-4 rotate-90 mr-1.5" />
+                <x-icon name="arrowLeft" class="w-4 h-4" />
                 Volver al listado
             </x-button>
 
-            @if (!empty($reviewAvailable))
+            @if (! empty($reviewAvailable) && ! $isHidden)
                 <x-button :href="route('attempts.review', $attempt)" variant="primary" size="md">
-                    <x-icon name="eye" class="w-4 h-4 mr-1.5" />
-                    Consultar soluciones y retroalimentación
+                    <x-icon name="eye" class="w-4 h-4" />
+                    Ver detalles y soluciones
                 </x-button>
             @endif
         </div>

@@ -65,6 +65,7 @@ class TeacherGradingService
         $published = StudentAttempt::where('student_id', $student->id)
             ->inCurrentGroupsOfStudent($student->id)
             ->whereNotNull('final_score')
+            ->whereHas('exam', static fn ($query) => $query->where('result_visibility_mode', '!=', 'hidden'))
             ->with('exam')
             ->get()
             ->map(fn (StudentAttempt $attempt): array => [
@@ -99,6 +100,7 @@ class TeacherGradingService
         return StudentAttempt::where('student_id', $user->id)
             ->inCurrentGroupsOfStudent($user->id)
             ->whereNotNull('final_score')
+            ->whereHas('exam', static fn ($query) => $query->where('result_visibility_mode', '!=', 'hidden'))
             ->with('exam')
             ->latest('submitted_at')
             ->get()
