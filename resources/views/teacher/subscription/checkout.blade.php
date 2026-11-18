@@ -1,7 +1,7 @@
 {{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: teacher/subscription/checkout.blade.php (MPW-V2 §4.1.2, §7.3, §7.8.2, §8.5, §8.6, Tabla 20) --}}
 @extends('layouts.app')
 
-@section('title', 'Pasarela de Pago Simulada')
+@section('title', 'Pago en línea simulado')
 
 @section('content')
 <div class="max-w-6xl mx-auto space-y-6">
@@ -15,7 +15,7 @@
                 </x-button>
                 <x-badge variant="info">Simulación segura</x-badge>
             </div>
-            <h1 class="text-2xl font-bold text-acode-primary tracking-tight">Pasarela de Pago</h1>
+            <h1 class="text-2xl font-bold text-acode-primary tracking-tight">Pago en línea</h1>
             <p class="text-sm text-slate-500">
                 Activa o actualiza tu paquete docente al instante mediante tarjeta o transferencia SPEI simulada.
             </p>
@@ -30,7 +30,7 @@
                     <x-icon name="error" class="w-5 h-5" />
                 </div>
                 <div class="space-y-1">
-                    <h2 class="text-sm font-bold text-acode-danger">Operación rechazada por la pasarela bancaria</h2>
+                    <h2 class="text-sm font-bold text-acode-danger">Operación rechazada por el banco</h2>
                     <p class="text-sm text-acode-ink">{{ $errors->first('payment_gateway') }}</p>
                     <p class="text-xs text-slate-600">
                         Puedes corregir los datos de tu tarjeta, probar con otra tarjeta de demostración o cambiar a transferencia SPEI para reintentar de inmediato.
@@ -288,15 +288,16 @@
                                         </p>
                                     </div>
 
-                                    <button
+                                    <x-button
                                         type="button"
+                                        variant="neutral"
+                                        size="sm"
                                         data-clabe="{{ $speiClabe }}"
-                                        @click="copyClabe($el.dataset.clabe)"
-                                        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-acode-primary transition hover:bg-acode-surface focus:outline-none focus:ring-2 focus:ring-acode-tech"
+                                        x-on:click="copyClabe($el.dataset.clabe)"
                                     >
                                         <x-icon name="copy" class="w-3.5 h-3.5" />
                                         Copiar CLABE
-                                    </button>
+                                    </x-button>
                                 </div>
                             </div>
                         </div>

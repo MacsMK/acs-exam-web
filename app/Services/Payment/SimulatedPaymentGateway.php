@@ -86,7 +86,7 @@ class SimulatedPaymentGateway implements PaymentGatewayContract
                 'card_holder_name' => null,
                 'spei_tracking_key' => null,
                 'failure_code' => 'unsupported_method',
-                'failure_message' => 'El método de pago seleccionado no es compatible con la pasarela',
+                'failure_message' => 'El método de pago seleccionado no está disponible',
                 'metadata' => ['simulated' => true],
             ],
         };

@@ -106,7 +106,7 @@ Descripción:    Landing page pública institucional del SaaS. Presenta el ecosi
 
 
     {{-- 2. Hero Section --}}
-    <section class="relative isolate overflow-hidden border-b border-slate-200 bg-gradient-to-br from-white via-slate-50 to-[#EDF7FA] py-20 lg:py-28">
+    <section class="relative isolate overflow-hidden border-b border-slate-200 bg-gradient-to-br from-white via-slate-50 to-acode-surface py-20 lg:py-28">
         {{-- Figuras decorativas institucionales --}}
         <div aria-hidden="true" class="pointer-events-none absolute -left-48 -top-64 h-[380px] w-[380px] rounded-full bg-acode-tech opacity-[0.08]"></div>
         <div aria-hidden="true" class="pointer-events-none absolute -right-48 top-16 h-[520px] w-[520px] rounded-full bg-acode-accent opacity-[0.10]"></div>
@@ -361,7 +361,7 @@ Descripción:    Landing page pública institucional del SaaS. Presenta el ecosi
     </section>
 
     {{-- 4. Sección de Planes y Precios SaaS --}}
-    <section id="planes" class="relative isolate overflow-hidden border-b border-slate-200 bg-gradient-to-br from-[#F5F9FC] via-white to-[#EAF5FA] py-20">
+    <section id="planes" class="relative isolate overflow-hidden border-b border-slate-200 bg-gradient-to-br from-slate-50 via-white to-acode-surface py-20">
 
     {{-- Figuras decorativas institucionales --}}
         <div aria-hidden="true" class="pointer-events-none absolute -left-48 -top-48 h-[420px] w-[420px] rounded-full bg-acode-tech opacity-[0.12]"></div>

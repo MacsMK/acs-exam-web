@@ -164,9 +164,9 @@
                         <x-icon name="clock" class="w-5 h-5 text-acode-tech" />
                         Registrar Nuevo Periodo de Evaluación
                     </h2>
-                    <button type="button" @click="openCreate = false" class="text-slate-400 hover:text-slate-600 rounded-lg p-1 transition" aria-label="Cerrar formulario">
-                        <x-icon name="xMark" class="w-5 h-5" />
-                    </button>
+                    <x-button type="button" variant="neutral" size="sm" :icon-only="true" x-on:click="openCreate = false" title="Cerrar formulario" aria-label="Cerrar formulario">
+                        <x-icon name="xMark" class="w-4 h-4" />
+                    </x-button>
                 </div>
 
                 <form method="POST" action="{{ route('groups.periods.store', $group) }}" class="space-y-4">

@@ -108,7 +108,7 @@
                 <div class="flex justify-between items-center">
                     <span>Modalidad de pago:</span>
                     <span class="font-medium text-slate-800">
-                        {{ $activePackage ? 'Pasarela Simulada / WhatsApp' : 'Prueba gratuita / WhatsApp' }}
+                        {{ $activePackage ? 'Pago en línea simulado / WhatsApp' : 'Prueba gratuita / WhatsApp' }}
                     </span>
                 </div>
             </div>
@@ -241,7 +241,7 @@
                         @else
                             <x-button href="{{ route('teacher.subscription.checkout', $pkg) }}" variant="primary" class="w-full">
                                 <x-icon name="lock" class="w-4 h-4" />
-                                Continuar a pasarela
+                                Contratar este paquete
                             </x-button>
 
                             <a
@@ -270,7 +270,7 @@
         <div>
             <h2 class="text-xl font-bold text-acode-primary">Historial de pagos y comprobantes</h2>
             <p class="text-xs text-slate-500 mt-0.5">
-                Registro de transacciones procesadas mediante la pasarela simulada para tu cuenta docente.
+                Registro de transacciones procesadas mediante el pago en línea simulado para tu cuenta docente.
             </p>
         </div>
 
