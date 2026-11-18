@@ -71,9 +71,11 @@
                     <span class="text-slate-700">Grupos Escolares Creados</span>
                     <span class="text-acode-primary">{{ $usedGroups }} / {{ $maxGroups }}</span>
                 </div>
-                <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div class="h-full {{ $pctGroups >= 100 ? 'bg-acode-danger' : 'bg-acode-tech' }} rounded-full transition-all duration-500" style="width: {{ $pctGroups }}%"></div>
-                </div>
+                <x-progress-bar
+                    :value="$pctGroups"
+                    :variant="$pctGroups >= 100 ? 'danger' : 'tech'"
+                    label="Grupos escolares creados"
+                />
                 @if (!$activePackage && $usedGroups >= 1)
                     <p class="text-[11px] text-acode-danger mt-1">Cota máxima de prueba gratuita alcanzada. Contrata un plan para agregar más grupos.</p>
                 @endif
@@ -96,13 +98,11 @@
                         <span class="text-acode-primary">{{ $questionsCount }} / {{ number_format((int) $maxQuestions) }}</span>
                     @endif
                 </div>
-                <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    @if ($isUnlimitedQuestions)
-                        <div class="h-full w-full bg-acode-accent rounded-full transition-all duration-500"></div>
-                    @else
-                        <div class="h-full {{ $pctQuestions >= 100 ? 'bg-acode-danger' : 'bg-acode-accent' }} rounded-full transition-all duration-500" style="width: {{ $pctQuestions }}%"></div>
-                    @endif
-                </div>
+                <x-progress-bar
+                    :value="$pctQuestions"
+                    :variant="(! $isUnlimitedQuestions && $pctQuestions >= 100) ? 'danger' : 'accent'"
+                    label="Reactivos en banco de preguntas"
+                />
             </div>
 
             {{-- Exámenes activos --}}
@@ -116,9 +116,11 @@
                     <span class="text-slate-700">Exámenes Guardados / Activos</span>
                     <span class="text-acode-primary">{{ $usedExams }} / {{ $maxExams }}</span>
                 </div>
-                <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div class="h-full {{ $pctExams >= 100 ? 'bg-acode-danger' : 'bg-acode-primary' }} rounded-full transition-all duration-500" style="width: {{ $pctExams }}%"></div>
-                </div>
+                <x-progress-bar
+                    :value="$pctExams"
+                    :variant="$pctExams >= 100 ? 'danger' : 'primary'"
+                    label="Exámenes guardados o activos"
+                />
             </div>
         </x-card>
     </div>

@@ -68,9 +68,12 @@
         @php
             $pctAi = min(100, (int) round(($totalAiEvaluations / max(1, $aiRequestsLimit)) * 100));
         @endphp
-        <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-            <div class="h-full {{ $pctAi >= 90 ? 'bg-acode-warning' : 'bg-acode-tech' }} rounded-full transition-all duration-500" style="width: {{ $pctAi }}%"></div>
-        </div>
+        <x-progress-bar
+            :value="$pctAi"
+            :variant="$pctAi >= 90 ? 'warning' : 'tech'"
+            size="lg"
+            label="Evaluaciones asistidas utilizadas"
+        />
 
         <div class="flex items-center justify-between text-xs text-slate-500">
             <span>{{ 100 - $pctAi }}% disponible en el ciclo actual</span>

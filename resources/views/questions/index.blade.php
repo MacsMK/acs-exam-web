@@ -150,12 +150,12 @@
                             </span>
                         @endif
                     </div>
-                    <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                            class="h-full rounded-full transition-all duration-300 {{ $quotaUnlimited ? 'bg-acode-accent' : ($quotaPercent >= 95 ? 'bg-acode-danger' : 'bg-acode-tech') }}"
-                            :style="{ width: '{{ $quotaPercent }}%' }"
-                        ></div>
-                    </div>
+                    <x-progress-bar
+                        :value="$quotaPercent"
+                        :variant="$quotaUnlimited ? 'accent' : ($quotaPercent >= 95 ? 'danger' : 'tech')"
+                        size="sm"
+                        label="Cuota de preguntas del plan"
+                    />
                 </div>
             </x-card>
 
