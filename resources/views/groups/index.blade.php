@@ -220,16 +220,14 @@
                     Buscar grupo, materia o folio
                 </label>
                 <div class="relative">
-                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                        <x-icon name="search" class="w-4 h-4 text-slate-400" />
-                    </div>
-                    <input
+                    <x-form.input
                         id="group-search"
                         type="search"
+                        prefixIcon="search"
                         x-model="search"
                         placeholder="Buscar por grupo, asignatura o folio..."
-                        class="h-10 w-full rounded-lg border border-slate-300 pl-10 pr-9 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-acode-tech focus:ring-2 focus:ring-acode-tech/20"
-                    >
+                        class="pr-9"
+                    />
                     <x-icon-button
                         icon="xMark"
                         label="Limpiar búsqueda"

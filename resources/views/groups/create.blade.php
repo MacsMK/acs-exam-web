@@ -27,58 +27,31 @@
 
                 {{-- Nombre del grupo --}}
                 <div>
-                    <label
-                        for="name"
-                        class="mb-2 block text-sm font-semibold text-acode-primary"
-                    >
-                        Nombre del grupo
-                    </label>
-
-                    <input
-                        id="name"
-                        type="text"
-                        name="name"
-                        value="{{ old('name') }}"
-                        required
-                        maxlength="120"
-                        placeholder="Ej. Ingeniería de Software 5A"
-                        aria-invalid="{{ $errors->has('name') ? 'true' : 'false' }}"
-                        class="h-12 w-full rounded-lg border border-slate-300 px-4 text-sm text-slate-800 outline-none transition focus:border-acode-tech focus:ring-2 focus:ring-acode-tech/20"
-                    >
-
-                    @error('name')
-                        <p class="mt-2 text-sm text-acode-danger">
-                            {{ $message }}
-                        </p>
-                    @enderror
+                    <x-form.group name="name" label="Nombre del grupo" required>
+                        <x-form.input
+                            name="name"
+                            size="lg"
+                            value="{{ old('name') }}"
+                            required
+                            maxlength="120"
+                            placeholder="Ej. Ingeniería de Software 5A"
+                            aria-invalid="{{ $errors->has('name') ? 'true' : 'false' }}"
+                        />
+                    </x-form.group>
                 </div>
 
                 {{-- Materia --}}
                 <div>
-                    <label
-                        for="subject"
-                        class="mb-2 block text-sm font-semibold text-acode-primary"
-                    >
-                        Materia
-                        <span class="font-normal text-slate-500">(opcional)</span>
-                    </label>
-
-                    <input
-                        id="subject"
-                        type="text"
-                        name="subject"
-                        value="{{ old('subject') }}"
-                        maxlength="120"
-                        placeholder="Ej. Auditoría de Sistemas"
-                        aria-invalid="{{ $errors->has('subject') ? 'true' : 'false' }}"
-                        class="h-12 w-full rounded-lg border border-slate-300 px-4 text-sm text-slate-800 outline-none transition focus:border-acode-tech focus:ring-2 focus:ring-acode-tech/20"
-                    >
-
-                    @error('subject')
-                        <p class="mt-2 text-sm text-acode-danger">
-                            {{ $message }}
-                        </p>
-                    @enderror
+                    <x-form.group name="subject" label="Materia (opcional)">
+                        <x-form.input
+                            name="subject"
+                            size="lg"
+                            value="{{ old('subject') }}"
+                            maxlength="120"
+                            placeholder="Ej. Auditoría de Sistemas"
+                            aria-invalid="{{ $errors->has('subject') ? 'true' : 'false' }}"
+                        />
+                    </x-form.group>
                 </div>
 
                 {{-- Información del folio --}}
@@ -111,12 +84,9 @@
                         :cancel-url="route('groups.index')"
                     />
 
-                    <button
-                        type="submit"
-                        class="inline-flex min-h-11 items-center justify-center rounded-lg bg-acode-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acode-tech"
-                    >
+                    <x-button type="submit" size="lg">
                         Crear grupo
-                    </button>
+                    </x-button>
 
                 </div>
 
