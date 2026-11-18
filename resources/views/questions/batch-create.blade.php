@@ -28,7 +28,7 @@
             </nav>
 
             <x-button :href="route('questions.create')" variant="neutral" size="sm">
-                <x-icon name="edit" class="w-3.5 h-3.5 mr-1.5" />
+                <x-icon name="edit" class="w-3.5 h-3.5" />
                 Crear reactivo individual
             </x-button>
         </div>
@@ -36,20 +36,20 @@
         {{-- Encabezado --}}
         <header class="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold text-acode-primary tracking-tight">Captura rápida en lote</h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <h1 class="text-2xl font-bold text-acode-primary tracking-tight leading-8">Captura rápida en lote</h1>
+                <p class="mt-1 text-sm text-slate-500 leading-5">
                     Registra hasta {{ $maxItems ?? 30 }} reactivos en una sola operación y compárteles la misma materia base.
                 </p>
             </div>
 
             {{-- Indicador dinámico de cuota disponible --}}
-            <div class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 flex items-center gap-3 shadow-xs">
+            <div class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 flex items-center gap-3 shadow-sm">
                 <div class="text-xs">
                     <span class="block text-slate-500 font-medium">Impacto en cuota</span>
-                    <span class="font-bold text-acode-primary" x-show="quotaSummary.is_unlimited">
+                    <span class="font-semibold text-acode-primary" x-show="quotaSummary.is_unlimited">
                         <span x-text="rows.length"></span> reactivos por crear · Plan Ilimitado
                     </span>
-                    <span class="font-bold" :class="exceedsQuota ? 'text-acode-danger' : 'text-acode-primary'" x-show="!quotaSummary.is_unlimited">
+                    <span class="font-semibold" :class="exceedsQuota ? 'text-acode-danger' : 'text-acode-primary'" x-show="!quotaSummary.is_unlimited">
                         <span x-text="rows.length"></span> en lote / <span x-text="quotaSummary.remaining ?? 0"></span> disponibles
                     </span>
                 </div>
@@ -117,16 +117,17 @@
                             x-transition
                             class="mt-2 rounded-xl border border-acode-warning/60 bg-acode-warning/15 px-3 py-2 text-xs text-slate-800 flex flex-wrap items-center justify-between gap-2"
                         >
-                            <span class="font-medium text-amber-950">
+                            <span class="font-medium text-acode-primary">
                                 Ya existe una materia similar: «<span x-text="subjectSuggestions[0]?.name"></span>» ¿Usar esa?
                             </span>
-                            <button
+                            <x-button
                                 type="button"
+                                variant="neutral"
+                                size="sm"
                                 @click="applySuggestedSubject(subjectSuggestions[0].name)"
-                                class="rounded-lg border border-amber-400 bg-white px-2.5 py-1 text-xs font-semibold text-amber-950 hover:bg-amber-50 transition"
                             >
-                                Usar «<span x-text="subjectSuggestions[0]?.name"></span>»
-                            </button>
+                                Aceptar «<span x-text="subjectSuggestions[0]?.name"></span>»
+                            </x-button>
                         </div>
                     </x-form.group>
 
@@ -138,8 +139,8 @@
                             @click="addRow()"
                             x-bind:disabled="rows.length >= maxItems"
                         >
-                            <x-icon name="add" class="w-4 h-4 mr-1.5" />
-                            + Agregar fila
+                            <x-icon name="add" class="w-4 h-4" />
+                            Agregar fila
                         </x-button>
 
                         <x-button
@@ -149,8 +150,8 @@
                             @click="duplicateLastRow()"
                             x-bind:disabled="rows.length >= maxItems"
                         >
-                            <x-icon name="copy" class="w-4 h-4 mr-1.5" />
-                            Duplicar fila anterior
+                            <x-icon name="copy" class="w-4 h-4" />
+                            Copiar fila anterior
                         </x-button>
                     </div>
                 </div>
@@ -160,7 +161,7 @@
             <div class="space-y-4">
                 <template x-for="(row, rIdx) in rows" :key="row.uid">
                     <div
-                        class="rounded-xl border bg-white p-5 shadow-xs space-y-4 transition-colors"
+                        class="rounded-xl border bg-white p-5 shadow-sm space-y-4 transition-colors"
                         :class="rowErrors(rIdx).length > 0 ? 'border-acode-danger/60 ring-1 ring-acode-danger/20' : 'border-slate-200'"
                     >
                         {{-- Barra superior de la fila --}}
@@ -169,7 +170,7 @@
                                 <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-acode-primary text-white font-mono text-xs font-bold">
                                     #<span x-text="rIdx + 1"></span>
                                 </span>
-                                <span class="text-sm font-bold text-acode-primary" x-text="typeLabel(row.question_type)"></span>
+                                <span class="text-base font-semibold text-acode-primary" x-text="typeLabel(row.question_type)"></span>
                                 <span x-show="rowErrors(rIdx).length > 0" x-cloak class="inline-flex items-center gap-1 rounded-full bg-acode-danger/10 px-2.5 py-0.5 text-xs font-semibold text-acode-danger">
                                     <x-icon name="error" class="w-3.5 h-3.5" />
                                     <span x-text="rowErrors(rIdx).length + ' error(es)'"></span>
@@ -184,7 +185,7 @@
                                     @click="duplicateRow(rIdx)"
                                     x-bind:disabled="rows.length >= maxItems"
                                 >
-                                    <x-icon name="copy" class="w-3.5 h-3.5 mr-1" />
+                                    <x-icon name="copy" class="w-3.5 h-3.5" />
                                     Copiar
                                 </x-button>
 
@@ -195,8 +196,8 @@
                                     @click="removeRow(rIdx)"
                                     x-bind:disabled="rows.length <= 1"
                                 >
-                                    <x-icon name="delete" class="w-3.5 h-3.5 mr-1" />
-                                    Quitar
+                                    <x-icon name="delete" class="w-3.5 h-3.5" />
+                                    Eliminar
                                 </x-button>
                             </div>
                         </div>
@@ -215,7 +216,7 @@
                         {{-- Fila 1: Tipo, Título, Puntos, Tiempo y Materia individual opcional --}}
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
                             <div class="lg:col-span-3">
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">Tipo *</label>
+                                <label class="block text-[13px] font-medium text-slate-800 mb-1.5">Tipo *</label>
                                 <x-form.select
                                     x-bind:name="'items[' + rIdx + '][question_type]'"
                                     x-model="row.question_type"
@@ -229,7 +230,7 @@
                             </div>
 
                             <div class="lg:col-span-4">
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">Título interno *</label>
+                                <label class="block text-[13px] font-medium text-slate-800 mb-1.5">Título interno *</label>
                                 <x-form.input
                                     type="text"
                                     x-bind:name="'items[' + rIdx + '][title]'"
@@ -242,7 +243,7 @@
                             </div>
 
                             <div class="lg:col-span-2">
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">Materia (opc.)</label>
+                                <label class="block text-[13px] font-medium text-slate-800 mb-1.5">Materia (opc.)</label>
                                 <x-form.input
                                     type="text"
                                     x-bind:name="'items[' + rIdx + '][subject_tag]'"
@@ -254,7 +255,7 @@
                             </div>
 
                             <div class="lg:col-span-1">
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">Pts *</label>
+                                <label class="block text-[13px] font-medium text-slate-800 mb-1.5">Pts *</label>
                                 <x-form.input
                                     type="number"
                                     x-bind:name="'items[' + rIdx + '][default_points]'"
@@ -267,7 +268,7 @@
                             </div>
 
                             <div class="lg:col-span-2">
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">Tiempo (s) *</label>
+                                <label class="block text-[13px] font-medium text-slate-800 mb-1.5">Tiempo (s) *</label>
                                 <x-form.input
                                     type="number"
                                     x-bind:name="'items[' + rIdx + '][default_time_seconds]'"
@@ -282,7 +283,7 @@
 
                         {{-- Enunciado --}}
                         <div>
-                            <label class="block text-xs font-semibold text-slate-700 mb-1">Enunciado para el estudiante *</label>
+                            <label class="block text-[13px] font-medium text-slate-800 mb-1.5">Enunciado para el estudiante *</label>
                             <x-form.textarea
                                 rows="2"
                                 minlength="3"
@@ -298,10 +299,10 @@
                         {{-- Bloque compacto polimórfico: Opción múltiple --}}
                         <fieldset x-show="row.question_type === 'multiple_choice'" :disabled="row.question_type !== 'multiple_choice'" class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5">
                             <div class="flex items-center justify-between">
-                                <span class="text-xs font-bold text-acode-primary">Opciones de respuesta (marca la correcta)</span>
+                                <span class="text-xs font-semibold text-acode-primary">Opciones de respuesta (marca la correcta)</span>
                                 <x-button type="button" variant="neutral" size="sm" @click="addOption(rIdx)" x-bind:disabled="row.options.length >= 6">
-                                    <x-icon name="add" class="w-3.5 h-3.5 mr-1" />
-                                    Opción
+                                    <x-icon name="add" class="w-3.5 h-3.5" />
+                                    Agregar opción
                                 </x-button>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -314,7 +315,7 @@
                                             x-model.number="row.correct_option_index"
                                             class="h-4 w-4 text-acode-accent focus:ring-acode-tech shrink-0"
                                         />
-                                        <span class="text-xs font-bold text-slate-500 w-4 shrink-0" x-text="String.fromCharCode(65 + oIdx)"></span>
+                                        <span class="text-xs font-bold text-slate-600 w-4 shrink-0" x-text="String.fromCharCode(65 + oIdx)"></span>
                                         <x-form.input
                                             type="text"
                                             size="sm"
@@ -328,10 +329,11 @@
                                             type="button"
                                             @click="removeOption(rIdx, oIdx)"
                                             :disabled="row.options.length <= 2"
-                                            class="text-acode-danger hover:opacity-75 disabled:opacity-30 p-1"
-                                            aria-label="Quitar opción"
+                                            class="h-8 w-8 inline-flex items-center justify-center rounded-lg text-acode-danger hover:bg-acode-danger/10 disabled:opacity-30 shrink-0 transition"
+                                            aria-label="Eliminar opción"
+                                            title="Eliminar opción"
                                         >
-                                            <x-icon name="xMark" class="w-3.5 h-3.5" />
+                                            <x-icon name="xMark" class="w-4 h-4" />
                                         </button>
                                     </div>
                                 </template>
@@ -341,10 +343,10 @@
                         {{-- Bloque compacto polimórfico: Relación de columnas --}}
                         <fieldset x-show="row.question_type === 'matching'" :disabled="row.question_type !== 'matching'" class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5">
                             <div class="flex items-center justify-between">
-                                <span class="text-xs font-bold text-acode-primary">Pares Concepto ↔ Definición (2 a 8)</span>
+                                <span class="text-xs font-semibold text-acode-primary">Pares Concepto ↔ Definición (2 a 8)</span>
                                 <x-button type="button" variant="neutral" size="sm" @click="addPair(rIdx)" x-bind:disabled="row.pairs.length >= 8">
-                                    <x-icon name="add" class="w-3.5 h-3.5 mr-1" />
-                                    Par
+                                    <x-icon name="add" class="w-3.5 h-3.5" />
+                                    Agregar par
                                 </x-button>
                             </div>
                             <div class="space-y-2">
@@ -375,7 +377,7 @@
                                             @click="removePair(rIdx, pIdx)"
                                             x-bind:disabled="row.pairs.length <= 2"
                                         >
-                                            Quitar
+                                            Eliminar
                                         </x-button>
                                     </div>
                                 </template>
@@ -385,7 +387,7 @@
                         {{-- Bloque compacto polimórfico: Pregunta abierta --}}
                         <fieldset x-show="row.question_type === 'open'" :disabled="row.question_type !== 'open'" class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">Respuesta modelo canónica *</label>
+                                <label class="block text-[13px] font-medium text-slate-800 mb-1.5">Respuesta modelo canónica *</label>
                                 <x-form.textarea
                                     rows="2"
                                     maxlength="10000"
@@ -396,7 +398,7 @@
                                 ></x-form.textarea>
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">Rúbrica (opcional)</label>
+                                <label class="block text-[13px] font-medium text-slate-800 mb-1.5">Rúbrica (opcional)</label>
                                 <x-form.textarea
                                     rows="2"
                                     maxlength="10000"
@@ -411,7 +413,7 @@
                         <fieldset x-show="row.question_type === 'code'" :disabled="row.question_type !== 'code'" class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-3">
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Lenguaje *</label>
+                                    <label class="block text-[13px] font-medium text-slate-800 mb-1.5">Lenguaje *</label>
                                     <x-form.select
                                         size="sm"
                                         x-bind:name="'items[' + rIdx + '][programming_language]'"
@@ -430,21 +432,21 @@
                                         <option value="Go">Go</option>
                                     </x-form.select>
                                 </div>
-                                <label class="flex items-center gap-2 text-xs font-semibold text-acode-primary pt-4 cursor-pointer">
+                                <label class="flex items-center gap-2 text-[13px] font-medium text-slate-800 pt-4 cursor-pointer">
                                     <input type="hidden" :name="'items[' + rIdx + '][is_find_error]'" value="0">
                                     <input
                                         type="checkbox"
                                         :name="'items[' + rIdx + '][is_find_error]'"
                                         value="1"
                                         x-model="row.is_find_error"
-                                        class="h-4 w-4 rounded border-slate-300 text-acode-tech"
+                                        class="h-4 w-4 rounded-md border-slate-300 text-acode-tech"
                                     />
                                     <span>Modo «Encuentra y corrige el error»</span>
                                 </label>
                             </div>
 
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">Instrucciones técnicas (opcional)</label>
+                                <label class="block text-[13px] font-medium text-slate-800 mb-1.5">Instrucciones técnicas (opcional)</label>
                                 <x-form.textarea
                                     rows="2"
                                     maxlength="5000"
@@ -456,7 +458,7 @@
 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-700 mb-1">
+                                    <label class="block text-[13px] font-medium text-slate-800 mb-1.5">
                                         Código inicial <span x-show="row.is_find_error" class="text-acode-danger">*</span>
                                     </label>
                                     <x-form.textarea
@@ -470,7 +472,7 @@
                                     ></x-form.textarea>
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Solución canónica *</label>
+                                    <label class="block text-[13px] font-medium text-slate-800 mb-1.5">Solución canónica *</label>
                                     <x-form.textarea
                                         rows="3"
                                         :mono="true"
@@ -488,7 +490,7 @@
             </div>
 
             {{-- Barra inferior de guardado --}}
-            <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-xs">
+            <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
                 <x-unsaved-changes form-id="batch-create-form" :cancel-url="route('questions.index')" />
 
                 <div class="flex flex-wrap items-center justify-end gap-2.5">
@@ -499,12 +501,12 @@
                         @click="addRow()"
                         x-bind:disabled="rows.length >= maxItems"
                     >
-                        <x-icon name="add" class="w-4 h-4 mr-1.5" />
-                        + Agregar fila
+                        <x-icon name="add" class="w-4 h-4" />
+                        Agregar fila
                     </x-button>
 
                     <x-button type="submit" variant="primary" size="md">
-                        <x-icon name="save" class="w-4 h-4 mr-1.5" />
+                        <x-icon name="save" class="w-4 h-4" />
                         Guardar lote (<span x-text="rows.length"></span>)
                     </x-button>
                 </div>

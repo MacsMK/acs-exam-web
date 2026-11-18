@@ -47,6 +47,7 @@ class AttemptService
         private readonly ExamAssemblyService $assemblyService,
         private readonly AiEvaluatorContract $aiEvaluator,
         private readonly ExamNotificationService $examNotifications,
+        private readonly GradeCalculatorService $gradeCalculator,
     ) {
     }
 
@@ -319,26 +320,47 @@ class AttemptService
 
         $this->assertAttemptWithinTimeLimit($attempt);
 
-        $submitted = DB::transaction(static function () use ($attempt): StudentAttempt {
+        $submitted = DB::transaction(function () use ($attempt): StudentAttempt {
+            $attempt->loadMissing('exam');
+            $exam = $attempt->exam;
             $answers = $attempt->answers()->with('examQuestion.question')->get();
 
             $objectiveScore = (float) $answers
-                ->filter(static fn (StudentAnswer $a) => in_array($a->examQuestion->question->question_type, ['multiple_choice', 'matching'], true))
+                ->filter(static fn (StudentAnswer $a): bool => in_array($a->examQuestion?->question?->question_type, ['multiple_choice', 'matching'], true))
                 ->sum('points_awarded');
             $aiEstimatedScore = (float) $answers
                 ->whereNotNull('ai_similarity_score')
                 ->sum('points_awarded');
-            $pendingAiCount = $answers
-                ->whereNull('ai_evaluated_at')
-                ->filter(static fn (StudentAnswer $a) => in_array($a->examQuestion->question->question_type, ['open', 'code'], true))
-                ->count();
+
+            $qualitativeAnswers = $answers->filter(
+                static fn (StudentAnswer $a): bool => in_array($a->examQuestion?->question?->question_type, ['open', 'code'], true)
+            );
+            $requiresTeacherRecoteje = $exam !== null && in_array(
+                (string) $exam->result_visibility_mode,
+                ['objective_only_pending', 'estimated_score'],
+                true
+            );
+
+            $pendingAiCount = $requiresTeacherRecoteje
+                ? $qualitativeAnswers->whereNull('teacher_recoteje_score')->count()
+                : $qualitativeAnswers->whereNull('ai_evaluated_at')->count();
+
+            $totalExamWeight = $exam !== null
+                ? (float) $exam->examQuestions()->sum('points_weight')
+                : 0.0;
+            $rawTotal = $objectiveScore + $aiEstimatedScore;
+            $finalScore = $pendingAiCount === 0
+                ? ($exam !== null
+                    ? $this->gradeCalculator->normalizeScoreForExam($rawTotal, $exam, $totalExamWeight)
+                    : round($rawTotal, 2))
+                : null;
 
             $attempt->update([
                 'status' => 'submitted',
                 'submitted_at' => now(),
                 'objective_score' => $objectiveScore,
                 'ai_estimated_score' => $aiEstimatedScore,
-                'final_score' => $pendingAiCount === 0 ? $objectiveScore + $aiEstimatedScore : null,
+                'final_score' => $finalScore,
                 'pending_ai_count' => $pendingAiCount,
             ]);
 

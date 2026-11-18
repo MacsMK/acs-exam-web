@@ -239,6 +239,7 @@ class EloquentQuestionRepository implements QuestionRepositoryInterface
         $expandedExcluded = $this->expandExcludedLineageIds($excludedIds);
 
         $query = Question::query()
+            ->withoutGlobalScope(TenantTeacherScope::class)
             ->forTeacher($teacherId)
             ->ofType($questionType)
             ->when(
@@ -246,8 +247,11 @@ class EloquentQuestionRepository implements QuestionRepositoryInterface
                 static fn (Builder $builder): Builder => $builder->whereNotIn('id', $expandedExcluded)
             );
 
-        if (($subjectId !== null && $subjectId > 0) || Subject::cleanDisplayName($subjectFilter) !== null) {
-            $query->forSubject($subjectFilter, $subjectId);
+        $resolvedSubjectId = ($subjectId !== null && $subjectId > 0) ? $subjectId : null;
+        $cleanSubjectFilter = Subject::cleanDisplayName($subjectFilter);
+
+        if ($resolvedSubjectId !== null || $cleanSubjectFilter !== null) {
+            $query->forSubject($cleanSubjectFilter, $resolvedSubjectId);
         }
 
         return $query
@@ -255,6 +259,228 @@ class EloquentQuestionRepository implements QuestionRepositoryInterface
             ->inRandomOrder()
             ->limit($limit)
             ->get();
+    }
+
+    /**
+     * Calcula el inventario de reactivos disponibles del docente agrupado por tipo
+     * y materia normalizada, excluyendo los IDs ya usados y sus linajes Copy-On-Write.
+     *
+     * @param int             $teacherId           Identificador del docente autor.
+     * @param array<int, int> $excludedQuestionIds Identificadores de reactivos ya incluidos en el examen.
+     * @return array{
+     *     total: int,
+     *     by_type: array{multiple_choice: int, matching: int, open: int, code: int},
+     *     by_subject_id: array<int, int>,
+     *     by_subject_tag: array<string, int>,
+     *     by_type_and_subject: array<string, int>,
+     *     subjects: list<array{subject_id: int|null, name: string, normalized_name: string, total: int}>
+     * }
+     */
+    public function getAvailableInventoryForTeacher(int $teacherId, array $excludedQuestionIds = []): array
+    {
+        $expandedExcluded = $this->expandExcludedLineageIds($excludedQuestionIds);
+
+        $rows = Question::query()
+            ->withoutGlobalScope(TenantTeacherScope::class)
+            ->leftJoin('acs_subjects', 'acs_subjects.id', '=', 'acs_questions.subject_id')
+            ->where('acs_questions.teacher_id', $teacherId)
+            ->when(
+                $expandedExcluded !== [],
+                static fn (Builder $builder): Builder => $builder->whereNotIn('acs_questions.id', $expandedExcluded)
+            )
+            ->selectRaw(
+                'acs_questions.question_type, '
+                . 'acs_questions.subject_id, '
+                . 'acs_questions.subject_tag, '
+                . 'acs_subjects.name as subject_name, '
+                . 'acs_subjects.normalized_name as subject_normalized_name, '
+                . 'COUNT(*) as aggregate'
+            )
+            ->groupBy([
+                'acs_questions.question_type',
+                'acs_questions.subject_id',
+                'acs_questions.subject_tag',
+                'acs_subjects.name',
+                'acs_subjects.normalized_name',
+            ])
+            ->get();
+
+        $total = 0;
+        $byType = [
+            'multiple_choice' => 0,
+            'matching' => 0,
+            'open' => 0,
+            'code' => 0,
+        ];
+        $bySubjectId = [];
+        $bySubjectTag = [];
+        $byTypeAndSubject = [];
+        $subjectsCatalog = [];
+
+        foreach ($rows as $row) {
+            $type = (string) $row->question_type;
+            $count = (int) $row->aggregate;
+            $subjectId = $row->subject_id !== null ? (int) $row->subject_id : null;
+            $displayName = Subject::cleanDisplayName(
+                $row->subject_name !== null
+                    ? (string) $row->subject_name
+                    : ($row->subject_tag !== null ? (string) $row->subject_tag : null)
+            );
+            $normalizedTag = $row->subject_normalized_name !== null
+                ? (string) $row->subject_normalized_name
+                : ($displayName !== null ? Subject::normalizeName($displayName) : '');
+
+            $total += $count;
+
+            if (! array_key_exists($type, $byType)) {
+                $byType[$type] = 0;
+            }
+            $byType[$type] += $count;
+
+            if ($subjectId !== null && $subjectId > 0) {
+                $bySubjectId[$subjectId] = ($bySubjectId[$subjectId] ?? 0) + $count;
+                $idComboKey = "{$type}::id:{$subjectId}";
+                $byTypeAndSubject[$idComboKey] = ($byTypeAndSubject[$idComboKey] ?? 0) + $count;
+            }
+
+            if ($normalizedTag !== '') {
+                $bySubjectTag[$normalizedTag] = ($bySubjectTag[$normalizedTag] ?? 0) + $count;
+            }
+
+            $subjectKey = $normalizedTag !== '' ? $normalizedTag : '__none__';
+            $comboKey = "{$type}::{$subjectKey}";
+            $byTypeAndSubject[$comboKey] = ($byTypeAndSubject[$comboKey] ?? 0) + $count;
+
+            if ($normalizedTag !== '' && $displayName !== null) {
+                if (! isset($subjectsCatalog[$normalizedTag])) {
+                    $subjectsCatalog[$normalizedTag] = [
+                        'subject_id' => $subjectId,
+                        'name' => $displayName,
+                        'normalized_name' => $normalizedTag,
+                        'total' => 0,
+                    ];
+                } elseif ($subjectsCatalog[$normalizedTag]['subject_id'] === null && $subjectId !== null) {
+                    $subjectsCatalog[$normalizedTag]['subject_id'] = $subjectId;
+                }
+
+                $subjectsCatalog[$normalizedTag]['total'] += $count;
+            }
+        }
+
+        uasort($subjectsCatalog, static fn (array $a, array $b): int => strcmp($a['normalized_name'], $b['normalized_name']));
+
+        return [
+            'total' => $total,
+            'by_type' => $byType,
+            'by_subject_id' => $bySubjectId,
+            'by_subject_tag' => $bySubjectTag,
+            'by_type_and_subject' => $byTypeAndSubject,
+            'subjects' => array_values($subjectsCatalog),
+        ];
+    }
+
+    /**
+     * Obtiene reactivos disponibles del banco del docente paginados para selección manual,
+     * excluyendo los IDs ya incluidos y todo su linaje Copy-On-Write.
+     *
+     * @param int                  $teacherId   Identificador del docente autor.
+     * @param array<int, int>      $excludedIds Identificadores de reactivos ya utilizados en el examen.
+     * @param array<string, mixed> $filters     Filtros opcionales (question_type, subject_id, subject_tag, search, sort_by).
+     * @param int                  $perPage     Registros por página en SQL.
+     * @return LengthAwarePaginator<Question>
+     */
+    public function getAvailableCandidatesPaginated(
+        int $teacherId,
+        array $excludedIds,
+        array $filters = [],
+        int $perPage = 12
+    ): LengthAwarePaginator {
+        $expandedExcluded = $this->expandExcludedLineageIds($excludedIds);
+
+        return Question::query()
+            ->withoutGlobalScope(TenantTeacherScope::class)
+            ->forTeacher($teacherId)
+            ->when(
+                $expandedExcluded !== [],
+                static fn (Builder $builder): Builder => $builder->whereNotIn('acs_questions.id', $expandedExcluded)
+            )
+            ->search(isset($filters['search']) ? (string) $filters['search'] : null)
+            ->filterBy([
+                'question_type' => $filters['question_type'] ?? null,
+                'subject_id' => $filters['subject_id'] ?? null,
+                'subject_tag' => $filters['subject_tag'] ?? null,
+                'sort_by' => $filters['sort_by'] ?? 'latest',
+            ])
+            ->with(['subject', 'paraphrases'])
+            ->withCount(['paraphrases'])
+            ->paginate($perPage)
+            ->withQueryString();
+    }
+
+    /**
+     * Filtra una lista ordenada de IDs candidatos conservando únicamente los reactivos
+     * activos del docente que estén libres de colisión Copy-On-Write, preservando el orden.
+     *
+     * @param int             $teacherId    Identificador del docente autor.
+     * @param array<int, int> $candidateIds Identificadores candidatos a validar.
+     * @param array<int, int> $excludedIds  Identificadores ya incluidos en el examen.
+     * @return array<int, int>
+     */
+    public function filterAvailableQuestionIds(
+        int $teacherId,
+        array $candidateIds,
+        array $excludedIds = []
+    ): array {
+        $orderedCandidates = [];
+        $seenCandidate = [];
+
+        foreach ($candidateIds as $rawId) {
+            $id = (int) $rawId;
+            if ($id > 0 && ! isset($seenCandidate[$id])) {
+                $seenCandidate[$id] = true;
+                $orderedCandidates[] = $id;
+            }
+        }
+
+        if ($orderedCandidates === []) {
+            return [];
+        }
+
+        $expandedExcluded = $this->expandExcludedLineageIds($excludedIds);
+
+        $validIds = Question::query()
+            ->withoutGlobalScope(TenantTeacherScope::class)
+            ->forTeacher($teacherId)
+            ->whereIn('id', $orderedCandidates)
+            ->when(
+                $expandedExcluded !== [],
+                static fn (Builder $builder): Builder => $builder->whereNotIn('id', $expandedExcluded)
+            )
+            ->pluck('id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->all();
+
+        if ($validIds === []) {
+            return [];
+        }
+
+        $validLookup = array_flip($validIds);
+        $accepted = [];
+        $blockedLineage = [];
+
+        foreach ($orderedCandidates as $candidateId) {
+            if (! isset($validLookup[$candidateId]) || isset($blockedLineage[$candidateId])) {
+                continue;
+            }
+
+            $accepted[] = $candidateId;
+
+            foreach ($this->getLineageQuestionIds($candidateId) as $lineageId) {
+                $blockedLineage[$lineageId] = true;
+            }
+        }
+
+        return $accepted;
     }
 
     /**

@@ -11,11 +11,11 @@ declare(strict_types=1);
  * Ubicación:      app/Http/Requests/ExamStoreRequest.php
  * Requerimiento:  RW-19, RW-20, RW-21, RW-25, RW-26, RW-27
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Fecha Creación: 26/10/2026
  * Descripción:    FormRequest de alta de examen (datos base): título, escala de
  *                 calificación, visibilidad del resultado, incidentes máximos,
- *                 ventana de aplicación y grupos del docente (ADR-017).
+ *                 ventana de aplicación y grupos abiertos del docente (ADR-017).
  * ============================================================================
  */
 
@@ -45,14 +45,17 @@ class ExamStoreRequest extends FormRequest
             'grading_scale' => ['required', 'in:0-10,0-100'],
             'randomize_question_order' => ['sometimes', 'boolean'],
             'result_visibility_mode' => ['required', 'in:final_score,estimated_score,objective_only_pending,hidden'],
-            'require_webcam' => ['sometimes', 'boolean'],
+            'require_webcam' => ['nullable', 'boolean'],
             'max_allowed_incidents' => ['required', 'integer', 'min:0'],
             'starts_at' => ['required', 'date'],
             'ends_at' => ['required', 'date', 'after:starts_at'],
             'group_ids' => ['nullable', 'array'],
             'group_ids.*' => [
                 'integer',
-                Rule::exists('acs_groups', 'id')->where('teacher_id', $this->user()?->id),
+                'distinct',
+                Rule::exists('acs_groups', 'id')
+                    ->where('teacher_id', $this->user()?->id)
+                    ->where('is_closed', false),
             ],
         ];
     }
@@ -64,17 +67,27 @@ class ExamStoreRequest extends FormRequest
     {
         return [
             'title.required' => 'El campo título es obligatorio',
+            'title.string' => 'El título debe ser una cadena de texto válida',
             'title.max' => 'El título no debe exceder los 150 caracteres',
+            'description.string' => 'La descripción debe ser una cadena de texto válida',
             'grading_scale.required' => 'El campo escala de calificación es obligatorio',
             'grading_scale.in' => 'La opción seleccionada en escala de calificación no es válida',
+            'randomize_question_order.boolean' => 'El campo aleatorizar orden debe ser verdadero o falso',
             'result_visibility_mode.required' => 'El campo visibilidad del resultado es obligatorio',
             'result_visibility_mode.in' => 'La opción seleccionada en visibilidad del resultado no es válida',
+            'require_webcam.boolean' => 'El campo cámara requerida debe ser verdadero o falso',
             'max_allowed_incidents.required' => 'El campo incidentes máximos permitidos es obligatorio',
+            'max_allowed_incidents.integer' => 'El número de incidentes máximos permitidos debe ser un entero',
             'max_allowed_incidents.min' => 'El número de incidentes máximos permitidos debe ser mayor o igual que 0',
             'starts_at.required' => 'El campo fecha de inicio es obligatorio',
+            'starts_at.date' => 'La fecha de inicio no tiene un formato válido',
             'ends_at.required' => 'El campo fecha de cierre es obligatorio',
+            'ends_at.date' => 'La fecha de cierre no tiene un formato válido',
             'ends_at.after' => 'La fecha de cierre debe ser posterior a la fecha de inicio',
-            'group_ids.*.exists' => 'La opción seleccionada en grupo no es válida o no pertenece al docente',
+            'group_ids.array' => 'Los grupos seleccionados deben enviarse como un arreglo',
+            'group_ids.*.integer' => 'El identificador de grupo debe ser un número entero',
+            'group_ids.*.distinct' => 'No puedes asignar el mismo grupo más de una vez',
+            'group_ids.*.exists' => 'La opción seleccionada en grupo no es válida, está cerrada o no pertenece al docente',
         ];
     }
 }

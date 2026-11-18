@@ -45,15 +45,15 @@
             </nav>
 
             <x-button :href="route('questions.show', $question)" variant="neutral" size="sm">
-                <x-icon name="view" class="w-3.5 h-3.5 mr-1.5" />
+                <x-icon name="view" class="w-4 h-4" />
                 Ver detalles
             </x-button>
         </div>
 
         {{-- Encabezado --}}
         <header>
-            <h1 class="text-2xl font-bold text-acode-primary tracking-tight">Editar Reactivo</h1>
-            <p class="mt-1 text-sm text-slate-500">
+            <h1 class="text-2xl font-bold text-acode-primary tracking-tight leading-8">Editar Reactivo</h1>
+            <p class="mt-1 text-sm text-slate-500 leading-5">
                 Actualiza el enunciado, alternativas, parámetros de tiempo o puntaje manteniendo trazabilidad académica.
             </p>
         </header>
@@ -61,15 +61,15 @@
         {{-- Banner dinámico de Versionado Copy-on-Write --}}
         @if ($isLinkedToExam || $isLinkedToExams)
             <div class="rounded-xl border border-acode-warning/60 bg-acode-warning/15 p-4 text-slate-800 flex items-start gap-3">
-                <span class="w-9 h-9 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                <span class="w-9 h-9 rounded-lg bg-acode-warning/30 text-acode-primary flex items-center justify-center shrink-0">
                     <x-icon name="warning" class="w-5 h-5" />
                 </span>
                 <div class="space-y-1 text-xs">
-                    <p class="font-bold text-amber-950 text-sm">
-                        Este reactivo está vinculado a exámenes: al guardar se creará la nueva versión <span class="font-mono px-1.5 py-0.5 rounded bg-amber-200/70">v{{ $nextVersionNumber }}</span>
+                    <p class="font-semibold text-acode-primary text-sm">
+                        Este reactivo está vinculado a exámenes: al guardar se creará la nueva versión <span class="font-mono px-1.5 py-0.5 rounded bg-acode-warning/40 text-acode-primary">v{{ $nextVersionNumber }}</span>
                     </p>
-                    <p class="text-amber-900 leading-relaxed">
-                        Los exámenes y resultados históricos conservarán intacto este reactivo original (<span class="font-mono">#{{ $question->id }}</span>), mientras que tus nuevos exámenes usarán automáticamente la versión <strong>v{{ $nextVersionNumber }}</strong>.
+                    <p class="text-slate-700 leading-relaxed">
+                        Los exámenes y resultados históricos conservarán intacto este reactivo original (<span class="font-mono font-semibold text-acode-primary">#{{ $question->id }}</span>), mientras que tus nuevos exámenes usarán automáticamente la versión <strong>v{{ $nextVersionNumber }}</strong>.
                     </p>
                 </div>
             </div>
@@ -116,12 +116,12 @@
             </div>
 
             {{-- Barra inferior de acciones normativas --}}
-            <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-xs">
+            <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
                 <x-unsaved-changes form-id="edit-question-form" :cancel-url="route('questions.show', $question)" />
 
                 <div class="flex items-center justify-end gap-2.5">
                     <x-button type="submit" variant="primary" size="md">
-                        <x-icon name="save" class="w-4 h-4 mr-1.5" />
+                        <x-icon name="save" class="w-4 h-4" />
                         {{ ($isLinkedToExam || $isLinkedToExams) ? 'Guardar como v' . $nextVersionNumber : 'Actualizar reactivo' }}
                     </x-button>
                 </div>

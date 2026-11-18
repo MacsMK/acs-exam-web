@@ -45,6 +45,17 @@ return [
         'timeout' => (int) env('GEMINI_TIMEOUT', 15),
     ],
 
+    'sep_cedula' => [
+        'driver' => env('SEP_CEDULA_DRIVER', 'manual'),
+        'api_url' => env('SEP_CEDULA_API_URL'),
+        'api_key' => env('SEP_CEDULA_API_KEY'),
+        'timeout' => (int) env('SEP_CEDULA_TIMEOUT', 10),
+    ],
+
+    'payment_gateway' => [
+        'driver' => env('PAYMENT_GATEWAY_DRIVER', 'simulated'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

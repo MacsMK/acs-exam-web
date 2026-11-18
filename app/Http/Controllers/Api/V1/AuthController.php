@@ -6,12 +6,17 @@ declare(strict_types=1);
  * ============================================================================
  * A-CODE SOLUTIONS - ANALIZAMOS, DISEÑAMOS, TRANSFORMAMOS
  * ============================================================================
- * Archivo:     AuthController.php
- * Ubicación:   app/Http/Controllers/Api/V1/AuthController.php
- * Descripción: Auth de la app móvil (acs-exam-mobile, MPM-V4 §6.6.1):
- *              login en dos pasos, token Sanctum al final. Respuestas
- *              alineadas 1:1 contra ApiEndpoints/AuthRepository del
- *              cliente móvil (ver docs/04_DECISIONES_ADR.md).
+ * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
+ * Archivo:        AuthController.php
+ * Ubicación:      app/Http/Controllers/Api/V1/AuthController.php
+ * Requerimiento:  RF-AUT-001..011, MPM-V4 §6.6.1, ADR-010, ADR-035, ADR-057
+ * Autor:          Equipo 4 (A-Code Solutions)
+ * Versión:        2.1.0
+ * Fecha Creación: 26/10/2026
+ * Descripción:    Controlador de autenticación API v1 consumido por la app
+ *                 móvil (acs-exam-mobile): registro docente híbrido y de
+ *                 alumnos, login en dos pasos, reenvío 2FA y emisión/revocación
+ *                 de tokens Sanctum bajo sobre uniforme ApiResponse.
  * ============================================================================
  */
 
@@ -29,23 +34,54 @@ use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Controlador de autenticación API v1 (Sanctum + 2FA + verificación docente).
+ *
+ * @package App\Http\Controllers\Api\V1
+ */
 class AuthController extends Controller
 {
+    /**
+     * Inicializa el controlador inyectando el servicio transaccional de autenticación.
+     *
+     * @param AuthService $authService Servicio de autenticación y 2FA.
+     */
     public function __construct(private readonly AuthService $authService)
     {
     }
 
+    /**
+     * Registra una cuenta docente vía API v1 aplicando acreditación híbrida.
+     *
+     * @param RegisterTeacherRequest $request Solicitud validada de alta docente.
+     * @return JsonResponse
+     */
     public function registerTeacher(RegisterTeacherRequest $request): JsonResponse
     {
-        $user = $this->authService->register($request->validated(), 'teacher');
+        $user = $this->authService->register(
+            $request->validated(),
+            'teacher',
+            $request->file('verification_document'),
+            $request->ip(),
+            $request->userAgent(),
+        );
 
         return ApiResponse::success(
-            $this->withDemoCode($user, ['user_id' => $user->id]),
+            $this->withDemoCode($user, [
+                'user_id' => $user->id,
+                'verification_status' => $user->teacher_verification_status,
+            ]),
             'Registro exitoso. Verifica tu código de un solo uso.',
             201,
         );
     }
 
+    /**
+     * Registra una cuenta de alumno vía API v1 y emite su primer código 2FA.
+     *
+     * @param RegisterStudentRequest $request Solicitud validada de alta de alumno.
+     * @return JsonResponse
+     */
     public function registerStudent(RegisterStudentRequest $request): JsonResponse
     {
         $user = $this->authService->register($request->validated(), 'student');
@@ -57,6 +93,12 @@ class AuthController extends Controller
         );
     }
 
+    /**
+     * Valida credenciales de acceso y dispara el envío del código 2FA.
+     *
+     * @param LoginRequest $request Solicitud validada con correo y contraseña.
+     * @return JsonResponse
+     */
     public function login(LoginRequest $request): JsonResponse
     {
         $user = $this->authService->attemptCredentials(
@@ -71,36 +113,13 @@ class AuthController extends Controller
     }
 
     /**
-     * `demo_code` es un campo opcional solo para entornos de demostración:
-     * únicamente se incluye cuando el correo NO sale de verdad
-     * (MAIL_MAILER=log o array), igual que el código ya visible en
-     * storage/logs/laravel.log. Con un correo real (smtp, ses, etc.) el
-     * código llega solo por ese medio y la API nunca lo devuelve, porque
-     * entregarlo en la respuesta anularía el segundo factor.
+     * Completa el segundo factor (api.v1.auth.two-factor, MPM-V4 Tabla 12,
+     * ADR-010) y emite un token personal Sanctum para la app móvil.
      *
-     * @param array<string, mixed> $data
-     * @return array<string, mixed>
-     */
-    private function withDemoCode(User $user, array $data): array
-    {
-        if (in_array(config('mail.default'), ['log', 'array'], true)) {
-            $data['demo_code'] = $user->two_factor_code;
-        }
-
-        return $data;
-    }
-
-    /**
-     * api.v1.auth.two-factor (MPM-V4 Tabla 12). A diferencia del panel web
-     * (sesión con `user_id` disponible desde el paso 1,
-     * Auth\LoginController), la API móvil es sin estado entre `login()` y
-     * este paso: `AuthRepository.verifyTwoFactor` del cliente Flutter
-     * solo manda `{"code": "..."}`, sin ningún identificador de usuario
-     * (acs-exam-mobile, auth_repository.dart). Se localiza al usuario por
-     * el código vigente y no vencido — es la única información disponible
-     * para hacerlo; el riesgo de colisión entre dos códigos idénticos
-     * vigentes al mismo tiempo se acepta y queda documentado como
-     * decisión de diseño (docs/04_DECISIONES_ADR.md).
+     * @param VerifyTwoFactorRequest $request Solicitud validada con código 2FA.
+     * @return JsonResponse
+     *
+     * @throws ValidationException Si no existe un código vigente coincidente.
      */
     public function twoFactor(VerifyTwoFactorRequest $request): JsonResponse
     {
@@ -128,9 +147,11 @@ class AuthController extends Controller
     }
 
     /**
-     * api.v1.auth.two-factor.resend (RF-AUT-006, ADR-035). Responde lo mismo
-     * exista o no una verificación pendiente para el correo, para no revelar
-     * qué cuentas existen; solo avisa (429) cuando falta esperar el intervalo.
+     * Reenvía el código 2FA respetando la ventana de espera (RF-AUT-006, ADR-035)
+     * con respuesta uniforme para evitar enumeración de cuentas.
+     *
+     * @param ResendTwoFactorRequest $request Solicitud validada con correo.
+     * @return JsonResponse
      */
     public function resendTwoFactor(ResendTwoFactorRequest $request): JsonResponse
     {
@@ -142,15 +163,42 @@ class AuthController extends Controller
         );
     }
 
+    /**
+     * Devuelve el perfil del usuario autenticado por token Sanctum.
+     *
+     * @return JsonResponse
+     */
     public function me(): JsonResponse
     {
         return ApiResponse::success(['user' => request()->user()]);
     }
 
+    /**
+     * Revoca el token Sanctum activo de la sesión móvil actual.
+     *
+     * @return JsonResponse
+     */
     public function logout(): JsonResponse
     {
         request()->user()->currentAccessToken()->delete();
 
         return ApiResponse::success(null, 'Sesión cerrada.');
+    }
+
+    /**
+     * Agrega `demo_code` únicamente cuando el mailer no envía correo real
+     * (`log` o `array`) para facilitar demostraciones sin exponer 2FA en producción.
+     *
+     * @param User $user Cuenta con código 2FA recién emitido.
+     * @param array<string, mixed> $data Payload base de la respuesta JSON.
+     * @return array<string, mixed>
+     */
+    private function withDemoCode(User $user, array $data): array
+    {
+        if (in_array(config('mail.default'), ['log', 'array'], true)) {
+            $data['demo_code'] = $user->two_factor_code;
+        }
+
+        return $data;
     }
 }

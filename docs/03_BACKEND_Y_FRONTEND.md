@@ -13,7 +13,7 @@ guests → `/login`, usuarios autenticados sin ruta específica → `/dashboard`
 | --- | --- | --- |
 | Invitados | — | `auth/register-teacher`, `auth/register-student`, `login`, `verify-2fa` (GET+POST cada una) |
 | Autenticado (cualquier rol) | `auth` | `dashboard` (redirige según rol), `logout` |
-| Docente | `auth` + `role:teacher` | `groups` (index/create/store/show, cerrar/reabrir, periodos/sabana), `questions` (CRUD + `template/csv`, `template/xlsx`, `import/preview`, `import`, `batch/create`, `batch`, `subjects/merge`, `subjects/suggestions`, `{question}/duplicate`, `{question}/parafrasis`), `exams` (index/create/store, `armar`, `apartados`, `propuesta`, `configuracion`, `revisar`, `publicar`, `monitoreo`) |
+| Docente | `auth` + `role:teacher` | `groups` (index/create/store/show, cerrar/reabrir, periodos/sabana), `questions` (CRUD + `template/csv`, `template/xlsx`, `import/preview`, `import`, `batch/create`, `batch`, `subjects/merge`, `subjects/suggestions`, `{question}/duplicate`, `{question}/parafrasis`), `exams` (index/create/store/edit/update/destroy, `armar`, `apartados` store/update/destroy, `propuesta` generate/accept/discard, `reactivos-manuales`, `reactivos/{examQuestion}` nuevo-sorteo/destroy, `configuracion`, `revisar`, `publicar`, `despublicar`, `cerrar`, `visibilidad-resultados`, `monitoreo`, `revision`) |
 | Alumno | `auth` + `role:student` | `grupos/unirse` (form + submit), `mis-examenes` |
 | Intentos (ambos lados pueden iniciarlos) | `auth` | `examenes/{exam}/iniciar`, `intentos/{attempt}` (show/responder/terminar/resultado) |
 

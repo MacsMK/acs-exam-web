@@ -68,7 +68,7 @@
                 @endif
 
                 <x-button :href="route('questions.batch.create')" variant="neutral" size="sm">
-                    <x-icon name="add" class="w-3.5 h-3.5 mr-1" />
+                    <x-icon name="add" class="w-4 h-4 text-acode-tech" />
                     Captura rápida en lote
                 </x-button>
             </div>
@@ -76,8 +76,8 @@
 
         {{-- Encabezado principal --}}
         <header>
-            <h1 class="text-2xl font-bold text-acode-primary tracking-tight">Nueva pregunta</h1>
-            <p class="mt-1 text-sm text-slate-500">
+            <h1 class="text-2xl font-bold text-acode-primary tracking-tight leading-8">Nueva pregunta</h1>
+            <p class="mt-1 text-sm text-slate-500 leading-5">
                 Completa los tres pasos y verifica en la columna derecha cómo se mostrará el reactivo al estudiante.
             </p>
         </header>
@@ -121,17 +121,17 @@
             </div>
 
             {{-- Barra inferior de acciones normativas --}}
-            <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-xs">
+            <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
                 <x-unsaved-changes form-id="create-question-form" :cancel-url="route('questions.index')" />
 
                 <div class="flex flex-wrap items-center justify-end gap-2.5">
                     <x-button type="submit" name="save_and_new" value="1" variant="secondary" size="md">
-                        <x-icon name="add" class="w-4 h-4 mr-1.5" />
-                        Guardar y crear otra
+                        <x-icon name="add" class="w-4 h-4" />
+                        Guardar y crear otro
                     </x-button>
 
                     <x-button type="submit" variant="primary" size="md">
-                        <x-icon name="save" class="w-4 h-4 mr-1.5" />
+                        <x-icon name="save" class="w-4 h-4" />
                         Guardar reactivo
                     </x-button>
                 </div>

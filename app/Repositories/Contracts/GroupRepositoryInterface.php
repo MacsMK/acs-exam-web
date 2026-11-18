@@ -51,6 +51,16 @@ interface GroupRepositoryInterface
     public function getForTeacher(int $teacherId): Collection;
 
     /**
+     * Obtiene los grupos abiertos del docente (y opcionalmente grupos ya asignados
+     * aunque estén cerrados) con conteo de alumnos precargado para selectores sin N+1.
+     *
+     * @param int             $teacherId       Identificador del docente propietario.
+     * @param array<int, int> $includeGroupIds Identificadores adicionales del docente a incluir.
+     * @return Collection<int, Group>
+     */
+    public function getSelectableForTeacher(int $teacherId, array $includeGroupIds = []): Collection;
+
+    /**
      * Obtiene los grupos abiertos (no cerrados, RF-GRU-019) en los que está inscrito un alumno.
      *
      * @param int $studentId Identificador del alumno.

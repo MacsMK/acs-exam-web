@@ -44,6 +44,7 @@ class StudentGradeController extends Controller
             ->where('student_id', $student->id)
             ->where('status', 'submitted')
             ->whereNotNull('final_score')
+            ->whereHas('exam', static fn ($query) => $query->where('result_visibility_mode', '!=', 'hidden'))
             ->whereHas('group', static fn ($query) => $query->where('is_closed', false))
             ->with(['exam', 'group.teacher'])
             ->latest('submitted_at')
@@ -89,6 +90,7 @@ class StudentGradeController extends Controller
             ->where('group_id', $group->id)
             ->where('status', 'submitted')
             ->whereNotNull('final_score')
+            ->whereHas('exam', static fn ($query) => $query->where('result_visibility_mode', '!=', 'hidden'))
             ->with(['exam'])
             ->latest('submitted_at')
             ->get();

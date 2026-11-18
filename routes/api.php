@@ -28,7 +28,9 @@ use App\Http\Controllers\Api\V1\PrivacyController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
-    Route::post('auth/register/teacher', [AuthController::class, 'registerTeacher'])->name('auth.register.teacher');
+    Route::post('auth/register/teacher', [AuthController::class, 'registerTeacher'])
+        ->middleware('throttle:10,1')
+        ->name('auth.register.teacher');
     Route::post('auth/register/student', [AuthController::class, 'registerStudent'])->name('auth.register.student');
     // Límite de intentos por IP: el código 2FA tiene solo 6 dígitos y se
     // localiza sin identificador de usuario, así que sin tope se podría
@@ -48,22 +50,24 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('privacy-notice', [PrivacyController::class, 'show'])->name('privacy.show');
         Route::post('privacy-notice/accept', [PrivacyController::class, 'accept'])->name('privacy.accept');
 
-        Route::get('groups', [GroupController::class, 'index'])->name('groups.index');
-        Route::post('groups/join', [GroupController::class, 'join'])->name('groups.join');
-        Route::post('groups/verify', [GroupController::class, 'verify'])->name('groups.verify');
-        Route::get('groups/{group}/students', [GroupController::class, 'students'])->name('groups.students');
-        Route::post('groups/{group}/leave', [GroupController::class, 'leave'])->name('groups.leave');
+        Route::middleware('teacher.verified')->group(function (): void {
+            Route::get('groups', [GroupController::class, 'index'])->name('groups.index');
+            Route::post('groups/join', [GroupController::class, 'join'])->name('groups.join');
+            Route::post('groups/verify', [GroupController::class, 'verify'])->name('groups.verify');
+            Route::get('groups/{group}/students', [GroupController::class, 'students'])->name('groups.students');
+            Route::post('groups/{group}/leave', [GroupController::class, 'leave'])->name('groups.leave');
 
-        Route::get('exams', [ExamController::class, 'index'])->name('exams.index');
-        Route::get('exams/{exam}/progress', [ExamController::class, 'progress'])->name('exams.progress');
-        Route::post('exams/take', [AttemptController::class, 'take'])->name('exams.take');
-        Route::post('exams/{exam}/answers', [AttemptController::class, 'answers'])->name('exams.answers');
-        Route::post('exams/{exam}/incidents', [AttemptController::class, 'incidents'])->name('exams.incidents');
+            Route::get('exams', [ExamController::class, 'index'])->name('exams.index');
+            Route::get('exams/{exam}/progress', [ExamController::class, 'progress'])->name('exams.progress');
+            Route::post('exams/take', [AttemptController::class, 'take'])->name('exams.take');
+            Route::post('exams/{exam}/answers', [AttemptController::class, 'answers'])->name('exams.answers');
+            Route::post('exams/{exam}/incidents', [AttemptController::class, 'incidents'])->name('exams.incidents');
 
-        Route::get('grades', [GradeController::class, 'index'])->name('grades.index');
-        Route::get('grades/statistics', [GradeController::class, 'statistics'])->name('grades.statistics');
-        Route::get('grades/{attempt}', [GradeController::class, 'show'])->whereNumber('attempt')->name('grades.show');
-        Route::get('grades/{attempt}/review', [GradeController::class, 'review'])->whereNumber('attempt')->name('grades.review');
+            Route::get('grades', [GradeController::class, 'index'])->name('grades.index');
+            Route::get('grades/statistics', [GradeController::class, 'statistics'])->name('grades.statistics');
+            Route::get('grades/{attempt}', [GradeController::class, 'show'])->whereNumber('attempt')->name('grades.show');
+            Route::get('grades/{attempt}/review', [GradeController::class, 'review'])->whereNumber('attempt')->name('grades.review');
+        });
 
         Route::post('devices', [DeviceController::class, 'store'])->name('devices.store');
     });

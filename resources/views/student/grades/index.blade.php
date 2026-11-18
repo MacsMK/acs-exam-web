@@ -192,7 +192,12 @@
                 <x-table.th align="right">Detalles</x-table.th>
             </x-slot:header>
 
-            @forelse ($attempts ?? auth()->user()->studentAttempts()->with(['exam.teacher', 'group'])->latest()->get() as $attempt)
+            @forelse ($attempts ?? $recentAttempts ?? collect() as $attempt)
+                @php
+                    $isHiddenMode = ($attempt->exam?->result_visibility_mode ?? 'hidden') === 'hidden';
+                    $isHundredScale = ($attempt->exam?->grading_scale ?? '0-10') === '0-100';
+                    $passingMin = $isHundredScale ? 60.0 : 6.0;
+                @endphp
                 <tr>
                     {{-- Examen --}}
                     <x-table.td>
@@ -217,7 +222,7 @@
                     {{-- Profesor --}}
                     <x-table.td>
                         <span class="text-xs text-slate-600">
-                            {{ $attempt->exam?->teacher?->full_name ?? 'Docente titular' }}
+                            {{ $attempt->group?->teacher?->full_name ?? 'Docente titular' }}
                         </span>
                     </x-table.td>
 
@@ -230,13 +235,17 @@
 
                     {{-- Calificación --}}
                     <x-table.td align="center">
-                        @if (($attempt->final_score ?? $attempt->objective_score) !== null)
+                        @if ($isHiddenMode)
+                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                                Reservado
+                            </span>
+                        @elseif ($attempt->final_score !== null)
                             <div class="flex flex-col items-center">
-                                <span class="font-bold font-mono text-base {{ ($attempt->final_score ?? $attempt->objective_score) >= 6.0 ? 'text-teal-600' : 'text-acode-danger' }}">
-                                    {{ number_format((float) ($attempt->final_score ?? $attempt->objective_score), 1) }}
+                                <span class="font-bold font-mono text-base {{ (float) $attempt->final_score >= $passingMin ? 'text-teal-600' : 'text-acode-danger' }}">
+                                    {{ number_format((float) $attempt->final_score, 1) }}
                                 </span>
                                 <span class="text-[10px] text-slate-400 font-mono">
-                                    / {{ $attempt->exam?->grading_scale === '0-100' ? '100' : '10.0' }}
+                                    / {{ $isHundredScale ? '100' : '10.0' }}
                                 </span>
                             </div>
                         @else

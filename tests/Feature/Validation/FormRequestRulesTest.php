@@ -47,6 +47,7 @@ use App\Models\Question;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Validator as ValidatorInstance;
@@ -213,8 +214,23 @@ class FormRequestRulesTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // Registro de docente (teléfono obligatorio)
+    // Registro de docente (teléfono obligatorio + acreditación híbrida ADR-057)
     // ------------------------------------------------------------------
+
+    /**
+     * Payload base válido para registro docente por vía abierta (revisión documental).
+     *
+     * @return array<string, mixed>
+     */
+    private static function teacherBase(): array
+    {
+        return array_merge(self::studentBase(), [
+            'institution_name' => 'Instituto Politécnico Nacional',
+            'educational_level' => 'superior',
+            'credential_type' => 'institutional_id',
+            'verification_document' => UploadedFile::fake()->create('credencial.pdf', 200, 'application/pdf'),
+        ]);
+    }
 
     /**
      * @return array<string, array{0: array<string, mixed>, 1: ?string}>
@@ -224,7 +240,13 @@ class FormRequestRulesTest extends TestCase
         $unset = self::UNSET;
 
         return [
-            'payload completo' => [[], null],
+            'payload completo (vía abierta)' => [[], null],
+            'vía rápida con código institucional omite institución, tipo y comprobante' => [[
+                'invitation_code' => 'ACS-7K9P-3M4Q',
+                'institution_name' => $unset,
+                'credential_type' => $unset,
+                'verification_document' => $unset,
+            ], null],
             'sin teléfono' => [['phone' => $unset], 'phone'],
             'teléfono nulo' => [['phone' => null], 'phone'],
             'teléfono vacío' => [['phone' => ''], 'phone'],
@@ -234,6 +256,26 @@ class FormRequestRulesTest extends TestCase
             'aviso de privacidad rechazado' => [['accepts_privacy_notice' => false], 'accepts_privacy_notice'],
             'nombre de 101 caracteres' => [['first_name' => str_repeat('a', 101)], 'first_name'],
             'confirmación distinta' => [['password_confirmation' => 'Otra1234'], 'password'],
+            'sin institución (vía abierta)' => [['institution_name' => $unset], 'institution_name'],
+            'institución vacía (vía abierta)' => [['institution_name' => ''], 'institution_name'],
+            'institución de exactamente 150 caracteres' => [['institution_name' => str_repeat('a', 150)], null],
+            'institución de 151 caracteres' => [['institution_name' => str_repeat('a', 151)], 'institution_name'],
+            'sin tipo de comprobante (vía abierta simplificada)' => [['credential_type' => $unset], null],
+            'tipo de comprobante constancia laboral' => [['credential_type' => 'employment_letter'], null],
+            'tipo de comprobante horario oficial' => [['credential_type' => 'official_schedule'], null],
+            'tipo de comprobante inválido' => [['credential_type' => 'pasaporte'], 'credential_type'],
+            'nivel educativo opcional ausente' => [['educational_level' => $unset], null],
+            'nivel educativo media superior' => [['educational_level' => 'media_superior'], null],
+            'nivel educativo inválido' => [['educational_level' => 'posdoctorado'], 'educational_level'],
+            'sin comprobante documental (vía abierta)' => [['verification_document' => $unset], 'verification_document'],
+            'comprobante documental no es archivo' => [['verification_document' => 'no-es-archivo'], 'verification_document'],
+            'cédula profesional opcional ausente' => [['professional_license' => $unset], null],
+            'cédula profesional de 7 dígitos' => [['professional_license' => '1234567'], null],
+            'cédula profesional de 8 dígitos' => [['professional_license' => '12345678'], null],
+            'cédula profesional de 6 dígitos' => [['professional_license' => '123456'], 'professional_license'],
+            'cédula profesional de 9 dígitos' => [['professional_license' => '123456789'], 'professional_license'],
+            'cédula profesional con letras' => [['professional_license' => '1234abcd'], 'professional_license'],
+            'código de invitación de 33 caracteres' => [['invitation_code' => str_repeat('A', 33)], 'invitation_code'],
         ];
     }
 
@@ -245,8 +287,71 @@ class FormRequestRulesTest extends TestCase
     {
         $this->assertRule(
             new RegisterTeacherRequest,
-            $this->merge(self::studentBase(), $overrides),
+            $this->merge(self::teacherBase(), $overrides),
             $errorField,
+        );
+    }
+
+    public function test_register_teacher_validates_document_mime_types_and_5mb_limit(): void
+    {
+        $request = new RegisterTeacherRequest;
+
+        // Formatos y tamaños permitidos (PDF <= 5120 KB, JPG, PNG)
+        $this->assertRule(
+            $request,
+            $this->merge(self::teacherBase(), [
+                'verification_document' => UploadedFile::fake()->create('limite.pdf', 5120, 'application/pdf'),
+            ]),
+            null,
+        );
+        $this->assertRule(
+            $request,
+            $this->merge(self::teacherBase(), [
+                'verification_document' => UploadedFile::fake()->image('credencial.jpg'),
+            ]),
+            null,
+        );
+        $this->assertRule(
+            $request,
+            $this->merge(self::teacherBase(), [
+                'verification_document' => UploadedFile::fake()->image('credencial.png'),
+            ]),
+            null,
+        );
+
+        // Formatos prohibidos (.php, .txt, .exe) y exceso de 5 MB (5121 KB)
+        $this->assertRule(
+            $request,
+            $this->merge(self::teacherBase(), [
+                'verification_document' => UploadedFile::fake()->create('script.php', 10, 'application/x-php'),
+            ]),
+            'verification_document',
+        );
+        $this->assertRule(
+            $request,
+            $this->merge(self::teacherBase(), [
+                'verification_document' => UploadedFile::fake()->create('nota.txt', 10, 'text/plain'),
+            ]),
+            'verification_document',
+        );
+        $this->assertRule(
+            $request,
+            $this->merge(self::teacherBase(), [
+                'verification_document' => UploadedFile::fake()->create('binario.exe', 10, 'application/octet-stream'),
+            ]),
+            'verification_document',
+        );
+
+        $oversizedValidator = $this->validate(
+            $request,
+            $this->merge(self::teacherBase(), [
+                'verification_document' => UploadedFile::fake()->create('excedido.pdf', 5121, 'application/pdf'),
+            ]),
+        );
+        $this->assertTrue($oversizedValidator->errors()->has('verification_document'));
+        $this->assertSame(
+            'El tamaño del comprobante de acreditación docente debe ser menor o igual que 5 MB',
+            $oversizedValidator->errors()->first('verification_document'),
         );
     }
 

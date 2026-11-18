@@ -3,7 +3,7 @@
     <x-card class="border-slate-200 shadow-sm">
         <div class="flex items-center justify-between gap-2 pb-3 mb-4 border-b border-slate-100">
             <div>
-                <span class="block text-[11px] font-bold uppercase tracking-wider text-acode-tech">
+                <span class="block text-xs font-semibold uppercase tracking-wider text-acode-tech">
                     Reactivo activo
                 </span>
                 <span class="block text-xs text-slate-500">
@@ -25,7 +25,7 @@
         </div>
 
         {{-- Enunciado (con whitespace-pre-line) --}}
-        <div class="text-sm text-slate-800 whitespace-pre-line leading-relaxed mb-5 break-words min-h-[3rem]">
+        <div class="text-sm text-slate-700 whitespace-pre-line leading-5 mb-5 break-words min-h-[3rem]">
             <span
                 x-show="stem.trim().length > 0"
                 x-text="stem"
@@ -38,56 +38,56 @@
 
         {{-- Vista previa: Opción múltiple --}}
         <div x-show="type === 'multiple_choice'" class="space-y-2">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
                 Selecciona una respuesta
             </p>
             <template x-for="(opt, i) in options" :key="opt.uid">
                 <button
                     type="button"
                     @click="previewSelectedOption = i"
-                    class="w-full text-left flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-xs transition-all"
+                    class="w-full text-left flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-sm transition-all"
                     :class="previewSelectedOption === i
                         ? 'border-acode-tech bg-acode-tech/5 text-acode-primary font-semibold'
                         : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'"
                 >
                     <span
-                        class="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold shrink-0"
+                        class="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
                         :class="previewSelectedOption === i
                             ? 'bg-acode-tech text-white'
                             : 'bg-slate-100 text-slate-600'"
                         x-text="String.fromCharCode(65 + i)"
                     ></span>
                     <span
-                        class="leading-snug pt-0.5 break-words"
+                        class="leading-5 pt-0.5 break-words"
                         :class="!opt.text.trim() ? 'italic text-slate-400' : ''"
                         x-text="opt.text.trim() || ('Opción ' + String.fromCharCode(65 + i))"
                     ></span>
                 </button>
             </template>
-            <p class="text-[11px] text-slate-400 pt-1">
+            <p class="text-xs text-slate-500 pt-1">
                 Las claves correctas nunca se muestran al estudiante durante el examen.
             </p>
         </div>
 
         {{-- Vista previa: Relación de columnas (definiciones mezcladas sin .reverse()) --}}
         <div x-show="type === 'matching'" x-cloak class="space-y-3">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Emparejamiento (orden mezclado)
             </p>
             <div class="space-y-2">
                 <template x-for="(pair, i) in pairs" :key="pair.uid">
-                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 space-y-1.5 text-xs">
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 space-y-2 text-xs">
                         <div class="flex items-start gap-2">
-                            <span class="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-acode-primary text-white shrink-0" x-text="i + 1"></span>
+                            <span class="font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-acode-primary text-white shrink-0" x-text="i + 1"></span>
                             <span
-                                class="font-semibold text-slate-800 break-words"
+                                class="text-sm font-semibold text-slate-800 break-words"
                                 x-text="pair.concept.trim() || ('Concepto ' + (i + 1))"
                             ></span>
                         </div>
                         <select
                             disabled
                             aria-label="Selector simulado de definición"
-                            class="w-full h-8 rounded-lg border border-slate-300 bg-white px-2 text-[11px] text-slate-600"
+                            class="w-full h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-600"
                         >
                             <option>Selecciona la definición correspondiente…</option>
                             <template x-for="defItem in previewShuffledDefinitions" :key="defItem.key">
@@ -101,39 +101,39 @@
 
         {{-- Vista previa: Pregunta abierta --}}
         <div x-show="type === 'open'" x-cloak class="space-y-2">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Área de respuesta del estudiante
             </p>
             <textarea
                 rows="4"
                 disabled
                 placeholder="Aquí redactará su respuesta abierta el estudiante…"
-                class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500 resize-none"
+                class="w-full rounded-lg border border-slate-300 bg-slate-50 px-3.5 py-2 text-sm text-slate-500 resize-none"
             ></textarea>
         </div>
 
-        {{-- Vista previa: Código fuente --}}
+        {{-- Vista previa: Código fuente (MPW-V2 Tabla 13 & MC-V2 Tabla 4) --}}
         <div x-show="type === 'code'" x-cloak class="space-y-3">
             <div class="flex flex-wrap items-center justify-between gap-2">
-                <span class="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-acode-tech/10 text-acode-tech border border-acode-tech/20" x-text="programmingLanguage || 'Código'"></span>
+                <span class="font-mono text-xs font-semibold px-2.5 py-0.5 rounded-md bg-acode-tech/10 text-acode-tech border border-acode-tech/30" x-text="programmingLanguage || 'Código'"></span>
                 <span
-                    class="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                    :class="isFindError ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'"
+                    class="text-xs font-semibold px-2.5 py-0.5 rounded-full"
+                    :class="isFindError ? 'bg-acode-warning/25 text-acode-primary border border-acode-warning/50' : 'bg-slate-100 text-slate-700 border border-slate-200'"
                     x-text="isFindError ? 'Depurar error' : 'Escribir solución'"
                 ></span>
             </div>
 
-            <div x-show="instructions.trim().length > 0" class="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-700 whitespace-pre-line">
-                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Instrucciones técnicas</span>
+            <div x-show="instructions.trim().length > 0" class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 whitespace-pre-line leading-5">
+                <span class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Instrucciones técnicas</span>
                 <span x-text="instructions"></span>
             </div>
 
-            <div class="rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
-                <div class="bg-slate-800 px-3 py-1.5 border-b border-slate-700 text-[11px] font-mono text-slate-300 flex items-center justify-between">
+            <div class="rounded-lg overflow-hidden border border-slate-300 border-l-4 border-l-acode-primary bg-slate-100">
+                <div class="bg-white/80 px-3 py-1.5 border-b border-slate-200 text-xs font-mono text-slate-600 flex items-center justify-between">
                     <span x-text="'editor.' + codeExtension"></span>
-                    <span class="text-[10px] uppercase tracking-wider text-slate-400">Editor alumno</span>
+                    <span class="uppercase tracking-wider text-slate-500 font-sans font-semibold">Editor alumno</span>
                 </div>
-                <pre class="p-3 text-xs font-mono text-slate-100 overflow-x-auto whitespace-pre leading-relaxed min-h-[5.5rem]"><code x-text="starterCode || '// El estudiante partirá de un editor en blanco en ' + (programmingLanguage || 'este lenguaje')"></code></pre>
+                <pre class="p-3 text-[13px] font-mono text-acode-ink overflow-x-auto whitespace-pre leading-5 min-h-[5.5rem]"><code x-text="starterCode || '// El estudiante partirá de un editor en blanco en ' + (programmingLanguage || 'este lenguaje')"></code></pre>
             </div>
         </div>
     </x-card>

@@ -11,16 +11,18 @@ declare(strict_types=1);
  * Ubicación:      app/Http/Controllers/ExamMonitorController.php
  * Requerimiento:  RW-12, RW-16, RNF-SEG-004 (Monitoreo Docente WebSockets Reverb)
  * Autor:          Equipo de Ingeniería (A-Code Solutions)
- * Versión:        1.1.0
- * Descripción:    Controlador web para el tablero de monitoreo y supervisión en
- *                 vivo de exámenes activos con conexión a Laravel Reverb.
+ * Versión:        1.2.0
+ * Descripción:    Controlador web delgado para el tablero de monitoreo y
+ *                 supervisión en vivo de exámenes activos con Laravel Reverb.
  * ============================================================================
  */
 
 namespace App\Http\Controllers;
 
-use App\Models\Exam;
 use Illuminate\Contracts\View\View;
+
+use App\Models\Exam;
+use App\Repositories\Contracts\ExamRepositoryInterface;
 
 /**
  * Controlador web para la supervisión docente reactiva de exámenes en tiempo real.
@@ -29,6 +31,11 @@ use Illuminate\Contracts\View\View;
  */
 class ExamMonitorController extends Controller
 {
+    public function __construct(
+        private readonly ExamRepositoryInterface $examRepository,
+    ) {
+    }
+
     /**
      * Muestra el tablero de monitoreo en tiempo real del examen.
      */
@@ -36,24 +43,22 @@ class ExamMonitorController extends Controller
     {
         $this->authorizeTeacher($exam);
 
-        $exam->load(['groups.students', 'studentAttempts.student']);
+        $loadedExam = $this->examRepository->getMonitorDashboardData($exam);
 
-        // Alumnos matriculados únicos en todos los grupos del examen
-        $enrolledStudents = $exam->groups
-            ->flatMap(fn ($group) => $group->students)
+        $enrolledStudents = $loadedExam->groups
+            ->flatMap(static fn ($group) => $group->students)
             ->unique('id')
             ->values();
 
-        $attempts = $exam->studentAttempts->keyBy('student_id');
+        $attempts = $loadedExam->studentAttempts->keyBy('student_id');
 
-        // Métricas iniciales calculadas sin N+1
         $totalEnrolled = $enrolledStudents->count();
         $inProgressCount = $attempts->where('status', 'in_progress')->count();
         $submittedCount = $attempts->where('status', 'submitted')->count();
         $cancelledCount = $attempts->where('status', 'cancelled_by_incident')->count();
         $totalIncidents = (int) $attempts->sum('incidents_count');
 
-        $studentsPayload = $enrolledStudents->mapWithKeys(function ($student) use ($attempts): array {
+        $studentsPayload = $enrolledStudents->mapWithKeys(static function ($student) use ($attempts): array {
             $att = $attempts->get($student->id);
 
             return [
@@ -73,15 +78,17 @@ class ExamMonitorController extends Controller
             ];
         })->all();
 
+        $scheme = (string) config('broadcasting.connections.reverb.options.scheme', 'http');
         $reverbConfig = [
             'key' => (string) config('broadcasting.connections.reverb.key', config('reverb.apps.apps.0.key', 'acsexamwebkey')),
-            'host' => request()->getHost(),
+            'host' => (string) config('broadcasting.connections.reverb.options.host', request()->getHost()),
             'port' => (int) config('broadcasting.connections.reverb.options.port', 8080),
-            'scheme' => (string) config('broadcasting.connections.reverb.options.scheme', 'http'),
+            'scheme' => $scheme,
+            'useTls' => strtolower($scheme) === 'https',
         ];
 
         return view('exams.monitor', [
-            'exam' => $exam,
+            'exam' => $loadedExam,
             'enrolledStudents' => $enrolledStudents,
             'studentsPayload' => $studentsPayload,
             'attempts' => $attempts,
@@ -99,6 +106,6 @@ class ExamMonitorController extends Controller
      */
     private function authorizeTeacher(Exam $exam): void
     {
-        abort_unless($exam->teacher_id === request()->user()->id, 403);
+        abort_unless((int) $exam->teacher_id === (int) request()->user()->id, 403);
     }
 }

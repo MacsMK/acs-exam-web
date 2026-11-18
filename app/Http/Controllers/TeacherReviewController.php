@@ -11,45 +11,57 @@ declare(strict_types=1);
  * Ubicación:      app/Http/Controllers/TeacherReviewController.php
  * Requerimiento:  RF-IAR-002, RF-EVA-009, RW-11 (Recoteje Docente)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Fecha Creación: 08/11/2026
- * Descripción:    Controlador de revisión docente para recotejar y modificar
- *                 calificaciones provisionales sugeridas por la IA.
+ * Descripción:    Controlador delgado de revisión docente para recotejar y
+ *                 ajustar calificaciones provisionales emitidas por la IA,
+ *                 recalculando pending_ai_count y normalizando escala final.
  * ============================================================================
  */
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\TeacherReviewStoreRequest;
-use App\Models\Exam;
-use App\Models\StudentAnswer;
-use App\Models\StudentAttempt;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
+use App\Http\Requests\TeacherReviewStoreRequest;
+use App\Models\Exam;
+use App\Models\StudentAnswer;
+use App\Models\StudentAttempt;
+use App\Repositories\Contracts\ExamRepositoryInterface;
+use App\Services\GradeCalculatorService;
+
 class TeacherReviewController extends Controller
 {
+    public function __construct(
+        private readonly ExamRepositoryInterface $examRepository,
+        private readonly GradeCalculatorService $gradeCalculator,
+    ) {
+    }
+
     /**
      * Panel concentrador de revisiones de exámenes para el docente.
      */
     public function globalIndex(Request $request): View
     {
-        $teacher = $request->user();
+        $teacherId = (int) $request->user()->id;
+        $filters = $request->only(['search', 'status']);
 
-        $exams = Exam::where('teacher_id', $teacher->id)
-            ->withCount([
-                'studentAttempts',
-                'studentAttempts as pending_reviews_count' => function ($query): void {
-                    $query->where('pending_ai_count', '>', 0);
-                },
-            ])
-            ->latest()
-            ->paginate(12);
+        $exams = $this->examRepository->paginateForTeacher($teacherId, 12, $filters);
+        $exams->getCollection()->each(static function (Exam $exam): void {
+            $exam->setAttribute('pending_reviews_count', (int) ($exam->pending_recoteje_count ?? 0));
+        });
 
-        return view('teacher.reviews.index', compact('exams'));
+        $stats = $this->examRepository->getTeacherExamStats($teacherId);
+
+        return view('teacher.reviews.index', [
+            'exams' => $exams,
+            'stats' => $stats,
+            'filters' => $filters,
+        ]);
     }
 
     /**
@@ -57,14 +69,16 @@ class TeacherReviewController extends Controller
      */
     public function index(Request $request, Exam $exam): View
     {
-        abort_unless($exam->teacher_id === $request->user()->id, 403);
+        abort_unless((int) $exam->teacher_id === (int) $request->user()->id, 403);
 
-        $attempts = $exam->studentAttempts()
-            ->with(['student', 'answers.examQuestion.question'])
-            ->latest('submitted_at')
-            ->paginate(15);
+        $filters = $request->only(['search', 'status']);
+        $attempts = $this->examRepository->paginateAttemptsForReview($exam, $filters, 15);
 
-        return view('exams.review-index', compact('exam', 'attempts'));
+        return view('exams.review-index', [
+            'exam' => $exam,
+            'attempts' => $attempts,
+            'filters' => $filters,
+        ]);
     }
 
     /**
@@ -72,19 +86,21 @@ class TeacherReviewController extends Controller
      */
     public function show(Request $request, Exam $exam, StudentAttempt $attempt): View
     {
-        abort_unless($exam->teacher_id === $request->user()->id, 403);
+        abort_unless((int) $exam->teacher_id === (int) $request->user()->id, 403);
         abort_unless((int) $attempt->exam_id === (int) $exam->id, 404);
 
-        $attempt->load([
-            'student',
-            'answers.examQuestion.question.questionable',
-        ]);
+        $loadedAttempt = $this->examRepository->findAttemptForReviewWithAnswers($exam, (int) $attempt->id);
+        abort_if($loadedAttempt === null, 404);
 
-        return view('exams.review-attempt', compact('exam', 'attempt'));
+        return view('exams.review-attempt', [
+            'exam' => $exam,
+            'attempt' => $loadedAttempt,
+        ]);
     }
 
     /**
-     * Persiste el recoteje docente y actualiza la calificación final definitiva del alumno.
+     * Persiste el recoteje docente sobre reactivos cualitativos, recalcula el
+     * conteo real de pendientes y normaliza la calificación final definitiva.
      */
     public function update(TeacherReviewStoreRequest $request, Exam $exam, StudentAttempt $attempt): RedirectResponse
     {
@@ -92,28 +108,46 @@ class TeacherReviewController extends Controller
 
         $reviews = $request->validated('reviews');
 
-        DB::transaction(function () use ($attempt, $reviews): void {
+        DB::transaction(function () use ($exam, $attempt, $reviews): void {
+            $lockedAttempt = StudentAttempt::query()
+                ->whereKey($attempt->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedAttempt->status !== 'submitted') {
+                throw ValidationException::withMessages([
+                    'attempt' => ['Solo se pueden recotejar intentos en estado entregado'],
+                ]);
+            }
+
             $answerIds = array_column($reviews, 'answer_id');
-            $answers = $attempt->answers()
-                ->with('examQuestion')
+            $answers = $lockedAttempt->answers()
+                ->with('examQuestion.question')
                 ->whereIn('id', $answerIds)
                 ->get()
                 ->keyBy('id');
 
             foreach ($reviews as $review) {
                 /** @var StudentAnswer|null $answer */
-                $answer = $answers->get($review['answer_id']);
+                $answer = $answers->get((int) $review['answer_id']);
 
                 if ($answer === null) {
                     abort(404, 'La respuesta seleccionada no pertenece al intento evaluado.');
                 }
 
-                $maxPoints = (float) $answer->examQuestion->points_weight;
+                $questionType = (string) ($answer->examQuestion?->question?->question_type ?? '');
+                if (! in_array($questionType, ['open', 'code'], true)) {
+                    throw ValidationException::withMessages([
+                        'reviews' => ['Solo puedes recotejar reactivos abiertos o de programación'],
+                    ]);
+                }
+
+                $maxPoints = (float) ($answer->examQuestion?->points_weight ?? 0);
                 $assignedScore = (float) $review['score'];
 
-                if ($assignedScore > $maxPoints) {
+                if ($assignedScore < 0 || $assignedScore > $maxPoints) {
                     throw ValidationException::withMessages([
-                        'reviews' => ["El puntaje asignado ({$assignedScore}) no puede superar el valor máximo del reactivo ({$maxPoints})."],
+                        'reviews' => ["El puntaje asignado ({$assignedScore}) debe estar entre 0 y {$maxPoints}"],
                     ]);
                 }
 
@@ -125,12 +159,22 @@ class TeacherReviewController extends Controller
                 ]);
             }
 
-            // Recalcula la calificación final definitiva sumando todos los reactivos
-            $newFinalScore = (float) $attempt->answers()->sum('points_awarded');
+            $pendingAiCount = $lockedAttempt->answers()
+                ->whereNull('teacher_recoteje_score')
+                ->whereHas('examQuestion.question', static function ($query): void {
+                    $query->whereIn('question_type', ['open', 'code']);
+                })
+                ->count();
 
-            $attempt->update([
-                'final_score' => $newFinalScore,
-                'pending_ai_count' => 0,
+            $rawTotal = (float) $lockedAttempt->answers()->sum('points_awarded');
+            $totalExamWeight = (float) $exam->examQuestions()->sum('points_weight');
+            $finalScore = $pendingAiCount === 0
+                ? $this->gradeCalculator->normalizeScoreForExam($rawTotal, $exam, $totalExamWeight)
+                : null;
+
+            $lockedAttempt->update([
+                'final_score' => $finalScore,
+                'pending_ai_count' => $pendingAiCount,
             ]);
         });
 

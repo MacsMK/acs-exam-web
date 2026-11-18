@@ -72,18 +72,14 @@
                                     <span class="flex-1 text-sm font-semibold text-slate-800">{{ $left['text'] }}</span>
                                     <input type="hidden" name="pairs[{{ $i }}][left_id]" value="{{ $left['id'] }}">
                                     <div class="flex-1">
-                                        <select
-                                            name="pairs[{{ $i }}][right_id]"
-                                            required
-                                            class="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-acode-tech"
-                                        >
+                                        <x-form.select name="pairs[{{ $i }}][right_id]" required>
                                             <option value="">Selecciona definición…</option>
                                             @forelse ($current['question']['right_items'] as $right)
                                                 <option value="{{ $right['id'] }}">{{ $right['text'] }}</option>
                                             @empty
                                                 <option value="" disabled>Sin definiciones</option>
                                             @endforelse
-                                        </select>
+                                        </x-form.select>
                                     </div>
                                 </div>
                             @empty
@@ -112,27 +108,27 @@
                             @endif
 
                             {{-- Aviso Normativo de Integridad Académica (RF-EXA-039) --}}
-                            <div class="text-xs text-acode-warning bg-acode-warning/15 border border-acode-warning/30 rounded-lg px-3 py-2 flex items-center gap-2">
-                                <x-icon name="warning" class="w-4 h-4 text-acode-warning shrink-0" />
+                            <div class="text-xs text-acode-primary bg-acode-warning/15 border border-acode-warning/50 rounded-lg px-3 py-2 flex items-center gap-2">
+                                <x-icon name="warning" class="w-4 h-4 text-acode-warning-dark shrink-0" />
                                 <span>Por integridad académica, el pegado de código externo está estrictamente deshabilitado.</span>
                             </div>
 
-                            <textarea
+                            <x-form.textarea
                                 name="answer_text"
                                 rows="10"
+                                :mono="true"
                                 required
                                 @paste.prevent
                                 onpaste="return false;"
                                 placeholder="// Escribe tu solución aquí..."
-                                class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 font-mono text-sm bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-acode-tech leading-relaxed"
-                            >{{ $current['question']['starter_code'] }}</textarea>
+                            >{{ $current['question']['starter_code'] }}</x-form.textarea>
                         </div>
                         @break
                 @endswitch
 
                 <div class="pt-4 flex items-center justify-between">
                     <x-button type="submit" variant="primary" size="md">
-                        <x-icon name="check" class="w-4 h-4 mr-1.5" />
+                        <x-icon name="check" class="w-4 h-4" />
                         Enviar respuesta
                     </x-button>
                 </div>
@@ -165,14 +161,10 @@
                 }"
             >
                 @csrf
-                <button
-                    type="button"
-                    @click="confirmFinish()"
-                    class="text-xs text-acode-danger font-semibold hover:underline flex items-center gap-1.5 p-1 rounded transition"
-                >
-                    <x-icon name="lock" class="w-3.5 h-3.5 text-acode-danger" />
-                    <span>Finalizar examen</span>
-                </button>
+                <x-button type="button" variant="danger" size="sm" @click="confirmFinish()">
+                    <x-icon name="lock" class="w-3.5 h-3.5" />
+                    Finalizar examen
+                </x-button>
             </form>
         </div>
     </div>

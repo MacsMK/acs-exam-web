@@ -26,7 +26,7 @@
 
         <div class="flex items-center gap-3">
             <x-button :href="route('student.groups.join.form')" variant="neutral" size="md">
-                <x-icon name="add" class="h-4 w-4 mr-1.5" />
+                <x-icon name="add" class="h-4 w-4" />
                 Unirme a un grupo
             </x-button>
         </div>
@@ -47,11 +47,11 @@
                     </div>
 
                     {{-- Título y descripción --}}
-                    <h3 class="font-bold text-base text-acode-primary leading-snug line-clamp-2">
+                    <h3 class="font-semibold text-base text-acode-primary leading-6 line-clamp-2">
                         {{ $exam->title }}
                     </h3>
 
-                    <p class="mt-2 text-xs text-slate-500 line-clamp-2">
+                    <p class="mt-2 text-sm text-slate-600 line-clamp-2">
                         {{ $exam->description ?? 'Evaluación institucional contrarreloj.' }}
                     </p>
 
@@ -85,7 +85,7 @@
                     <form method="POST" action="{{ route('attempts.start', $exam) }}">
                         @csrf
                         <x-button type="submit" variant="primary" size="md" class="w-full">
-                            <x-icon name="clock" class="w-4 h-4 mr-1.5" />
+                            <x-icon name="clock" class="w-4 h-4" />
                             Iniciar examen
                         </x-button>
                     </form>
