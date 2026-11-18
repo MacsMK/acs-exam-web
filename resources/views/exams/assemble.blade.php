@@ -177,32 +177,8 @@
                 <x-card padding="p-0" class="overflow-hidden">
                     {{-- Selector de Pestañas del Constructor Dual --}}
                     <div class="grid grid-cols-2 border-b border-slate-200 bg-slate-50" role="tablist" aria-label="Modo de asignación de reactivos">
-                        <button
-                            type="button"
-                            role="tab"
-                            @click="activeTab = 'draw'"
-                            :aria-selected="(activeTab === 'draw').toString()"
-                            class="px-4 py-3.5 text-xs sm:text-sm font-bold transition border-b-2 flex items-center justify-center gap-2"
-                            :class="activeTab === 'draw' ? 'border-acode-primary bg-white text-acode-primary' : 'border-transparent text-slate-500 hover:text-acode-primary'"
-                        >
-                            <x-icon name="filter" class="w-4 h-4 text-acode-tech" />
-                            <span>Sorteo inteligente</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            role="tab"
-                            @click="activeTab = 'manual'"
-                            :aria-selected="(activeTab === 'manual').toString()"
-                            class="px-4 py-3.5 text-xs sm:text-sm font-bold transition border-b-2 flex items-center justify-center gap-2"
-                            :class="activeTab === 'manual' ? 'border-acode-primary bg-white text-acode-primary' : 'border-transparent text-slate-500 hover:text-acode-primary'"
-                        >
-                            <x-icon name="check" class="w-4 h-4 text-acode-accent" />
-                            <span>Selección manual</span>
-                            <span class="rounded-full bg-acode-surface px-2 py-0.5 text-xs font-mono text-acode-primary">
-                                {{ $manualCandidates->total() }}
-                            </span>
-                        </button>
+                        <x-tab name="draw" label="Sorteo inteligente" icon="filter" class="justify-center" />
+                        <x-tab name="manual" label="Selección manual" icon="check" :count="$manualCandidates->total()" class="justify-center" />
                     </div>
 
                     {{-- Pestaña A: Sorteo Inteligente --}}
@@ -455,26 +431,13 @@
                             <div class="rounded-xl border border-slate-200 bg-white p-3.5 space-y-3">
                                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Apartado destino</p>
 
-                                <div class="flex flex-wrap gap-2">
-                                    <button
-                                        type="button"
-                                        @click="manualTargetMode = 'new'"
-                                        class="h-8 rounded-lg px-3 text-xs font-semibold border transition"
-                                        :class="manualTargetMode === 'new' ? 'bg-acode-primary text-white border-acode-primary' : 'bg-white text-slate-700 border-slate-300 hover:bg-acode-surface'"
-                                    >
-                                        Crear apartado
-                                    </button>
-                                    @if ($exam->sections->isNotEmpty())
-                                        <button
-                                            type="button"
-                                            @click="manualTargetMode = 'existing'"
-                                            class="h-8 rounded-lg px-3 text-xs font-semibold border transition"
-                                            :class="manualTargetMode === 'existing' ? 'bg-acode-primary text-white border-acode-primary' : 'bg-white text-slate-700 border-slate-300 hover:bg-acode-surface'"
-                                        >
-                                            Apartado existente
-                                        </button>
-                                    @endif
-                                </div>
+                                <x-toggle-group
+                                    model="manualTargetMode"
+                                    label="Apartado destino"
+                                    :options="$exam->sections->isNotEmpty()
+                                        ? ['new' => 'Crear apartado', 'existing' => 'Apartado existente']
+                                        : ['new' => 'Crear apartado']"
+                                />
 
                                 <div x-show="manualTargetMode === 'new'">
                                     <x-form.input

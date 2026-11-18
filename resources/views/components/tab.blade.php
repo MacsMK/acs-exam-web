@@ -19,7 +19,7 @@
     :class="{{ $model }} === @js($name)
         ? 'border-acode-tech text-acode-primary font-bold'
         : 'border-transparent text-slate-500 hover:text-acode-primary font-medium'"
-    {{ $attributes->merge(['class' => 'inline-flex items-center gap-2 border-b-3 px-4 py-3 text-sm transition whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-acode-tech']) }}
+    {{ $attributes->merge(['class' => 'inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm transition whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-acode-tech']) }}
 >
     @if ($icon)
         <x-icon :name="$icon" class="w-4 h-4 text-acode-tech" />

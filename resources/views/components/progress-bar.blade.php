@@ -1,5 +1,5 @@
 {{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-progress-bar (MPW-V2 §7.3, §7.4.2, §8.1) --}}
-{{-- Barra de progreso institucional: el avance se expresa con una clase de fracción de Tailwind (w-N/100), sin style="". --}}
+{{-- Barra de progreso institucional: el avance se expresa con una clase de fracción de Tailwind (w-N/12), sin style="". --}}
 @props([
     'value' => 0,          // 0 a 100
     'variant' => 'tech',   // primary, tech, accent, warning, danger
@@ -20,8 +20,13 @@
         'danger' => 'bg-acode-danger',
         default => 'bg-acode-tech',
     };
-    // Tailwind no genera la fracción con numerador 0 (w-0/100), por eso 0 % usa w-0.
-    $widthClass = $percent === 0 ? 'w-0' : "w-{$percent}/100";
+    // Las vistas usan Tailwind 3.4 (CDN), que solo trae fracciones de doce: el avance se redondea a 12 pasos.
+    $steps = $percent === 0 ? 0 : max(1, (int) round($percent * 12 / 100));
+    $widthClass = match (true) {
+        $steps === 0 => 'w-0',
+        $steps >= 12 => 'w-full',
+        default => "w-{$steps}/12",
+    };
 @endphp
 <div
     role="progressbar"
