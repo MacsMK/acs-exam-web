@@ -136,6 +136,23 @@ class AuthController extends Controller
         $user = $query->latest('two_factor_expires_at')->first();
 
         if ($user === null) {
+            // Con el correo se identifica la cuenta y el intento fallido cuenta
+            // contra su código vigente (RF-AUT-007). Sin correo solo aplica el
+            // límite de peticiones de la ruta.
+            if ($request->filled('email')) {
+                $pending = User::where('email', $request->string('email')->toString())
+                    ->whereIn('role', ['teacher', 'student'])
+                    ->first();
+
+                if ($pending !== null) {
+                    $this->authService->registerFailedTwoFactorAttempt($pending);
+
+                    if ($this->authService->twoFactorAttemptsExhausted($pending)) {
+                        throw ValidationException::withMessages(['code' => [AuthService::TWO_FACTOR_LOCKED_MESSAGE]]);
+                    }
+                }
+            }
+
             throw ValidationException::withMessages(['code' => ['El código es inválido o expiró. Solicita uno nuevo.']]);
         }
 

@@ -28,6 +28,7 @@ use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -52,6 +53,12 @@ class AuthService
      * Espera mínima, en segundos, entre dos envíos del código (RF-AUT-006).
      */
     public const TWO_FACTOR_RESEND_SECONDS = 60;
+
+    /** Intentos de verificación permitidos por código (RF-AUT-007). */
+    public const TWO_FACTOR_MAX_ATTEMPTS = 5;
+
+    /** Mensaje cuando el código agotó sus intentos (MPW-V2 Tabla 17, plantilla 7). */
+    public const TWO_FACTOR_LOCKED_MESSAGE = 'Superaste los 5 intentos permitidos para este código. Solicita un nuevo código';
 
     /**
      * Inicializa el servicio de autenticación con el servicio de acreditación docente.
@@ -375,15 +382,27 @@ class AuthService
      */
     public function verifyTwoFactorCode(User $user, string $code): void
     {
+        if ($this->twoFactorAttemptsExhausted($user)) {
+            throw ValidationException::withMessages([
+                'code' => [self::TWO_FACTOR_LOCKED_MESSAGE],
+            ]);
+        }
+
         $isValid = $user->two_factor_code === $code
             && $user->two_factor_expires_at !== null
             && $user->two_factor_expires_at->isFuture();
 
         if (! $isValid) {
+            $this->registerFailedTwoFactorAttempt($user);
+
             throw ValidationException::withMessages([
-                'code' => ['El código es inválido o expiró. Solicita uno nuevo.'],
+                'code' => [$this->twoFactorAttemptsExhausted($user)
+                    ? self::TWO_FACTOR_LOCKED_MESSAGE
+                    : 'El código es inválido o expiró. Solicita uno nuevo.'],
             ]);
         }
+
+        Cache::forget($this->twoFactorAttemptsKey($user));
 
         $user->forceFill([
             'two_factor_code' => null,
@@ -398,6 +417,46 @@ class AuthService
      * @param User|null $user Usuario opcional que cierra sesión.
      * @return void
      */
+    /**
+     * Registra un intento fallido contra el código vigente (RF-AUT-007). El
+     * contador se guarda por código (clave con su vencimiento), por lo que un
+     * código nuevo empieza en cero y no se requiere modificar la base de datos.
+     *
+     * @param User $user Cuenta con verificación pendiente.
+     * @return void
+     */
+    public function registerFailedTwoFactorAttempt(User $user): void
+    {
+        if ($user->two_factor_code === null || $user->two_factor_expires_at === null || ! $user->two_factor_expires_at->isFuture()) {
+            return;
+        }
+
+        $key = $this->twoFactorAttemptsKey($user);
+        Cache::add($key, 0, $user->two_factor_expires_at);
+        Cache::increment($key);
+    }
+
+    /**
+     * Indica si el código vigente ya agotó sus cinco intentos (RF-AUT-007).
+     * Un código agotado queda invalidado: solo se acepta uno nuevo.
+     *
+     * @param User $user Cuenta con verificación pendiente.
+     * @return bool
+     */
+    public function twoFactorAttemptsExhausted(User $user): bool
+    {
+        if ($user->two_factor_expires_at === null) {
+            return false;
+        }
+
+        return (int) Cache::get($this->twoFactorAttemptsKey($user), 0) >= self::TWO_FACTOR_MAX_ATTEMPTS;
+    }
+
+    private function twoFactorAttemptsKey(User $user): string
+    {
+        return 'two_factor_attempts:'.$user->id.':'.($user->two_factor_expires_at?->getTimestamp() ?? 0);
+    }
+
     public function logout(?User $user = null): void
     {
         Auth::guard('web')->logout();
