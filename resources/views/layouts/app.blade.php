@@ -357,7 +357,20 @@
                             </a>
 
                             <div class="my-1 border-t border-slate-100"></div>
-                            <form method="POST" action="{{ route('auth.logout') }}">
+                            {{-- Cierre de sesión con confirmación previa; si se cancela, la sesión continúa (RF-AUT-012) --}}
+                            <form
+                                method="POST"
+                                action="{{ route('auth.logout') }}"
+                                data-logout-form
+                                x-on:submit.prevent="window.AcodeAlert.confirm({
+                                    title: '¿Cerrar sesión?',
+                                    text: 'Tendrás que volver a ingresar tu correo, contraseña y código de verificación.',
+                                    confirmButtonText: 'Cerrar sesión',
+                                    cancelButtonText: 'Cancelar',
+                                    isDanger: false,
+                                    onConfirm: () => $el.submit(),
+                                })"
+                            >
                                 @csrf
                                 <button type="submit"
                                         class="w-full px-4 py-2 text-left text-sm text-acode-danger hover:bg-red-50">
