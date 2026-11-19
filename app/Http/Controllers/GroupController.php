@@ -18,6 +18,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\GroupStoreRequest;
 use App\Models\Group;
 use App\Models\StudentAttempt;
+use App\Services\SubscriptionLimitService;
 use App\Services\GroupEnrollmentService;
 use DomainException;
 use Illuminate\Contracts\View\View;
@@ -91,11 +92,14 @@ class GroupController extends Controller
         return redirect()->route('groups.show', $group)->with('status', 'Grupo cerrado (cierre semestral, RW-35).');
     }
 
-    public function reopen(Group $group): RedirectResponse
+    public function reopen(Group $group, SubscriptionLimitService $subscriptionLimitService): RedirectResponse
     {
         $this->authorizeOwnership($group);
 
         abort_unless($group->is_closed, 409, 'El grupo ya está activo.');
+
+        // Reabrir vuelve a ocupar un lugar del límite de grupos activos (RF-GRU-014, ACT-WEB-051)
+        $subscriptionLimitService->ensureCanReopenGroup($group->teacher()->firstOrFail());
 
         $group->update([
             'is_closed' => false,
