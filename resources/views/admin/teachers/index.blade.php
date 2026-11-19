@@ -411,14 +411,17 @@
                     </template>
                 </div>
 
-                <button
+                <x-button
                     type="button"
-                    @click="closeReview()"
-                    class="rounded-lg p-1 text-slate-400 transition hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-acode-tech"
+                    variant="neutral"
+                    size="sm"
+                    :icon-only="true"
+                    x-on:click="closeReview()"
                     aria-label="Cerrar modal"
+                    title="Cerrar modal"
                 >
                     <x-icon name="xMark" class="h-5 w-5" />
-                </button>
+                </x-button>
             </div>
 
             {{-- Cuerpo desplazable --}}
@@ -471,15 +474,16 @@
                                 ></span>
 
                                 <template x-if="activeTeacher?.professionalLicense">
-                                    <button
+                                    <x-button
                                         type="button"
-                                        @click="copyLicense(activeTeacher.professionalLicense)"
-                                        class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-acode-tech"
+                                        variant="neutral"
+                                        size="sm"
+                                        x-on:click="copyLicense(activeTeacher.professionalLicense)"
                                         title="Copiar cédula profesional"
                                     >
                                         <x-icon name="copy" class="h-3.5 w-3.5" />
                                         <span>Copiar</span>
-                                    </button>
+                                    </x-button>
                                 </template>
                             </div>
                         </div>

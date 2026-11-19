@@ -220,101 +220,54 @@
                     Buscar grupo, materia o folio
                 </label>
                 <div class="relative">
-                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                        <x-icon name="search" class="w-4 h-4 text-slate-400" />
-                    </div>
-                    <input
+                    <x-form.input
                         id="group-search"
-                        type="search"
+                        type="text"
+                        enterkeyhint="search"
+                        autocomplete="off"
+                        prefixIcon="search"
                         x-model="search"
                         placeholder="Buscar por grupo, asignatura o folio..."
-                        class="h-10 w-full rounded-lg border border-slate-300 pl-10 pr-9 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-acode-tech focus:ring-2 focus:ring-acode-tech/20"
-                    >
-                    <button
+                        class="pr-11"
+                    />
+                    <x-button
                         type="button"
-                        x-show="search.length > 0"
-                        @click="search = ''"
-                        class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 transition"
+                        variant="neutral"
+                        size="md"
+                        :icon-only="true"
                         title="Limpiar búsqueda"
+                        aria-label="Limpiar búsqueda"
+                        x-show="search.length > 0"
+                        x-on:click="search = ''"
+                        class="absolute inset-y-0 right-2 my-auto"
                     >
                         <x-icon name="xMark" class="w-4 h-4" />
-                    </button>
+                    </x-button>
                 </div>
             </div>
 
             {{-- Filtros de estado y switch de vista --}}
             <div class="flex flex-wrap items-center justify-between lg:justify-end gap-3">
                 {{-- Filtro de Estado --}}
-                <div class="flex items-center gap-1.5">
-                    <button
-                        type="button"
-                        @click="filter = 'all'"
-                        :class="filter === 'all'
-                            ? 'bg-acode-primary text-white shadow-sm'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                        class="h-9 rounded-lg px-3.5 text-xs sm:text-sm font-semibold transition"
-                    >
-                        Todos
-                    </button>
-
-                    <button
-                        type="button"
-                        @click="filter = 'active'"
-                        :class="filter === 'active'
-                            ? 'bg-acode-primary text-white shadow-sm'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                        class="h-9 rounded-lg px-3.5 text-xs sm:text-sm font-semibold transition"
-                    >
-                        Activos
-                    </button>
-
-                    <button
-                        type="button"
-                        @click="filter = 'closed'"
-                        :class="filter === 'closed'
-                            ? 'bg-acode-primary text-white shadow-sm'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                        class="h-9 rounded-lg px-3.5 text-xs sm:text-sm font-semibold transition"
-                    >
-                        Cerrados
-                    </button>
-                </div>
+                <x-toggle-group
+                    model="filter"
+                    :options="['all' => 'Todos', 'active' => 'Activos', 'closed' => 'Cerrados']"
+                    label="Filtrar grupos por estado"
+                />
 
                 {{-- Separador vertical en desktop --}}
                 <div class="hidden sm:block h-6 w-px bg-slate-200"></div>
 
                 {{-- Alternancia de Vista: Cuadrícula / Lista --}}
-                <div class="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-                    <button
-                        type="button"
-                        @click="viewMode = 'grid'"
-                        :class="viewMode === 'grid'
-                            ? 'bg-white text-acode-primary shadow-sm font-semibold'
-                            : 'text-slate-500 hover:text-slate-700'"
-                        class="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition"
-                        title="Vista en cuadrícula"
-                    >
-                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-                        </svg>
-                        <span class="hidden sm:inline">Cuadrícula</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        @click="viewMode = 'list'"
-                        :class="viewMode === 'list'
-                            ? 'bg-white text-acode-primary shadow-sm font-semibold'
-                            : 'text-slate-500 hover:text-slate-700'"
-                        class="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition"
-                        title="Vista en lista"
-                    >
-                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-                        </svg>
-                        <span class="hidden sm:inline">Lista</span>
-                    </button>
-                </div>
+                <x-toggle-group
+                    model="viewMode"
+                    variant="segmented"
+                    :options="[
+                        ['value' => 'grid', 'label' => 'Cuadrícula', 'icon' => 'squares2x2'],
+                        ['value' => 'list', 'label' => 'Lista', 'icon' => 'listBullet'],
+                    ]"
+                    label="Cambiar vista de grupos"
+                />
             </div>
         </div>
     </div>
@@ -388,15 +341,16 @@
                                 ></span>
                             </div>
 
-                            <button
+                            <x-button
+                                variant="neutral"
+                                size="sm"
                                 type="button"
-                                @click="copyFolio(group.folio)"
-                                class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-acode-tech hover:bg-acode-surface transition focus:outline-none focus:ring-1 focus:ring-acode-tech"
+                                x-on:click="copyFolio(group.folio)"
                                 title="Copiar folio al portapapeles"
                             >
                                 <x-icon name="copy" class="w-3.5 h-3.5" />
-                                <span>Copiar</span>
-                            </button>
+                                <span>Copiar folio</span>
+                            </x-button>
                         </div>
 
                         {{-- Conteo de alumnos con icono oficial x-icon --}}
@@ -469,14 +423,17 @@
                         <x-table.td>
                             <div class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1">
                                 <span class="font-mono text-xs font-bold text-acode-primary select-all" x-text="group.folio || 'N/D'"></span>
-                                <button
+                                <x-button
                                     type="button"
-                                    @click="copyFolio(group.folio)"
-                                    class="text-slate-400 hover:text-acode-tech transition"
+                                    variant="neutral"
+                                    size="sm"
+                                    :icon-only="true"
                                     title="Copiar folio"
+                                    aria-label="Copiar folio"
+                                    x-on:click="copyFolio(group.folio)"
                                 >
                                     <x-icon name="copy" class="w-3.5 h-3.5" />
-                                </button>
+                                </x-button>
                             </div>
                         </x-table.td>
 
@@ -592,14 +549,17 @@
                 <h3 id="qr-modal-title" class="text-base font-bold text-acode-primary tracking-tight truncate pr-2">
                     Código QR y Folio · <span x-text="selectedGroup?.name || 'Grupo escolar'"></span>
                 </h3>
-                <button
+                <x-button
                     type="button"
-                    @click="closeQr()"
-                    class="text-slate-400 hover:text-slate-600 rounded-lg p-1 transition focus:outline-none focus:ring-2 focus:ring-acode-tech"
-                    aria-label="Cerrar modal"
+                    variant="neutral"
+                    size="md"
+                    :icon-only="true"
+                    title="Cerrar ventana"
+                    aria-label="Cerrar ventana"
+                    x-on:click="closeQr()"
                 >
                     <x-icon name="xMark" class="w-5 h-5" />
-                </button>
+                </x-button>
             </div>
 
             {{-- Cuerpo del modal --}}

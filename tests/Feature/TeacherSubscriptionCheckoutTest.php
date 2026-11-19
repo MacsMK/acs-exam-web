@@ -125,7 +125,7 @@ class TeacherSubscriptionCheckoutTest extends TestCase
             ->get(route('teacher.subscription.checkout', $package))
             ->assertOk()
             ->assertSee($package->name)
-            ->assertSee('Pasarela de Pago');
+            ->assertSee('Pago en línea');
 
         // 2. Envío de cobro con tarjeta Visa válida (Luhn)
         $rawPan = '4242424242424242';

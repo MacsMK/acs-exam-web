@@ -115,6 +115,13 @@
                 return Math.min(100, Math.max(0, this.totalWeight));
             },
 
+            get progressWidthClass() {
+                const steps = this.progressPercent <= 0 ? 0 : Math.max(1, Math.round(this.progressPercent * 12 / 100));
+                if (steps === 0) return 'w-0';
+                if (steps >= 12) return 'w-full';
+                return ['w-1/12', 'w-2/12', 'w-3/12', 'w-4/12', 'w-5/12', 'w-6/12', 'w-7/12', 'w-8/12', 'w-9/12', 'w-10/12', 'w-11/12'][steps - 1];
+            },
+
             get progressColorClass() {
                 if (this.totalWeight > 100.01) return 'bg-acode-danger';
                 if (this.isWeightExact) return 'bg-acode-accent';
@@ -209,11 +216,11 @@
                                         x-text="`${totalWeight.toFixed(2)} / 100.00 pts`"
                                     ></span>
                                 </div>
-                                <div class="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden">
+                                {{-- Ancho en 12 pasos (w-N/12, Tailwind 3.4), sin style inline (MPW-V2 §7.4.2) --}}
+                                <div class="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden" role="progressbar" aria-label="Suma de ponderaciones" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(progressPercent)">
                                     <div
                                         class="h-full rounded-full transition-all duration-200"
-                                        :class="progressColorClass"
-                                        :style="{ width: progressPercent + '%' }"
+                                        :class="[progressColorClass, progressWidthClass]"
                                     ></div>
                                 </div>
                                 @error('questions')

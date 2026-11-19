@@ -89,50 +89,25 @@
                 <label for="student-group-search" class="mb-2 block text-xs font-semibold text-slate-600">
                     Buscar grupo o asignatura
                 </label>
-                <div class="relative">
-                    <input
-                        id="student-group-search"
-                        type="search"
-                        x-model="search"
-                        placeholder="Buscar por materia, grupo o nombre de profesor..."
-                        class="h-11 w-full rounded-lg border border-slate-300 pl-10 pr-4 text-sm outline-none transition focus:border-acode-tech focus:ring-2 focus:ring-acode-tech/20"
-                    >
-                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                        <x-icon name="search" class="h-5 w-5" />
-                    </div>
-                </div>
+                <x-form.input
+                    id="student-group-search"
+                    type="search"
+                    prefixIcon="search"
+                    x-model="search"
+                    placeholder="Buscar por materia, grupo o nombre de profesor..."
+                />
             </div>
 
             <div>
                 <p class="mb-2 text-xs font-semibold text-slate-600">
                     Estado del grupo
                 </p>
-                <div class="flex flex-wrap gap-2">
-                    <button type="button"
-                            @click="filter = 'all'"
-                            :class="filter === 'all'
-                                ? 'bg-acode-primary text-white'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                            class="rounded-lg px-4 py-2.5 text-sm font-medium transition">
-                        Todos
-                    </button>
-                    <button type="button"
-                            @click="filter = 'active'"
-                            :class="filter === 'active'
-                                ? 'bg-acode-primary text-white'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                            class="rounded-lg px-4 py-2.5 text-sm font-medium transition">
-                        Activos
-                    </button>
-                    <button type="button"
-                            @click="filter = 'closed'"
-                            :class="filter === 'closed'
-                                ? 'bg-acode-primary text-white'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                            class="rounded-lg px-4 py-2.5 text-sm font-medium transition">
-                        Cerrados
-                    </button>
-                </div>
+                <x-toggle-group
+                    model="filter"
+                    :options="['all' => 'Todos', 'active' => 'Activos', 'closed' => 'Cerrados']"
+                    label="Filtrar grupos por estado"
+                    class="flex-wrap"
+                />
             </div>
         </div>
     </div>
@@ -215,20 +190,21 @@
 
                     {{-- Acciones de tarjeta --}}
                     <div class="mt-5 flex items-center justify-between gap-2 border-t border-slate-100 pt-4">
-                        <a :href="group.exams_url"
-                           class="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-acode-primary px-3 text-xs font-semibold text-white transition hover:bg-acode-primary-dark">
-                            <x-nav-icon name="exams" class="h-4 w-4 mr-1.5" />
+                        <x-button ::href="group.exams_url" class="flex-1">
+                            <x-nav-icon name="exams" class="h-4 w-4" />
                             Ver exámenes
-                        </a>
+                        </x-button>
 
-                        <button
+                        <x-button
+                            variant="danger"
                             type="button"
-                            @click="openLeaveModal(group)"
-                            class="inline-flex h-10 items-center justify-center rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold text-acode-danger transition hover:bg-red-50 focus:outline-none"
-                            title="Abandonar grupo (RF-GRU-012)">
+                            x-on:click="openLeaveModal(group)"
+                            title="Salir del grupo"
+                            aria-label="Salir del grupo"
+                        >
                             <x-icon name="delete" class="h-4 w-4" />
-                            <span class="ml-1 hidden sm:inline">Salir</span>
-                        </button>
+                            <span class="hidden sm:inline">Salir</span>
+                        </x-button>
                     </div>
                 </article>
             </template>
@@ -244,11 +220,15 @@
             <p class="mt-2 text-sm text-slate-500">
                 Prueba con otro término de búsqueda o restablece los filtros aplicados.
             </p>
-            <button type="button"
-                    @click="search = ''; filter = 'all'"
-                    class="mt-4 rounded-lg border border-acode-tech px-4 py-2 text-xs font-semibold text-acode-tech hover:bg-acode-surface">
+            <x-button
+                variant="secondary"
+                size="sm"
+                type="button"
+                x-on:click="search = ''; filter = 'all'"
+                class="mt-4"
+            >
                 Limpiar filtros
-            </button>
+            </x-button>
         </div>
     </div>
 

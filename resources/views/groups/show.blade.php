@@ -122,15 +122,17 @@
                     <div class="inline-flex items-center gap-2 rounded-xl bg-acode-surface px-3 py-1.5 border border-slate-200/80">
                         <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Folio de acceso:</span>
                         <span class="font-mono text-sm font-bold text-acode-primary select-all">{{ $group->access_folio }}</span>
-                        <button
+                        <x-button
                             type="button"
-                            @click="copyFolio()"
-                            class="rounded p-1 text-slate-400 hover:text-acode-tech hover:bg-white transition focus:outline-none"
-                            title="Copiar folio al portapapeles"
+                            variant="neutral"
+                            size="sm"
+                            :icon-only="true"
+                            title="Copiar folio"
                             aria-label="Copiar folio"
+                            x-on:click="copyFolio()"
                         >
                             <x-icon name="copy" class="w-3.5 h-3.5" />
-                        </button>
+                        </x-button>
                     </div>
                 </div>
 
@@ -282,88 +284,40 @@
     <div>
         <div class="flex gap-2 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="Secciones del grupo">
             {{-- Pestaña 1: Estudiantes --}}
-            <button
-                type="button"
-                role="tab"
-                @click="setActiveTab('students')"
-                :aria-selected="activeTab === 'students'"
-                :class="activeTab === 'students'
-                    ? 'border-acode-tech text-acode-primary font-bold'
-                    : 'border-transparent text-slate-500 hover:text-acode-primary font-medium'"
-                class="inline-flex items-center gap-2 border-b-[3px] px-4 py-3 text-sm transition whitespace-nowrap"
-            >
-                <x-icon name="userGroup" class="w-4 h-4 text-acode-tech" />
-                <span>Estudiantes</span>
-                <span
-                    class="rounded-full px-2 py-0.5 text-xs font-semibold"
-                    :class="activeTab === 'students' ? 'bg-acode-tech text-white' : 'bg-slate-100 text-slate-600'"
-                >
-                    {{ $group->students->count() }}
-                </span>
-            </button>
+            <x-tab
+                name="students"
+                label="Estudiantes"
+                icon="userGroup"
+                :count="$group->students->count()"
+                select="setActiveTab('students')"
+            />
 
             {{-- Pestaña 2: Exámenes --}}
-            <button
-                type="button"
-                role="tab"
-                @click="setActiveTab('exams')"
-                :aria-selected="activeTab === 'exams'"
-                :class="activeTab === 'exams'
-                    ? 'border-acode-tech text-acode-primary font-bold'
-                    : 'border-transparent text-slate-500 hover:text-acode-primary font-medium'"
-                class="inline-flex items-center gap-2 border-b-[3px] px-4 py-3 text-sm transition whitespace-nowrap"
-            >
-                <x-icon name="document" class="w-4 h-4 text-acode-tech" />
-                <span>Exámenes</span>
-                <span
-                    class="rounded-full px-2 py-0.5 text-xs font-semibold"
-                    :class="activeTab === 'exams' ? 'bg-acode-tech text-white' : 'bg-slate-100 text-slate-600'"
-                >
-                    {{ $group->exams->count() }}
-                </span>
-            </button>
+            <x-tab
+                name="exams"
+                label="Exámenes"
+                icon="document"
+                :count="$group->exams->count()"
+                select="setActiveTab('exams')"
+            />
 
             {{-- Pestaña 3: Calificaciones --}}
-            <button
-                type="button"
-                role="tab"
-                @click="setActiveTab('grades')"
-                :aria-selected="activeTab === 'grades'"
-                :class="activeTab === 'grades'
-                    ? 'border-acode-tech text-acode-primary font-bold'
-                    : 'border-transparent text-slate-500 hover:text-acode-primary font-medium'"
-                class="inline-flex items-center gap-2 border-b-[3px] px-4 py-3 text-sm transition whitespace-nowrap"
-            >
-                <x-icon name="reportBar" class="w-4 h-4 text-acode-tech" />
-                <span>Calificaciones</span>
-                <span
-                    class="rounded-full px-2 py-0.5 text-xs font-semibold"
-                    :class="activeTab === 'grades' ? 'bg-acode-tech text-white' : 'bg-slate-100 text-slate-600'"
-                >
-                    {{ $attempts->count() }}
-                </span>
-            </button>
+            <x-tab
+                name="grades"
+                label="Calificaciones"
+                icon="reportBar"
+                :count="$attempts->count()"
+                select="setActiveTab('grades')"
+            />
 
             {{-- Pestaña 4: Configuración de evaluación --}}
-            <button
-                type="button"
-                role="tab"
-                @click="setActiveTab('evaluation')"
-                :aria-selected="activeTab === 'evaluation'"
-                :class="activeTab === 'evaluation'
-                    ? 'border-acode-tech text-acode-primary font-bold'
-                    : 'border-transparent text-slate-500 hover:text-acode-primary font-medium'"
-                class="inline-flex items-center gap-2 border-b-[3px] px-4 py-3 text-sm transition whitespace-nowrap"
-            >
-                <x-icon name="clock" class="w-4 h-4 text-acode-tech" />
-                <span>Configuración de evaluación</span>
-                <span
-                    class="rounded-full px-2 py-0.5 text-xs font-semibold"
-                    :class="activeTab === 'evaluation' ? 'bg-acode-tech text-white' : 'bg-slate-100 text-slate-600'"
-                >
-                    {{ $group->evaluationPeriods->count() }}
-                </span>
-            </button>
+            <x-tab
+                name="evaluation"
+                label="Configuración de evaluación"
+                icon="clock"
+                :count="$group->evaluationPeriods->count()"
+                select="setActiveTab('evaluation')"
+            />
         </div>
     </div>
 
@@ -396,15 +350,13 @@
 
                 @if (!$group->students->isEmpty())
                     <div class="w-full sm:max-w-xs relative">
-                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                            <x-icon name="search" class="w-4 h-4" />
-                        </div>
-                        <input
+                        <x-form.input
                             type="search"
+                            prefixIcon="search"
                             x-model="studentSearch"
                             placeholder="Buscar estudiante por nombre o correo..."
-                            class="h-10 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm focus:border-acode-tech focus:outline-none focus:ring-2 focus:ring-acode-tech/20"
-                        >
+                            aria-label="Buscar estudiante"
+                        />
                     </div>
                 @endif
             </div>
@@ -663,35 +615,29 @@
                         <label for="grade-search" class="mb-1.5 block text-xs font-semibold text-acode-primary">
                             Buscar estudiante o examen
                         </label>
-                        <div class="relative">
-                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                                <x-icon name="search" class="w-4 h-4" />
-                            </div>
-                            <input
-                                id="grade-search"
-                                type="search"
-                                x-model="gradeSearch"
-                                placeholder="Nombre, correo o título de examen..."
-                                class="h-10 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm focus:border-acode-tech focus:outline-none focus:ring-2 focus:ring-acode-tech/20"
-                            >
-                        </div>
+                        <x-form.input
+                            id="grade-search"
+                            type="search"
+                            prefixIcon="search"
+                            x-model="gradeSearch"
+                            placeholder="Nombre, correo o título de examen..."
+                        />
                     </div>
 
                     <div>
                         <label for="grade-status" class="mb-1.5 block text-xs font-semibold text-acode-primary">
                             Estado del intento
                         </label>
-                        <select
+                        <x-form.select
                             id="grade-status"
                             x-model="gradeStatus"
-                            class="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-acode-tech focus:outline-none focus:ring-2 focus:ring-acode-tech/20"
                         >
                             <option value="all">Todos los estados</option>
                             <option value="submitted">Entregado</option>
                             <option value="in_progress">En progreso</option>
                             <option value="expired">Expirado</option>
                             <option value="cancelled_by_incident">Cancelado por incidente</option>
-                        </select>
+                        </x-form.select>
                     </div>
                 </div>
 

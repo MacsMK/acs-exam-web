@@ -46,20 +46,17 @@
                 helpText="Solicita este código al docente titular de tu materia o clase."
                 required
             >
-                <div class="relative mt-1">
-                    <input
-                        type="text"
-                        name="access_folio"
-                        id="access_folio"
-                        x-model="folio"
-                        x-on:input="folio = folio.toUpperCase()"
-                        required
-                        maxlength="12"
-                        autofocus
-                        placeholder="Ej. 7F3K9QRT"
-                        class="h-12 w-full rounded-xl border border-slate-300 px-4 text-center font-mono text-lg font-bold uppercase tracking-widest text-acode-primary shadow-sm outline-none transition focus:border-acode-tech focus:ring-2 focus:ring-acode-tech/20"
-                    />
-                </div>
+                <x-form.input
+                    name="access_folio"
+                    size="lg"
+                    x-model="folio"
+                    x-on:input="folio = folio.toUpperCase()"
+                    required
+                    maxlength="12"
+                    autofocus
+                    placeholder="Ej. 7F3K9QRT"
+                    class="mt-1 text-center font-mono font-bold uppercase tracking-widest text-acode-primary"
+                />
             </x-form.group>
 
             <div class="rounded-xl border border-slate-100 bg-slate-50 p-4 text-xs text-slate-500 flex items-start gap-3">

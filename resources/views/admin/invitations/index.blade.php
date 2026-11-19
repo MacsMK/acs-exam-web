@@ -175,16 +175,18 @@
                                         <span class="font-mono font-bold text-acode-primary tracking-wider">
                                             {{ $invitation->code }}
                                         </span>
-                                        <button
+                                        <x-button
                                             type="button"
+                                            variant="neutral"
+                                            size="sm"
+                                            :icon-only="true"
                                             data-code="{{ $invitation->code }}"
-                                            @click="copyText($el.dataset.code, 'Código copiado al portapapeles')"
-                                            class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-acode-tech hover:text-acode-tech focus:outline-none focus:ring-2 focus:ring-acode-tech"
+                                            x-on:click="copyText($el.dataset.code, 'Código copiado al portapapeles')"
                                             title="Copiar código"
                                             aria-label="Copiar código {{ $invitation->code }}"
                                         >
                                             <x-icon name="copy" class="h-3.5 w-3.5" />
-                                        </button>
+                                        </x-button>
                                     </div>
                                     <button
                                         type="button"

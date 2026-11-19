@@ -244,13 +244,9 @@
                             <div class="flex flex-wrap items-center gap-2 pt-1">
                                 <span class="text-xs font-semibold text-slate-500 mr-1">Duración rápida desde inicio:</span>
                                 @foreach ([1 => '+1 hora', 2 => '+2 horas', 24 => '+24 horas', 168 => '+7 días'] as $hours => $presetLabel)
-                                    <button
-                                        type="button"
-                                        @click="applyDurationPreset({{ $hours }})"
-                                        class="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-acode-primary hover:border-acode-tech hover:bg-acode-surface transition"
-                                    >
+                                    <x-button type="button" variant="neutral" size="sm" x-on:click="applyDurationPreset({{ $hours }})">
                                         {{ $presetLabel }}
-                                    </button>
+                                    </x-button>
                                 @endforeach
                             </div>
                         </div>

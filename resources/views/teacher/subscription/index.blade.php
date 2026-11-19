@@ -15,17 +15,20 @@
         </div>
 
         <div class="flex items-center gap-3 shrink-0">
-            <a
-                href="https://wa.me/{{ $whatsappNumber }}?text={{ urlencode("Hola A-Code Solutions, deseo solicitar/renovar un paquete docente para mi cuenta:\nDocente: {$teacher->full_name}\nCorreo: {$teacher->email}\nID: {$teacher->id}") }}"
+            @php
+                $waMessage = urlencode("Hola A-Code Solutions, deseo solicitar/renovar un paquete docente para mi cuenta:\nDocente: {$teacher->full_name}\nCorreo: {$teacher->email}\nID: {$teacher->id}");
+            @endphp
+            <x-button
+                variant="accent"
+                href="https://wa.me/{{ $whatsappNumber }}?text={{ $waMessage }}"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex items-center gap-2 bg-acode-accent hover:bg-acode-accent-dark text-white font-semibold text-sm px-4 py-2.5 rounded-lg shadow-sm transition-all duration-200 hover:shadow active:scale-[0.98]"
             >
                 <svg class="w-5 h-5 fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
                 </svg>
                 Atención Comercial por WhatsApp
-            </a>
+            </x-button>
         </div>
     </div>
 
@@ -105,13 +108,13 @@
                 <div class="flex justify-between items-center">
                     <span>Modalidad de pago:</span>
                     <span class="font-medium text-slate-800">
-                        {{ $activePackage ? 'Pasarela Simulada / WhatsApp' : 'Prueba gratuita / WhatsApp' }}
+                        {{ $activePackage ? 'Pago en línea simulado / WhatsApp' : 'Prueba gratuita / WhatsApp' }}
                     </span>
                 </div>
             </div>
         </x-card>
 
-        {{-- Barras de cuotas y consumo (12 pasos discretos sin style inline) --}}
+        {{-- Barras de cuotas y consumo (componente x-progress-bar, sin style inline) --}}
         <x-card class="lg:col-span-2 space-y-4">
             <h3 class="text-base font-bold text-acode-primary mb-3">Consumo de Cuotas del Paquete</h3>
 
@@ -123,33 +126,16 @@
                         {{ $activePackage ? $activeGroupsCount : $cumulativeGroupsCount }} / {{ $activePackage?->max_groups ?? 1 }}
                     </span>
                 </div>
-                <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                        class="h-full rounded-full transition-all duration-500 {{ ($activePackage ? $activeGroupsCount : $cumulativeGroupsCount) >= ($activePackage?->max_groups ?? 1) ? 'bg-acode-danger' : 'bg-acode-tech' }} {{ match (
-                            ($activePackage ? $activeGroupsCount : $cumulativeGroupsCount) > 0
-                                ? max(1, (int) round(min(12, (($activePackage ? $activeGroupsCount : $cumulativeGroupsCount) / max(1, (int) ($activePackage?->max_groups ?? 1))) * 12)))
-                                : 0
-                        ) {
-                            0 => 'w-0',
-                            1 => 'w-1/12',
-                            2 => 'w-2/12',
-                            3 => 'w-3/12',
-                            4 => 'w-4/12',
-                            5 => 'w-5/12',
-                            6 => 'w-6/12',
-                            7 => 'w-7/12',
-                            8 => 'w-8/12',
-                            9 => 'w-9/12',
-                            10 => 'w-10/12',
-                            11 => 'w-11/12',
-                            default => 'w-full',
-                        } }}"
-                        role="progressbar"
-                        aria-valuenow="{{ $activePackage ? $activeGroupsCount : $cumulativeGroupsCount }}"
-                        aria-valuemin="0"
-                        aria-valuemax="{{ $activePackage?->max_groups ?? 1 }}"
-                    ></div>
-                </div>
+                @php
+                    $usedGroups = $activePackage ? $activeGroupsCount : $cumulativeGroupsCount;
+                    $maxGroups = (int) ($activePackage?->max_groups ?? 1);
+                    $pctGroups = min(100, (int) round(($usedGroups / max(1, $maxGroups)) * 100));
+                @endphp
+                <x-progress-bar
+                    :value="$pctGroups"
+                    :variant="$usedGroups >= $maxGroups ? 'danger' : 'tech'"
+                    label="Grupos escolares creados"
+                />
                 @if (!$activePackage && $cumulativeGroupsCount >= 1)
                     <p class="text-[11px] text-acode-danger mt-1">Cota máxima de prueba gratuita alcanzada. Contrata un plan para agregar más grupos.</p>
                 @endif
@@ -165,37 +151,16 @@
                         <span class="text-acode-primary">{{ $questionsCount }} / {{ number_format((int) ($activePackage?->max_questions ?? 50)) }}</span>
                     @endif
                 </div>
-                <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    @if ($activePackage !== null && $activePackage->max_questions === null)
-                        <div class="h-full w-full bg-acode-accent rounded-full transition-all duration-500" role="progressbar" aria-valuenow="{{ $questionsCount }}" aria-valuemin="0" aria-valuemax="{{ max(1, $questionsCount) }}"></div>
-                    @else
-                        <div
-                            class="h-full rounded-full transition-all duration-500 {{ $questionsCount >= ($activePackage?->max_questions ?? 50) ? 'bg-acode-danger' : 'bg-acode-accent' }} {{ match (
-                                $questionsCount > 0
-                                    ? max(1, (int) round(min(12, ($questionsCount / max(1, (int) ($activePackage?->max_questions ?? 50))) * 12)))
-                                    : 0
-                            ) {
-                                0 => 'w-0',
-                                1 => 'w-1/12',
-                                2 => 'w-2/12',
-                                3 => 'w-3/12',
-                                4 => 'w-4/12',
-                                5 => 'w-5/12',
-                                6 => 'w-6/12',
-                                7 => 'w-7/12',
-                                8 => 'w-8/12',
-                                9 => 'w-9/12',
-                                10 => 'w-10/12',
-                                11 => 'w-11/12',
-                                default => 'w-full',
-                            } }}"
-                            role="progressbar"
-                            aria-valuenow="{{ $questionsCount }}"
-                            aria-valuemin="0"
-                            aria-valuemax="{{ $activePackage?->max_questions ?? 50 }}"
-                        ></div>
-                    @endif
-                </div>
+                @php
+                    $isUnlimitedQuestions = $activePackage !== null && $activePackage->max_questions === null;
+                    $maxQuestions = (int) ($activePackage?->max_questions ?? 50);
+                    $pctQuestions = $isUnlimitedQuestions ? 100 : min(100, (int) round(($questionsCount / max(1, $maxQuestions)) * 100));
+                @endphp
+                <x-progress-bar
+                    :value="$pctQuestions"
+                    :variant="(! $isUnlimitedQuestions && $questionsCount >= $maxQuestions) ? 'danger' : 'accent'"
+                    label="Reactivos en banco de preguntas"
+                />
             </div>
 
             {{-- Exámenes activos --}}
@@ -206,33 +171,16 @@
                         {{ $activePackage ? $examsCount : $cumulativeExamsCount }} / {{ $activePackage?->max_active_exams ?? 1 }}
                     </span>
                 </div>
-                <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                        class="h-full rounded-full transition-all duration-500 {{ ($activePackage ? $examsCount : $cumulativeExamsCount) >= ($activePackage?->max_active_exams ?? 1) ? 'bg-acode-danger' : 'bg-acode-primary' }} {{ match (
-                            ($activePackage ? $examsCount : $cumulativeExamsCount) > 0
-                                ? max(1, (int) round(min(12, (($activePackage ? $examsCount : $cumulativeExamsCount) / max(1, (int) ($activePackage?->max_active_exams ?? 1))) * 12)))
-                                : 0
-                        ) {
-                            0 => 'w-0',
-                            1 => 'w-1/12',
-                            2 => 'w-2/12',
-                            3 => 'w-3/12',
-                            4 => 'w-4/12',
-                            5 => 'w-5/12',
-                            6 => 'w-6/12',
-                            7 => 'w-7/12',
-                            8 => 'w-8/12',
-                            9 => 'w-9/12',
-                            10 => 'w-10/12',
-                            11 => 'w-11/12',
-                            default => 'w-full',
-                        } }}"
-                        role="progressbar"
-                        aria-valuenow="{{ $activePackage ? $examsCount : $cumulativeExamsCount }}"
-                        aria-valuemin="0"
-                        aria-valuemax="{{ $activePackage?->max_active_exams ?? 1 }}"
-                    ></div>
-                </div>
+                @php
+                    $usedExams = $activePackage ? $examsCount : $cumulativeExamsCount;
+                    $maxExams = (int) ($activePackage?->max_active_exams ?? 1);
+                    $pctExams = min(100, (int) round(($usedExams / max(1, $maxExams)) * 100));
+                @endphp
+                <x-progress-bar
+                    :value="$pctExams"
+                    :variant="$usedExams >= $maxExams ? 'danger' : 'primary'"
+                    label="Exámenes guardados o activos"
+                />
             </div>
         </x-card>
     </div>
@@ -293,7 +241,7 @@
                         @else
                             <x-button href="{{ route('teacher.subscription.checkout', $pkg) }}" variant="primary" class="w-full">
                                 <x-icon name="lock" class="w-4 h-4" />
-                                Continuar a pasarela
+                                Contratar este paquete
                             </x-button>
 
                             <a
@@ -322,7 +270,7 @@
         <div>
             <h2 class="text-xl font-bold text-acode-primary">Historial de pagos y comprobantes</h2>
             <p class="text-xs text-slate-500 mt-0.5">
-                Registro de transacciones procesadas mediante la pasarela simulada para tu cuenta docente.
+                Registro de transacciones procesadas mediante el pago en línea simulado para tu cuenta docente.
             </p>
         </div>
 

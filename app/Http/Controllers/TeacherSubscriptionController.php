@@ -120,7 +120,7 @@ class TeacherSubscriptionController extends Controller
             ->withInput($request->except(['card_number', 'card_cvv', 'card_expiry']))
             ->withErrors([
                 'payment_gateway' => $transaction->failure_message
-                    ?? 'No fue posible procesar el pago con la pasarela simulada.',
+                    ?? 'No fue posible procesar el pago, intenta nuevamente.',
             ]);
     }
 

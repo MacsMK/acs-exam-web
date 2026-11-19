@@ -313,14 +313,17 @@
                             <x-icon name="warning" class="w-5 h-5 shrink-0" />
                             <span class="text-xs sm:text-sm font-semibold" x-text="alert.text"></span>
                         </div>
-                        <button
+                        <x-button
                             type="button"
-                            @click="removeAlert(alert.id)"
-                            class="text-xs font-bold opacity-60 hover:opacity-100 px-2 py-0.5"
+                            variant="neutral"
+                            size="sm"
+                            :icon-only="true"
+                            x-on:click="removeAlert(alert.id)"
+                            title="Descartar alerta"
                             aria-label="Descartar alerta"
                         >
-                            &times;
-                        </button>
+                            <x-icon name="xMark" class="w-3.5 h-3.5" />
+                        </x-button>
                     </div>
                 </template>
             </div>
