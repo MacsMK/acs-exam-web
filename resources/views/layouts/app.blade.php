@@ -320,7 +320,16 @@
                                     <x-icon name="shield" class="h-5 w-5" />
                                     <span>Verificación de cuenta</span>
                                 </a>
-                            @elseif (auth()->user()->role === 'student')
+                            @elseif (in_array(auth()->user()->role, ['student', 'super_admin'], true))
+                                {{-- Perfil del alumno y del superadministrador (RF-AUT-013) --}}
+                                <a href="{{ route('account.profile') }}"
+                                   class="flex min-h-11 items-center gap-3 px-4 py-3 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
+                                    <x-icon name="user" class="h-5 w-5" />
+                                    <span>Mi perfil</span>
+                                </a>
+                            @endif
+
+                            @if (auth()->user()->role === 'student')
                                 <a href="{{ route('student.groups.index') }}"
                                    class="flex min-h-11 items-center gap-3 px-4 py-3 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
                                     <x-nav-icon name="groups" class="h-5 w-5" />

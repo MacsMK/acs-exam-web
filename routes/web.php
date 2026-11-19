@@ -13,6 +13,7 @@ declare(strict_types=1);
  * ============================================================================
  */
 
+use App\Http\Controllers\AccountProfileController;
 use App\Http\Controllers\AdminInvitationCodeController;
 use App\Http\Controllers\AdminTeacherController;
 use App\Http\Controllers\AttemptController;
@@ -59,6 +60,11 @@ Route::middleware('auth')->group(function (): void {
     Route::post('logout', [LoginController::class, 'logout'])->name('auth.logout');
 
     Route::get('dashboard', DashboardController::class)->name('dashboard');
+
+    // Perfil del alumno y del superadministrador (RF-AUT-013, ACT-WEB-050)
+    Route::get('mi-perfil', AccountProfileController::class)
+        ->middleware('role:student,super_admin')
+        ->name('account.profile');
 
     Route::middleware('role:teacher')->group(function (): void {
         Route::get('docente/verificacion', [TeacherVerificationController::class, 'show'])
