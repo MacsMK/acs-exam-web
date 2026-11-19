@@ -316,13 +316,24 @@ class AuthService
             return null;
         }
 
-        $availableAt = $user->two_factor_expires_at->copy()
-            ->subMinutes(self::TWO_FACTOR_TTL_MINUTES)
-            ->addSeconds(self::TWO_FACTOR_RESEND_SECONDS);
+        return $this->resendTwoFactorCodeForUser($user);
+    }
 
-        if (now()->lt($availableAt)) {
-            $wait = max(1, $availableAt->getTimestamp() - now()->getTimestamp());
+    /**
+     * Reenvía el código del segundo paso a una cuenta con verificación pendiente
+     * (RF-AUT-006). Lo usan la API (por correo) y la web (por la sesión pendiente),
+     * por lo que aplica a todos los roles que inician sesión en la web.
+     *
+     * @param User $user Cuenta con verificación pendiente.
+     * @return User Cuenta con el nuevo código emitido; el anterior queda invalidado.
+     *
+     * @throws TooManyRequestsHttpException Si aún no transcurren los 60 segundos.
+     */
+    public function resendTwoFactorCodeForUser(User $user): User
+    {
+        $wait = $this->secondsUntilResendAvailable($user);
 
+        if ($wait > 0) {
             throw new TooManyRequestsHttpException(
                 $wait,
                 "Espera {$wait} segundos para solicitar un nuevo código.",
@@ -332,6 +343,25 @@ class AuthService
         $this->issueTwoFactorCode($user);
 
         return $user->fresh();
+    }
+
+    /**
+     * Segundos que faltan para poder solicitar un nuevo código (0 si ya se puede).
+     *
+     * @param User $user Cuenta con verificación pendiente.
+     * @return int
+     */
+    public function secondsUntilResendAvailable(User $user): int
+    {
+        if ($user->two_factor_expires_at === null) {
+            return 0;
+        }
+
+        $availableAt = $user->two_factor_expires_at->copy()
+            ->subMinutes(self::TWO_FACTOR_TTL_MINUTES)
+            ->addSeconds(self::TWO_FACTOR_RESEND_SECONDS);
+
+        return max(0, $availableAt->getTimestamp() - now()->getTimestamp());
     }
 
     /**

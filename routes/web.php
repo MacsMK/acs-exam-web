@@ -52,6 +52,7 @@ Route::middleware('guest')->group(function (): void {
 
     Route::get('verificar-codigo/{user}', [LoginController::class, 'showTwoFactorForm'])->name('auth.verify-2fa.show');
     Route::post('verificar-codigo', [LoginController::class, 'verifyTwoFactor'])->middleware('throttle:10,1')->name('auth.verify-2fa.store');
+    Route::post('verificar-codigo/reenviar', [LoginController::class, 'resendTwoFactor'])->middleware('throttle:10,1')->name('auth.verify-2fa.resend');
 });
 
 Route::middleware('auth')->group(function (): void {

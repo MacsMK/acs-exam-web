@@ -29,15 +29,14 @@
 
     <div
         x-data="{
-            remaining: 600, // 10 minutos normativos
+            remaining: {{ (int) ($expiresIn ?? 600) }}, // vigencia real del código (10 minutos normativos)
+            resendIn: {{ (int) ($resendIn ?? 0) }}, // espera para solicitar un nuevo código (RF-AUT-006)
             timerId: null,
             init() {
                 this.timerId = setInterval(() => {
-                    if (this.remaining > 0) {
-                        this.remaining--;
-                    } else {
-                        clearInterval(this.timerId);
-                    }
+                    if (this.remaining > 0) this.remaining--;
+                    if (this.resendIn > 0) this.resendIn--;
+                    if (this.remaining <= 0 && this.resendIn <= 0) clearInterval(this.timerId);
                 }, 1000);
             },
             formattedTime() {
@@ -87,6 +86,21 @@
                     Continuar
                 </x-button>
             </div>
+        </form>
+
+        {{-- Reenvío del código tras 60 segundos; el nuevo código invalida el anterior (RF-AUT-006) --}}
+        <form method="POST" action="{{ route('auth.verify-2fa.resend') }}" class="text-center">
+            @csrf
+            <p class="text-xs text-slate-500 mb-2">¿No recibiste el código?</p>
+            <x-button
+                type="submit"
+                variant="neutral"
+                size="sm"
+                x-bind:disabled="resendIn > 0"
+            >
+                <span x-show="resendIn <= 0">Reenviar código</span>
+                <span x-show="resendIn > 0" x-cloak x-text="'Reenviar código en ' + resendIn + ' s'"></span>
+            </x-button>
         </form>
 
         <div class="text-center pt-2">
