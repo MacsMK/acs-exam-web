@@ -14,6 +14,7 @@ declare(strict_types=1);
  */
 
 use App\Http\Controllers\AccountProfileController;
+use App\Http\Controllers\ProfilePhotoController;
 use App\Http\Controllers\AdminInvitationCodeController;
 use App\Http\Controllers\AdminTeacherController;
 use App\Http\Controllers\AttemptController;
@@ -60,6 +61,11 @@ Route::middleware('auth')->group(function (): void {
     Route::post('logout', [LoginController::class, 'logout'])->name('auth.logout');
 
     Route::get('dashboard', DashboardController::class)->name('dashboard');
+
+    // Fotografía de perfil en almacenamiento privado (RF-AUT-008, ACT-WEB-038)
+    Route::get('usuarios/{user}/foto', ProfilePhotoController::class)
+        ->whereNumber('user')
+        ->name('users.photo');
 
     // Perfil del alumno y del superadministrador (RF-AUT-013, ACT-WEB-050)
     Route::get('mi-perfil', AccountProfileController::class)

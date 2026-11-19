@@ -264,9 +264,7 @@
                                 :aria-expanded="profileOpen.toString()"
                                 class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-slate-100">
 
-                            <div class="flex h-9 w-9 items-center justify-center rounded-full bg-acode-primary text-sm font-bold text-white">
-                                {{ strtoupper(substr(auth()->user()->first_name, 0, 1)) }}
-                            </div>
+                            <x-avatar :user="auth()->user()" />
 
                             <span class="hidden text-sm font-medium text-acode-primary sm:block">
                                 {{ auth()->user()->full_name }}

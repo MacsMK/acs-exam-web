@@ -16,6 +16,13 @@
     <x-card>
         <x-slot:title>Datos de la cuenta</x-slot:title>
 
+        <div class="flex items-center gap-4 mb-4">
+            <x-avatar :user="$user" size="lg" />
+            <p class="text-xs text-slate-500">
+                {{ $user->profile_photo_path ? 'Fotografía de perfil registrada.' : 'Sin fotografía: se muestra la imagen predeterminada.' }}
+            </p>
+        </div>
+
         <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5">
                 <dt class="text-xs text-slate-500">Nombre</dt>

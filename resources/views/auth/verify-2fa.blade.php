@@ -10,7 +10,7 @@
         </div>
         <h1 class="text-xl font-bold text-acode-primary tracking-tight">Verificación en Dos Pasos</h1>
         <p class="text-xs text-slate-500 mt-1">
-            Hemos generado un código de 6 dígitos para tu cuenta <strong class="text-slate-700">{{ $user->email }}</strong>.
+            Hemos generado un código de 6 dígitos para tu cuenta <strong class="text-slate-700">{{ $user->email }}</strong>
         </p>
     </div>
 

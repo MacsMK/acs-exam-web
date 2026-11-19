@@ -396,9 +396,7 @@
                             {{-- Columna Estudiante con Avatar Vectorial (ADR-049) --}}
                             <x-table.td>
                                 <div class="flex items-center gap-3">
-                                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-acode-primary text-sm font-bold text-white shadow-sm">
-                                        {{ strtoupper(substr($student->first_name ?? $student->full_name, 0, 1)) }}
-                                    </div>
+                                    <x-avatar :user="$student" />
                                     <div>
                                         <p class="font-bold text-acode-primary leading-tight">
                                             {{ $student->full_name }}

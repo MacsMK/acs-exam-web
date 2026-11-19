@@ -30,6 +30,7 @@ use App\Http\Requests\ResendTwoFactorRequest;
 use App\Http\Requests\VerifyTwoFactorRequest;
 use App\Models\User;
 use App\Services\AuthService;
+use App\Services\ProfilePhotoService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
@@ -82,9 +83,14 @@ class AuthController extends Controller
      * @param RegisterStudentRequest $request Solicitud validada de alta de alumno.
      * @return JsonResponse
      */
-    public function registerStudent(RegisterStudentRequest $request): JsonResponse
+    public function registerStudent(RegisterStudentRequest $request, ProfilePhotoService $profilePhotoService): JsonResponse
     {
-        $user = $this->authService->register($request->validated(), 'student');
+        $user = $this->authService->register(collect($request->validated())->except('photo')->all(), 'student');
+
+        // Fotografía opcional del estudiante enviada como multipart (RF-AUT-008)
+        if ($request->hasFile('photo')) {
+            $profilePhotoService->store($user, $request->file('photo'));
+        }
 
         return ApiResponse::success(
             $this->withDemoCode($user, ['user_id' => $user->id]),
