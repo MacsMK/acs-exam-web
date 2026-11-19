@@ -71,6 +71,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('mi-perfil', AccountProfileController::class)
         ->middleware('role:student,super_admin')
         ->name('account.profile');
+    Route::post('mi-perfil/foto', [AccountProfileController::class, 'updatePhoto'])
+        ->middleware('role:student')
+        ->name('account.profile.photo');
 
     Route::middleware('role:teacher')->group(function (): void {
         Route::get('docente/verificacion', [TeacherVerificationController::class, 'show'])

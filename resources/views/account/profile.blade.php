@@ -16,11 +16,32 @@
     <x-card>
         <x-slot:title>Datos de la cuenta</x-slot:title>
 
-        <div class="flex items-center gap-4 mb-4">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
             <x-avatar :user="$user" size="lg" />
-            <p class="text-xs text-slate-500">
-                {{ $user->profile_photo_path ? 'Fotografía de perfil registrada.' : 'Sin fotografía: se muestra la imagen predeterminada.' }}
-            </p>
+            <div class="flex-1">
+                <p class="text-xs text-slate-500">
+                    {{ $user->profile_photo_path ? 'Fotografía de perfil registrada.' : 'Sin fotografía: se muestra la imagen predeterminada.' }}
+                </p>
+
+                @if ($user->role === 'student')
+                    {{-- Reemplazo de la fotografía: JPG o PNG de hasta 5 MB (RF-AUT-014) --}}
+                    <form method="POST" action="{{ route('account.profile.photo') }}" enctype="multipart/form-data" class="mt-2 flex flex-col sm:flex-row sm:items-center gap-2">
+                        @csrf
+                        <input
+                            type="file"
+                            name="photo"
+                            required
+                            accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+                            aria-label="Nueva fotografía (JPG o PNG de hasta 5 MB)"
+                            class="block w-full sm:w-auto h-10 text-sm text-slate-700 file:mr-3 file:h-full file:px-3.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-acode-primary file:text-white hover:file:bg-acode-tech border border-slate-300 rounded-lg bg-white p-1"
+                        />
+                        <x-button type="submit" variant="secondary" size="sm" class="shrink-0 whitespace-nowrap">
+                            Actualizar fotografía
+                        </x-button>
+                    </form>
+                    <p class="text-xs text-slate-400 mt-1">JPG o PNG de hasta 5 MB.</p>
+                @endif
+            </div>
         </div>
 
         <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">

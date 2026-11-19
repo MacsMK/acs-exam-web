@@ -24,7 +24,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\UpdateProfilePhotoRequest;
+use App\Services\ProfilePhotoService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class AccountProfileController extends Controller
@@ -42,5 +45,15 @@ class AccountProfileController extends Controller
             'user' => $user,
             'acceptance' => $acceptance,
         ]);
+    }
+
+    /**
+     * Reemplaza la fotografía de perfil del estudiante (RF-AUT-014, ACT-WEB-054).
+     */
+    public function updatePhoto(UpdateProfilePhotoRequest $request, ProfilePhotoService $photos): RedirectResponse
+    {
+        $photos->store($request->user(), $request->file('photo'));
+
+        return redirect()->route('account.profile')->with('status', 'Fotografía actualizada correctamente.');
     }
 }

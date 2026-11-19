@@ -96,6 +96,38 @@ class StudentProfilePhotoTest extends TestCase
         $this->actingAs($stranger)->get(route('users.photo', $student))->assertForbidden();
     }
 
+    public function test_student_replaces_photo_from_profile_and_old_file_is_removed(): void
+    {
+        $student = $this->student();
+        $photos = app(ProfilePhotoService::class);
+        $photos->store($student, UploadedFile::fake()->image('vieja.jpg'));
+        $oldPath = $student->fresh()->profile_photo_path;
+
+        $this->actingAs($student)
+            ->post(route('account.profile.photo'), ['photo' => UploadedFile::fake()->image('nueva.png')->size(300)])
+            ->assertRedirect(route('account.profile'))
+            ->assertSessionHas('status');
+
+        $newPath = $student->fresh()->profile_photo_path;
+        $this->assertNotSame($oldPath, $newPath);
+        Storage::disk(ProfilePhotoService::DISK)->assertExists($newPath);
+        Storage::disk(ProfilePhotoService::DISK)->assertMissing($oldPath);
+    }
+
+    public function test_photo_update_validates_format_and_is_only_for_students(): void
+    {
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->post(route('account.profile.photo'), ['photo' => UploadedFile::fake()->create('foto.gif', 50, 'image/gif')])
+            ->assertSessionHasErrors(['photo' => 'La fotografía debe ser una imagen JPG o PNG']);
+
+        $admin = $this->user('super_admin', 'admin@example.test');
+        $this->actingAs($admin)
+            ->post(route('account.profile.photo'), ['photo' => UploadedFile::fake()->image('a.jpg')])
+            ->assertForbidden();
+    }
+
     private function payload(array $extra = []): array
     {
         $notice = PrivacyNotice::first() ?? PrivacyNotice::create([

@@ -14,7 +14,8 @@
 @endphp
 @if ($user->profile_photo_path)
     <img
-        src="{{ route('users.photo', $user) }}"
+        {{-- El parámetro v cambia con cada fotografía nueva para que el navegador no muestre la anterior guardada en caché --}}
+        src="{{ route('users.photo', ['user' => $user, 'v' => substr(md5($user->profile_photo_path), 0, 10)]) }}"
         alt="Fotografía de {{ $user->full_name }}"
         {{ $attributes->merge(['class' => 'shrink-0 rounded-full object-cover shadow-sm ' . $sizeClass]) }}
     >
