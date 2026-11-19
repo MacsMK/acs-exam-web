@@ -384,6 +384,9 @@
                         <x-table.th>Correo electrónico</x-table.th>
                         <x-table.th>Fecha de incorporación</x-table.th>
                         <x-table.th align="center">Estado</x-table.th>
+                        @unless ($group->is_closed)
+                            <x-table.th align="right">Acciones</x-table.th>
+                        @endunless
                     </x-slot:header>
 
                     @foreach ($group->students as $student)
@@ -424,6 +427,30 @@
                                     Inscrito
                                 </x-badge>
                             </x-table.td>
+
+                            @unless ($group->is_closed)
+                                {{-- Retiro del estudiante con confirmación (RF-GRU-011, RF-GRU-016, CAM-008) --}}
+                                <x-table.td align="right">
+                                    <form
+                                        method="POST"
+                                        action="{{ route('groups.students.remove', [$group, $student]) }}"
+                                        x-on:submit.prevent="window.AcodeAlert.confirm({
+                                            title: '¿Retirar a este estudiante?',
+                                            text: @js($student->full_name . ' perderá su pertenencia al grupo y el acceso a sus recursos y resultados. Sus registros académicos se conservarán. No se puede retirar si tiene un examen en curso.'),
+                                            confirmButtonText: 'Retirar estudiante',
+                                            cancelButtonText: 'Cancelar',
+                                            isDanger: true,
+                                            onConfirm: () => $el.submit(),
+                                        })"
+                                    >
+                                        @csrf
+                                        @method('DELETE')
+                                        <x-button type="submit" variant="danger" size="sm" class="whitespace-nowrap">
+                                            Retirar
+                                        </x-button>
+                                    </form>
+                                </x-table.td>
+                            @endunless
                         </tr>
                     @endforeach
                 </x-table>

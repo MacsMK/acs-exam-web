@@ -210,6 +210,59 @@ class GroupEnrollmentService
      *
      * @throws DomainException
      */
+    /**
+     * Retiro de un estudiante por el docente (RF-GRU-011, RF-GRU-016,
+     * ACT-WEB-021). Elimina la pertenencia y con ella el acceso del estudiante
+     * a los recursos y resultados del grupo; sus registros académicos se
+     * conservan (CAM-008). No procede si tiene un intento en curso en el grupo.
+     *
+     * @param Group $group Grupo administrado por el docente.
+     * @param User $student Estudiante a retirar.
+     * @param User $teacher Docente que realiza el retiro (bitácora).
+     * @return void
+     *
+     * @throws ValidationException Si el estudiante no pertenece al grupo.
+     * @throws DomainException Si el estudiante tiene un intento en curso.
+     */
+    public function removeStudent(Group $group, User $student, User $teacher): void
+    {
+        $belongs = $group->students()->where('acs_users.id', $student->id)->exists();
+
+        if (! $belongs) {
+            throw ValidationException::withMessages([
+                'student' => ['El estudiante no pertenece a este grupo.'],
+            ]);
+        }
+
+        $hasAttemptInProgress = $group->studentAttempts()
+            ->where('student_id', $student->id)
+            ->where('status', 'in_progress')
+            ->with('exam')
+            ->get()
+            ->contains(fn (StudentAttempt $attempt): bool => $this->attemptService->isInProgress($attempt));
+
+        if ($hasAttemptInProgress) {
+            throw new DomainException(
+                'No es posible retirar al estudiante mientras tenga un examen en curso en este grupo. '
+                .'Podrás hacerlo cuando ese intento haya finalizado.'
+            );
+        }
+
+        DB::transaction(static function () use ($group, $student, $teacher): void {
+            $group->students()->detach($student->id);
+
+            AuditLog::create([
+                'user_id' => $teacher->id,
+                'action' => 'group.student_removed',
+                'auditable_type' => Group::class,
+                'auditable_id' => $group->id,
+                'old_values' => ['student_id' => $student->id, 'group_id' => $group->id],
+                'ip_address' => request()->ip(),
+                'user_agent' => mb_substr((string) request()->userAgent(), 0, 255),
+            ]);
+        });
+    }
+
     public function closeGroup(Group $group): void
     {
         $hasActiveAttempts = $group->studentAttempts()

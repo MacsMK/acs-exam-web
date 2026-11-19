@@ -95,6 +95,9 @@ Route::middleware('auth')->group(function (): void {
             Route::resource('groups', GroupController::class)->only(['index', 'create', 'store', 'show']);
         Route::post('groups/{group}/cerrar', [GroupController::class, 'close'])->name('groups.close');
         Route::post('groups/{group}/reabrir', [GroupController::class, 'reopen'])->name('groups.reopen');
+        Route::delete('groups/{group}/alumnos/{student}', [GroupController::class, 'removeStudent'])
+            ->whereNumber('student')
+            ->name('groups.students.remove');
         Route::get('groups/{group}/periodos', [EvaluationPeriodController::class, 'index'])->name('groups.periods.index');
         Route::post('groups/{group}/periodos', [EvaluationPeriodController::class, 'store'])->name('groups.periods.store');
         Route::get('groups/{group}/periodos/{period}/sabana', [EvaluationPeriodController::class, 'gradebook'])->name('groups.periods.gradebook');
