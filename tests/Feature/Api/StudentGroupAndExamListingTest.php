@@ -10,11 +10,13 @@ declare(strict_types=1);
  * Ubicación:   tests/Feature/Api/StudentGroupAndExamListingTest.php
  * Descripción: Datos de las tarjetas del alumno en la API móvil (ADR-061):
  *              materia, docente y fecha de ingreso en api.v1.groups.index y
- *              api.v1.groups.join; docente, grupo con materia, número de
- *              preguntas e intento del alumno en api.v1.exams.index. Incluye
- *              el vencimiento de un intento en curso, que los grupos
- *              cerrados no muestren sus exámenes (RF-GRU-019) y que el
- *              docente conserve su respuesta anterior.
+ *              api.v1.groups.join; docente, grupo con materia, fechas,
+ *              número de preguntas e intento del alumno en
+ *              api.v1.exams.index; grupo de cada fila en api.v1.grades.index
+ *              y el filtro ?group= de ambos listados. Incluye el vencimiento
+ *              de un intento en curso, que los grupos cerrados no muestren
+ *              sus exámenes (RF-GRU-019) y que el docente conserve su
+ *              respuesta anterior.
  * ============================================================================
  */
 
@@ -122,6 +124,8 @@ class StudentGroupAndExamListingTest extends TestCase
         $response->assertJsonPath('data.0.group.name', 'Grupo DATOS001');
         $response->assertJsonPath('data.0.group.subject', 'Programación Móvil');
         $response->assertJsonPath('data.0.questions_count', 2);
+        $this->assertTrue(Carbon::parse($response->json('data.0.starts_at'))->equalTo($exam->starts_at));
+        $this->assertTrue(Carbon::parse($response->json('data.0.ends_at'))->equalTo($exam->ends_at));
         $response->assertJsonPath('data.0.attempts_allowed', 1);
         $response->assertJsonPath('data.0.attempts_used', 0);
         $response->assertJsonPath('data.0.attempt_status', null);
@@ -231,6 +235,75 @@ class StudentGroupAndExamListingTest extends TestCase
         ]);
     }
 
+    public function test_the_group_filter_lists_only_the_exams_of_that_group(): void
+    {
+        $otherGroup = $this->createGroup('DATOS005', 'Redes');
+        $otherGroup->students()->attach($this->student->id, ['joined_at' => now()]);
+        $examOfGroup = $this->createExam($this->group);
+        $this->createExam($otherGroup);
+
+        $response = $this->as($this->student)->getJson('/api/v1/exams?group='.$this->group->id);
+
+        $response->assertOk();
+        $response->assertJsonCount(1, 'data');
+        $response->assertJsonPath('data.0.id', (string) $examOfGroup->id);
+        $response->assertJsonPath('data.0.group.id', (string) $this->group->id);
+    }
+
+    public function test_the_group_filter_of_a_foreign_group_returns_an_empty_list(): void
+    {
+        $foreignGroup = $this->createGroup('DATOS006', 'Ajena');
+        $this->createExam($foreignGroup);
+        $this->createExam($this->group);
+
+        $response = $this->as($this->student)->getJson('/api/v1/exams?group='.$foreignGroup->id);
+
+        $response->assertOk();
+        $response->assertJsonCount(0, 'data');
+    }
+
+    public function test_an_invalid_group_filter_is_rejected(): void
+    {
+        $response = $this->as($this->student)->getJson('/api/v1/exams?group=abc');
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('errors.group.0', 'El grupo indicado no es válido');
+    }
+
+    public function test_each_grade_row_includes_the_group_of_the_attempt(): void
+    {
+        $graded = $this->createExam($this->group);
+        $this->createAttempt($graded, 'submitted', finalScore: 8.5);
+        $pending = $this->createExam($this->group);
+        $this->createAttempt($pending, 'submitted');
+
+        $response = $this->as($this->student)->getJson('/api/v1/grades');
+
+        $response->assertOk();
+        $response->assertJsonCount(2, 'data.data');
+        foreach ($response->json('data.data') as $row) {
+            $this->assertSame((string) $this->group->id, $row['group']['id']);
+            $this->assertSame('Programación Móvil', $row['group']['subject']);
+        }
+    }
+
+    public function test_the_group_filter_lists_only_the_grades_of_that_group(): void
+    {
+        $otherGroup = $this->createGroup('DATOS007', 'Redes');
+        $otherGroup->students()->attach($this->student->id, ['joined_at' => now()]);
+        $this->createAttempt($this->createExam($this->group), 'submitted', finalScore: 9.0);
+        $this->createAttempt($this->createExam($otherGroup), 'submitted', finalScore: 7.0, group: $otherGroup);
+        $this->createAttempt($this->createExam($otherGroup), 'submitted', group: $otherGroup);
+
+        $response = $this->as($this->student)->getJson('/api/v1/grades?group='.$otherGroup->id);
+
+        $response->assertOk();
+        $response->assertJsonCount(2, 'data.data');
+        foreach ($response->json('data.data') as $row) {
+            $this->assertSame((string) $otherGroup->id, $row['group']['id']);
+        }
+    }
+
     private function as(User $user): static
     {
         $this->app['auth']->forgetGuards();
@@ -320,16 +393,22 @@ class StudentGroupAndExamListingTest extends TestCase
         ]);
     }
 
-    private function createAttempt(Exam $exam, string $status, ?User $student = null): StudentAttempt
-    {
+    private function createAttempt(
+        Exam $exam,
+        string $status,
+        ?User $student = null,
+        ?float $finalScore = null,
+        ?Group $group = null,
+    ): StudentAttempt {
         return StudentAttempt::create([
             'exam_id' => $exam->id,
             'student_id' => ($student ?? $this->student)->id,
-            'group_id' => $this->group->id,
+            'group_id' => ($group ?? $this->group)->id,
             'question_sequence_payload' => [],
             'started_at' => now(),
             'submitted_at' => $status === 'in_progress' ? null : now(),
             'status' => $status,
+            'final_score' => $finalScore,
         ]);
     }
 }
