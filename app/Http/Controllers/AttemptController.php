@@ -17,6 +17,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Requests\AttemptAnswerWebRequest;
+use App\Http\Requests\AttemptIncidentStoreRequest;
 use App\Http\Requests\AttemptTakeRequest;
 use App\Models\Exam;
 use App\Models\StudentAttempt;
@@ -24,6 +25,7 @@ use App\Services\AttemptService;
 use App\Services\StudentResultService;
 use DomainException;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 
 class AttemptController extends Controller
@@ -104,6 +106,37 @@ class AttemptController extends Controller
             : $next;
     }
 
+    /**
+     * Registra un incidente anti-trampa detectado en el navegador web durante
+     * el intento activo y emite el evento en vivo por Reverb (MPW-V2 §7.7, ADR-042).
+     */
+    public function incident(AttemptIncidentStoreRequest $request, StudentAttempt $attempt): JsonResponse
+    {
+        $this->authorizeOwnership($attempt);
+
+        if ($attempt->status !== 'in_progress') {
+            return response()->json([
+                'incidents_count' => (int) $attempt->incidents_count,
+                'status' => $attempt->status,
+                'cancelled' => $attempt->status === 'cancelled_by_incident',
+                'redirect_url' => route('attempts.result', $attempt),
+            ]);
+        }
+
+        $updated = $this->attemptService->reportIncident(
+            $attempt,
+            (string) $request->validated('incident_type'),
+            (string) ($request->validated('description') ?? 'Cambio de pestaña o pérdida de foco detectada en navegador web.'),
+        );
+
+        return response()->json([
+            'incidents_count' => (int) $updated->incidents_count,
+            'status' => $updated->status,
+            'cancelled' => $updated->status === 'cancelled_by_incident',
+            'redirect_url' => route('attempts.result', $updated),
+        ]);
+    }
+
     public function finish(StudentAttempt $attempt): RedirectResponse
     {
         $this->authorizeOwnership($attempt);
@@ -125,9 +158,12 @@ class AttemptController extends Controller
     {
         $this->authorizeOwnership($attempt);
 
+        $attempt->load('exam', 'answers.examQuestion.question', 'group.teacher');
+
         return view('exams.result-summary', [
-            'attempt' => $attempt->load('exam', 'answers.examQuestion.question', 'group.teacher'),
+            'attempt' => $attempt,
             'reviewAvailable' => $this->studentResultService->reviewIsAvailable($attempt),
+            'summary' => $this->studentResultService->buildWebResultSummary($attempt),
         ]);
     }
 

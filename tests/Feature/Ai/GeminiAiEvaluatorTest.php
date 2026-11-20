@@ -9,12 +9,14 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        GeminiAiEvaluatorTest.php
  * Ubicación:      tests/Feature/Ai/GeminiAiEvaluatorTest.php
- * Requerimiento:  RF-EVA-004, RF-EVA-005, RF-IAR-002, RNF-PRI-001, RNF-CON-002
+ * Requerimiento:  RF-EVA-004, RF-EVA-005, RF-EVA-008, RF-IAR-002, RF-IAR-011,
+ *                 RNF-PRI-001, RNF-CON-002, ADR-041, ADR-059
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
- * Descripción:    Pruebas automatizadas del evaluador asistido por IA Google Gemini
- *                 1.5 Flash: evaluación semántica, minimización de datos (LFPDPPP)
- *                 y degradación transparente (fallback).
+ * Versión:        2.0.0
+ * Descripción:    Pruebas automatizadas del evaluador asistido por IA Google
+ *                 Gemini (modelo default gemini-2.5-flash): evaluación
+ *                 semántica con contexto pedagógico sin PII (LFPDPPP),
+ *                 bandera is_fallback, degradación resiliente y Circuit Breaker.
  * ============================================================================
  */
 
@@ -24,6 +26,7 @@ use App\Contracts\AiEvaluatorContract;
 use App\Services\Ai\GeminiAiEvaluator;
 use App\Services\MockAiEvaluator;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -33,13 +36,61 @@ class GeminiAiEvaluatorTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Cache::flush();
         Config::set('services.ai.driver', 'gemini');
         Config::set('services.gemini.api_key', 'test-gemini-api-key-12345');
-        Config::set('services.gemini.model', 'gemini-1.5-flash');
+        Config::set('services.gemini.model', 'gemini-2.5-flash');
         Config::set('services.gemini.timeout', 10);
+        Config::set('services.gemini.circuit_failure_threshold', 3);
+        Config::set('services.gemini.circuit_cooldown_seconds', 60);
     }
 
-    public function test_evaluates_answer_successfully_with_gemini_api(): void
+    public function test_uses_gemini_2_5_flash_as_default_model(): void
+    {
+        // Sin valor explícito en config, el driver debe resolver el default gemini-2.5-flash (ADR-059)
+        Config::set('services.gemini.model', '');
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                [
+                                    'text' => json_encode([
+                                        'similarity_score' => 92.0,
+                                        'meets_goal' => true,
+                                        'feedback' => 'Respuesta clara y precisa.',
+                                    ]),
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        /** @var GeminiAiEvaluator $evaluator */
+        $evaluator = $this->app->make(AiEvaluatorContract::class);
+        $this->assertInstanceOf(GeminiAiEvaluator::class, $evaluator);
+
+        $result = $evaluator->evaluate(
+            studentAnswer: 'El polimorfismo permite invocar distintos comportamientos bajo una misma interfaz.',
+            referenceAnswer: 'Capacidad de objetos de distintas clases de responder al mismo mensaje de manera específica.'
+        );
+
+        $this->assertSame(92.0, $result['similarity_score']);
+        $this->assertTrue($result['meets_goal']);
+        $this->assertFalse($result['is_fallback']);
+        $this->assertSame('gemini-2.5-flash', $result['model']);
+
+        Http::assertSent(function (Request $request): bool {
+            return str_contains($request->url(), '/models/gemini-2.5-flash:generateContent');
+        });
+    }
+
+    public function test_evaluates_answer_successfully_with_pedagogical_context_and_zero_pii(): void
     {
         Http::fake([
             'https://generativelanguage.googleapis.com/*' => Http::response([
@@ -67,20 +118,54 @@ class GeminiAiEvaluatorTest extends TestCase
 
         $result = $evaluator->evaluate(
             studentAnswer: 'La herencia permite compartir atributos y métodos entre clases padre e hijo.',
-            referenceAnswer: 'Mecanismo de POO donde una clase derivada hereda comportamiento y estado de una clase base.'
+            referenceAnswer: 'Mecanismo de POO donde una clase derivada hereda comportamiento y estado de una clase base.',
+            context: [
+                'question_type' => 'code',
+                'stem' => 'Corrige la función de ordenamiento en Python.',
+                'evaluation_rubric' => 'Debe preservar estabilidad y complejidad O(n log n).',
+                'programming_language' => 'Python',
+                'instructions' => 'No uses librerías externas y corrige el índice fuera de rango.',
+                'is_find_error' => true,
+                'starter_code' => 'def sort_items(arr): return arr',
+                'points_weight' => 25.0,
+                // Claves PII inyectadas deliberadamente para certificar whitelist RNF-PRI-001
+                'student_id' => 99999,
+                'student_name' => 'Juan Carlos Pérez Privado',
+                'email' => 'juan.privado@universidad.edu.mx',
+                'matricula' => 'MAT-2026-SECRET',
+            ],
         );
 
         $this->assertSame(88.5, $result['similarity_score']);
         $this->assertTrue($result['meets_goal']);
         $this->assertSame('El estudiante explica adecuadamente la relación de herencia y abstracción.', $result['feedback']);
+        $this->assertFalse($result['is_fallback']);
+        $this->assertSame('gemini-2.5-flash', $result['model']);
 
-        // Verificar cumplimiento de RNF-PRI-001: No deben enviarse datos personales a Gemini
-        Http::assertSent(function (Request $request) {
+        // Verificar envío de contexto pedagógico y CERO PII (RNF-PRI-001)
+        Http::assertSent(function (Request $request): bool {
             $body = (string) $request->body();
-            $this->assertStringContainsString('La herencia permite compartir', $body);
-            $this->assertStringNotContainsString('student_id', $body);
-            $this->assertStringNotContainsString('email', $body);
-            $this->assertStringNotContainsString('matricula', $body);
+            $promptText = (string) ($request['contents'][0]['parts'][0]['text'] ?? '');
+
+            // Contexto pedagógico autorizado
+            $this->assertStringContainsString('La herencia permite compartir', $promptText);
+            $this->assertStringContainsString('Corrige la función de ordenamiento en Python.', $promptText);
+            $this->assertStringContainsString('Debe preservar estabilidad y complejidad O(n log n).', $promptText);
+            $this->assertStringContainsString('Python', $promptText);
+            $this->assertStringContainsString('No uses librerías externas y corrige el índice fuera de rango.', $promptText);
+            $this->assertStringContainsString('Detección y corrección de errores sobre código base', $promptText);
+            $this->assertStringContainsString('def sort_items(arr): return arr', $promptText);
+
+            // Cero datos personales (LFPDPPP) tanto en prompt decodificado como en payload crudo
+            foreach ([$promptText, $body] as $payload) {
+                $this->assertStringNotContainsString('student_id', $payload);
+                $this->assertStringNotContainsString('99999', $payload);
+                $this->assertStringNotContainsString('Juan Carlos', $payload);
+                $this->assertStringNotContainsString('juan.privado@universidad.edu.mx', $payload);
+                $this->assertStringNotContainsString('MAT-2026-SECRET', $payload);
+                $this->assertStringNotContainsString('matricula', $payload);
+            }
+
             return true;
         });
     }
@@ -96,6 +181,8 @@ class GeminiAiEvaluatorTest extends TestCase
 
         $this->assertSame(0.0, $result['similarity_score']);
         $this->assertFalse($result['meets_goal']);
+        $this->assertFalse($result['is_fallback']);
+        $this->assertSame('none', $result['model']);
         $this->assertStringContainsString('en blanco', $result['feedback']);
 
         Http::assertNothingSent();
@@ -121,6 +208,8 @@ class GeminiAiEvaluatorTest extends TestCase
         $this->assertArrayHasKey('meets_goal', $result);
         $this->assertArrayHasKey('feedback', $result);
         $this->assertGreaterThan(0.0, $result['similarity_score']);
+        $this->assertTrue($result['is_fallback']);
+        $this->assertSame('mock-local', $result['model']);
 
         Http::assertNothingSent();
     }
@@ -146,6 +235,8 @@ class GeminiAiEvaluatorTest extends TestCase
 
         $this->assertArrayHasKey('similarity_score', $result);
         $this->assertArrayHasKey('meets_goal', $result);
+        $this->assertTrue($result['is_fallback']);
+        $this->assertSame('mock-local', $result['model']);
         $this->assertStringStartsWith('[Degradación por Contingencia]', $result['feedback']);
     }
 
@@ -174,6 +265,45 @@ class GeminiAiEvaluatorTest extends TestCase
         );
 
         $this->assertArrayHasKey('similarity_score', $result);
+        $this->assertTrue($result['is_fallback']);
+        $this->assertSame('mock-local', $result['model']);
         $this->assertStringStartsWith('[Degradación por Contingencia]', $result['feedback']);
+    }
+
+    public function test_circuit_breaker_opens_after_three_consecutive_503_errors_and_skips_fourth_http_call(): void
+    {
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
+                'error' => [
+                    'code' => 503,
+                    'message' => 'Service Unavailable',
+                ],
+            ], 503),
+        ]);
+
+        /** @var GeminiAiEvaluator $evaluator */
+        $evaluator = $this->app->make(AiEvaluatorContract::class);
+
+        for ($attempt = 1; $attempt <= 3; $attempt++) {
+            $res = $evaluator->evaluate(
+                studentAnswer: "Intento {$attempt} de respuesta sobre bases de datos relacionales.",
+                referenceAnswer: 'Un SGBD relacional organiza los datos en tablas relacionadas mediante llaves.'
+            );
+
+            $this->assertTrue($res['is_fallback']);
+            $this->assertStringStartsWith('[Degradación por Contingencia]', $res['feedback']);
+        }
+
+        // Tras 3 fallos consecutivos el circuito está abierto; la 4ª llamada degrada al instante sin HTTP
+        $fourthResult = $evaluator->evaluate(
+            studentAnswer: 'Cuarta llamada con circuito abierto.',
+            referenceAnswer: 'Un SGBD relacional organiza los datos en tablas relacionadas mediante llaves.'
+        );
+
+        $this->assertTrue($fourthResult['is_fallback']);
+        $this->assertSame('mock-local', $fourthResult['model']);
+        $this->assertStringStartsWith('[Degradación por Contingencia]', $fourthResult['feedback']);
+
+        Http::assertSentCount(3);
     }
 }

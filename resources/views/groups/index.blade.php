@@ -5,11 +5,10 @@
     Archivo:     resources/views/groups/index.blade.php
     Ubicación:   resources/views/groups/index.blade.php
     Descripción: Catálogo operativo de grupos escolares del docente con arquitectura
-                 espacial de 5 niveles: hero institucional, métricas KPI en tiempo real,
-                 barra de búsqueda y filtrado multidimensional con alternancia de vista,
-                 cuadrícula de tarjetas con folio y microinteracciones, vista de tabla
-                 compacta y modal dinámico de código QR institucional (MPW-V2 §5.2.1,
-                 §7.2, §7.3, §7.8.2, §8.1.1, §8.4, §8.6, Tabla 20, Tabla 29).
+                 espacial homologada: encabezado institucional, 4 KPIs canónicos,
+                 barra de búsqueda y filtrado con alternancia cuadrícula/lista,
+                 tarjetas con folio copiable y modal QR (MPW-V2 §7.3, §7.4.2,
+                 §7.8.2, §8.1–§8.12; MC-V2 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')
@@ -86,20 +85,6 @@
 
                     if (typeof AcodeAlert !== 'undefined') {
                         AcodeAlert.toast('Folio copiado al portapapeles con éxito', 'success');
-                    } else if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            toast: true,
-                            position: 'top-end',
-                            icon: 'success',
-                            iconColor: '#16A6A1',
-                            title: 'Folio copiado al portapapeles con éxito',
-                            showConfirmButton: false,
-                            timer: 3000,
-                            timerProgressBar: true,
-                            customClass: {
-                                popup: 'rounded-xl shadow-lg text-sm font-medium font-sans'
-                            }
-                        });
                     }
                 }).catch(() => {});
             }
@@ -109,109 +94,55 @@
     class="space-y-6"
 >
 
-    {{-- Nivel 1: Hero Institucional + Botón canónico Crear grupo --}}
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-5 rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 shadow-sm">
-        <div class="max-w-2xl">
-            <h1 class="text-2xl sm:text-3xl font-bold text-acode-primary tracking-tight">
-                Mis grupos escolares
-            </h1>
-            <p class="mt-2 text-sm text-slate-500 leading-relaxed">
-                Gestiona tus aulas escolares, consulta folios de acceso, supervisa la matrícula y accede a las evaluaciones por periodo.
-            </p>
-        </div>
-
-        <div class="flex items-center shrink-0">
+    {{-- Nivel 1: Encabezado Institucional --}}
+    <x-page-header
+        title="Mis grupos escolares"
+        subtitle="Gestiona tus aulas escolares, consulta folios de acceso, supervisa la matrícula y accede a las evaluaciones por periodo."
+    >
+        <x-slot:actions>
             <x-button :href="route('groups.create')" variant="primary" size="md">
-                <x-icon name="add" class="w-4 h-4 mr-1.5" />
+                <x-icon name="add" class="w-4 h-4" />
                 Crear grupo
             </x-button>
-        </div>
-    </div>
+        </x-slot:actions>
+    </x-page-header>
 
-    {{-- Nivel 2: Barra de 4 Tarjetas KPI en Grid --}}
+    {{-- Nivel 2: Barra de 4 Tarjetas KPI Canónicas --}}
     <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        {{-- KPI 1: Total de grupos --}}
-        <div class="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-            <div class="flex items-center gap-3">
-                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
-                    <x-icon name="userGroup" class="w-6 h-6 text-acode-tech" />
-                </div>
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Total de grupos
-                </span>
-            </div>
-            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
-                    {{ $groups->count() }}
-                </p>
-                <p class="text-xs text-slate-500">
-                    Aulas escolares registradas
-                </p>
-            </div>
-        </div>
+        <x-kpi-card
+            label="Total de grupos"
+            :value="$groups->count()"
+            meta="Aulas escolares registradas"
+            nav-icon="groups"
+            tone="tech"
+        />
 
-        {{-- KPI 2: Grupos activos --}}
-        <div class="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-            <div class="flex items-center gap-3">
-                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-acode-accent/10 text-acode-accent">
-                    <x-icon name="check" class="w-6 h-6 text-acode-accent" />
-                </div>
-                <x-badge variant="accent">
-                    Grupos activos
-                </x-badge>
-            </div>
-            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
-                    {{ $groups->where('is_closed', false)->count() }}
-                </p>
-                <p class="text-xs text-slate-500">
-                    En ciclo lectivo vigente
-                </p>
-            </div>
-        </div>
+        <x-kpi-card
+            label="Grupos activos"
+            :value="$groups->where('is_closed', false)->count()"
+            meta="En ciclo lectivo vigente"
+            icon="success"
+            tone="accent"
+        />
 
-        {{-- KPI 3: Grupos cerrados --}}
-        <div class="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-            <div class="flex items-center gap-3">
-                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
-                    <x-icon name="lock" class="w-6 h-6 text-slate-500" />
-                </div>
-                <x-badge variant="neutral">
-                    Grupos cerrados
-                </x-badge>
-            </div>
-            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <p class="text-3xl lg:text-4xl font-extrabold text-slate-600 tracking-tight">
-                    {{ $groups->where('is_closed', true)->count() }}
-                </p>
-                <p class="text-xs text-slate-500">
-                    Ciclos escolares concluidos
-                </p>
-            </div>
-        </div>
+        <x-kpi-card
+            label="Grupos cerrados"
+            :value="$groups->where('is_closed', true)->count()"
+            meta="Ciclos escolares concluidos"
+            icon="lock"
+            tone="neutral"
+        />
 
-        {{-- KPI 4: Alumnos matriculados --}}
-        <div class="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-            <div class="flex items-center gap-3">
-                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
-                    <x-icon name="user" class="w-6 h-6 text-acode-tech" />
-                </div>
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Alumnos matriculados
-                </span>
-            </div>
-            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
-                    {{ $groups->sum('students_count') }}
-                </p>
-                <p class="text-xs text-slate-500">
-                    Censo total en tus aulas
-                </p>
-            </div>
-        </div>
+        <x-kpi-card
+            label="Estudiantes inscritos"
+            :value="$groups->sum('students_count')"
+            meta="Censo total en tus aulas"
+            icon="user"
+            tone="primary"
+        />
     </div>
 
-    {{-- Nivel 3: Barra de Búsqueda y Filtros de Estado + Alternador de Vista --}}
+    {{-- Nivel 3: Barra de Búsqueda, Filtros de Estado y Alternador de Vista --}}
     <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             {{-- Buscador predictivo multidimensional --}}
@@ -228,37 +159,32 @@
                         prefixIcon="search"
                         x-model="search"
                         placeholder="Buscar por grupo, asignatura o folio..."
-                        class="pr-11"
+                        class="pr-10"
                     />
-                    <x-button
+                    <button
                         type="button"
-                        variant="neutral"
-                        size="md"
-                        :icon-only="true"
                         title="Limpiar búsqueda"
                         aria-label="Limpiar búsqueda"
                         x-show="search.length > 0"
+                        x-cloak
                         x-on:click="search = ''"
-                        class="absolute inset-y-0 right-2 my-auto"
+                        class="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-acode-tech"
                     >
                         <x-icon name="xMark" class="w-4 h-4" />
-                    </x-button>
+                    </button>
                 </div>
             </div>
 
             {{-- Filtros de estado y switch de vista --}}
             <div class="flex flex-wrap items-center justify-between lg:justify-end gap-3">
-                {{-- Filtro de Estado --}}
                 <x-toggle-group
                     model="filter"
                     :options="['all' => 'Todos', 'active' => 'Activos', 'closed' => 'Cerrados']"
                     label="Filtrar grupos por estado"
                 />
 
-                {{-- Separador vertical en desktop --}}
                 <div class="hidden sm:block h-6 w-px bg-slate-200"></div>
 
-                {{-- Alternancia de Vista: Cuadrícula / Lista --}}
                 <x-toggle-group
                     model="viewMode"
                     variant="segmented"
@@ -280,26 +206,23 @@
             message="Crea tu primer grupo escolar para organizar a tus estudiantes, asignar exámenes y gestionar evaluaciones por periodos."
         >
             <x-button :href="route('groups.create')" variant="primary" size="md">
-                <x-icon name="add" class="w-4 h-4 mr-1.5" />
+                <x-icon name="add" class="w-4 h-4" />
                 Crear grupo
             </x-button>
         </x-empty-state>
     @else
-
         {{-- Cabecera de Resultados y Conteo --}}
-        <div class="flex items-center justify-between gap-3">
-            <h2 class="text-base font-semibold text-acode-primary">
-                Grupos registrados
-            </h2>
-
-            <p class="text-xs sm:text-sm text-slate-500">
-                Mostrando
-                <span class="font-bold text-acode-primary" x-text="filteredGroups.length"></span>
-                de
-                <span class="font-bold text-slate-700">{{ $groups->count() }}</span>
-                {{ $groups->count() === 1 ? 'grupo' : 'grupos' }}
-            </p>
-        </div>
+        <x-section-header title="Grupos registrados">
+            <x-slot:actions>
+                <p class="text-xs sm:text-sm text-slate-500">
+                    Mostrando
+                    <span class="font-bold text-acode-primary" x-text="filteredGroups.length"></span>
+                    de
+                    <span class="font-bold text-slate-700">{{ $groups->count() }}</span>
+                    {{ $groups->count() === 1 ? 'grupo' : 'grupos' }}
+                </p>
+            </x-slot:actions>
+        </x-section-header>
 
         {{-- Nivel 4A: Cuadrícula de Tarjetas (Grid View) --}}
         <div
@@ -307,20 +230,20 @@
             class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
         >
             <template x-for="group in filteredGroups" :key="group.id">
-                <article class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+                <article class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-acode-tech/40 hover:shadow-md">
                     <div>
-                        {{-- Cabecera de tarjeta: Materia en mayúsculas + Badge semántico de estado --}}
+                        {{-- Cabecera de tarjeta: Materia + Badge semántico de estado --}}
                         <div class="flex items-start justify-between gap-3">
                             <span
-                                class="text-xs font-bold uppercase tracking-wider text-acode-tech break-words"
-                                x-text="group.subject || 'SIN ASIGNATURA'"
+                                class="text-xs font-semibold uppercase tracking-wider text-acode-tech break-words"
+                                x-text="group.subject || 'Sin asignatura'"
                             ></span>
 
                             <span
-                                class="inline-flex items-center rounded-full text-xs px-2.5 py-0.5 font-medium tracking-wide shrink-0"
+                                class="inline-flex items-center rounded-full text-xs px-2.5 py-0.5 font-semibold tracking-wide shrink-0"
                                 :class="group.is_closed
                                     ? 'bg-slate-100 text-slate-700 border border-slate-200'
-                                    : 'bg-acode-accent/15 text-acode-accent border border-acode-accent/30'"
+                                    : 'bg-acode-accent/15 text-acode-primary border border-acode-accent/40'"
                                 x-text="group.is_closed ? 'Cerrado' : 'Activo'"
                             ></span>
                         </div>
@@ -331,10 +254,10 @@
                             x-text="group.name"
                         ></h3>
 
-                        {{-- Chip de folio de acceso alfanumérico visible con botón rápido de copiado --}}
-                        <div class="mt-4 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2">
+                        {{-- Chip de folio de acceso alfanumérico con botón de copiado --}}
+                        <div class="mt-4 flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-acode-surface/60 px-3 py-2">
                             <div class="flex items-center gap-1.5 overflow-hidden">
-                                <span class="text-[11px] font-semibold uppercase text-slate-400 shrink-0">Folio:</span>
+                                <span class="text-xs font-semibold text-slate-500 shrink-0">Folio:</span>
                                 <span
                                     class="font-mono text-xs sm:text-sm font-bold tracking-wider text-acode-primary truncate select-all"
                                     x-text="group.folio || 'N/D'"
@@ -349,21 +272,20 @@
                                 title="Copiar folio al portapapeles"
                             >
                                 <x-icon name="copy" class="w-3.5 h-3.5" />
-                                <span>Copiar folio</span>
+                                <span>Copiar</span>
                             </x-button>
                         </div>
 
-                        {{-- Conteo de alumnos con icono oficial x-icon --}}
+                        {{-- Conteo de estudiantes --}}
                         <div class="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3 text-xs text-slate-600">
                             <x-icon name="userGroup" class="w-4 h-4 text-acode-tech shrink-0" />
                             <span class="font-bold text-slate-800" x-text="group.students_count"></span>
-                            <span x-text="group.students_count === 1 ? 'alumno inscrito' : 'alumnos inscritos'"></span>
+                            <span x-text="group.students_count === 1 ? 'estudiante inscrito' : 'estudiantes inscritos'"></span>
                         </div>
                     </div>
 
                     {{-- Tríada de botones de acción canónicos --}}
                     <div class="mt-5 flex items-center gap-2 border-t border-slate-100 pt-4">
-                        {{-- 1. Abrir grupo --}}
                         <x-button
                             ::href="group.url"
                             variant="primary"
@@ -373,24 +295,22 @@
                             Abrir grupo
                         </x-button>
 
-                        {{-- 2. Periodos --}}
                         <x-button
                             ::href="group.periods_url"
                             variant="neutral"
                             size="sm"
                         >
-                            Periodos
+                            Abrir periodos
                         </x-button>
 
-                        {{-- 3. Botón QR iconográfico --}}
                         <x-button
                             type="button"
                             variant="neutral"
                             size="sm"
+                            :icon-only="true"
                             @click="openQr(group)"
-                            title="Ver Código QR del grupo"
-                            aria-label="Ver Código QR"
-                            class="px-2.5"
+                            title="Abrir QR del grupo"
+                            aria-label="Abrir QR del grupo"
                         >
                             <x-icon name="qrCode" class="w-4 h-4 text-acode-primary" />
                         </x-button>
@@ -408,7 +328,7 @@
                 <x-slot:header>
                     <x-table.th>Grupo</x-table.th>
                     <x-table.th>Folio de acceso</x-table.th>
-                    <x-table.th align="center">Alumnos inscritos</x-table.th>
+                    <x-table.th align="center">Estudiantes inscritos</x-table.th>
                     <x-table.th align="center">Estado</x-table.th>
                     <x-table.th align="right">Acciones</x-table.th>
                 </x-slot:header>
@@ -417,11 +337,11 @@
                     <tr>
                         <x-table.td>
                             <div class="font-bold text-acode-primary text-sm" x-text="group.name"></div>
-                            <div class="text-xs uppercase font-semibold text-acode-tech mt-0.5" x-text="group.subject || 'SIN ASIGNATURA'"></div>
+                            <div class="text-xs font-semibold text-acode-tech mt-0.5" x-text="group.subject || 'Sin asignatura'"></div>
                         </x-table.td>
 
                         <x-table.td>
-                            <div class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1">
+                            <div class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-acode-surface/60 px-2.5 py-1">
                                 <span class="font-mono text-xs font-bold text-acode-primary select-all" x-text="group.folio || 'N/D'"></span>
                                 <x-button
                                     type="button"
@@ -431,6 +351,7 @@
                                     title="Copiar folio"
                                     aria-label="Copiar folio"
                                     x-on:click="copyFolio(group.folio)"
+                                    class="!h-6 !w-6"
                                 >
                                     <x-icon name="copy" class="w-3.5 h-3.5" />
                                 </x-button>
@@ -446,10 +367,10 @@
 
                         <x-table.td align="center">
                             <span
-                                class="inline-flex items-center rounded-full text-xs px-2.5 py-0.5 font-medium tracking-wide"
+                                class="inline-flex items-center rounded-full text-xs px-2.5 py-0.5 font-semibold tracking-wide"
                                 :class="group.is_closed
                                     ? 'bg-slate-100 text-slate-700 border border-slate-200'
-                                    : 'bg-acode-accent/15 text-acode-accent border border-acode-accent/30'"
+                                    : 'bg-acode-accent/15 text-acode-primary border border-acode-accent/40'"
                                 x-text="group.is_closed ? 'Cerrado' : 'Activo'"
                             ></span>
                         </x-table.td>
@@ -469,17 +390,17 @@
                                     variant="neutral"
                                     size="sm"
                                 >
-                                    Periodos
+                                    Abrir periodos
                                 </x-button>
 
                                 <x-button
                                     type="button"
                                     variant="neutral"
                                     size="sm"
+                                    :icon-only="true"
                                     @click="openQr(group)"
-                                    title="Ver Código QR"
-                                    aria-label="Ver Código QR"
-                                    class="px-2"
+                                    title="Abrir QR"
+                                    aria-label="Abrir QR"
                                 >
                                     <x-icon name="qrCode" class="w-4 h-4 text-acode-primary" />
                                 </x-button>
@@ -491,7 +412,7 @@
         </div>
 
         {{-- Sin coincidencias por búsqueda o filtro --}}
-        <div x-show="filteredGroups.length === 0" x-cloak class="mt-2">
+        <div x-show="filteredGroups.length === 0" x-cloak>
             <x-empty-state
                 icon="search"
                 title="No encontramos grupos escolares"
@@ -507,7 +428,6 @@
                 </x-button>
             </x-empty-state>
         </div>
-
     @endif
 
     {{-- Nivel 5: Modal Dinámico de Código QR Institucional --}}
@@ -533,7 +453,7 @@
             aria-hidden="true"
         ></div>
 
-        {{-- Contenedor de la ventana modal (16px rounded-2xl, shadow-xl) --}}
+        {{-- Contenedor de la ventana modal --}}
         <div
             x-show="qrModalOpen"
             x-transition:enter="ease-out duration-200"
@@ -544,31 +464,30 @@
             x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             class="relative bg-white rounded-2xl shadow-xl overflow-hidden transform transition-all w-full border border-slate-200 z-10 sm:max-w-md"
         >
-            {{-- Encabezado con título institucional y botón de cierre 'X' --}}
-            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70">
-                <h3 id="qr-modal-title" class="text-base font-bold text-acode-primary tracking-tight truncate pr-2">
+            {{-- Encabezado --}}
+            <div class="flex items-center justify-between gap-3 px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+                <h3 id="qr-modal-title" class="text-base font-bold text-acode-primary tracking-tight truncate">
                     Código QR y Folio · <span x-text="selectedGroup?.name || 'Grupo escolar'"></span>
                 </h3>
                 <x-button
                     type="button"
                     variant="neutral"
-                    size="md"
+                    size="sm"
                     :icon-only="true"
                     title="Cerrar ventana"
                     aria-label="Cerrar ventana"
                     x-on:click="closeQr()"
                 >
-                    <x-icon name="xMark" class="w-5 h-5" />
+                    <x-icon name="xMark" class="w-4 h-4" />
                 </x-button>
             </div>
 
             {{-- Cuerpo del modal --}}
             <div class="px-6 py-5 text-sm text-slate-700 flex flex-col items-center text-center">
                 <p class="text-xs text-slate-500 mb-4 max-w-xs">
-                    Comparte este código QR o el folio alfanumérico con los estudiantes para que se matriculen en el grupo escolar.
+                    Comparte este código QR o el folio alfanumérico con tus estudiantes para que se inscriban al grupo escolar.
                 </p>
 
-                {{-- Visualizador de Código QR en alta definición --}}
                 <div class="p-3 bg-white border border-slate-200 rounded-2xl shadow-sm mb-4 inline-flex items-center justify-center">
                     <img
                         :src="'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(selectedGroup?.folio || '') + '&color=14-43-74&bgcolor=255-255-255&margin=1'"
@@ -578,9 +497,8 @@
                     />
                 </div>
 
-                {{-- Contenedor del Folio Alfanumérico --}}
                 <div class="w-full bg-acode-surface border border-slate-200 rounded-xl p-3 mb-4">
-                    <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block mb-1">
+                    <span class="text-xs font-semibold text-slate-500 block mb-1">
                         Folio alfanumérico oficial
                     </span>
                     <span
@@ -589,7 +507,6 @@
                     ></span>
                 </div>
 
-                {{-- Botón de Copiar folio con Toast institucional --}}
                 <div class="flex items-center justify-center gap-3 w-full">
                     <x-button
                         type="button"
@@ -598,14 +515,14 @@
                         class="w-full"
                         @click="copyFolio(selectedGroup?.folio)"
                     >
-                        <x-icon name="check" class="w-4 h-4 mr-1.5" x-show="copiedFolio" />
-                        <x-icon name="copy" class="w-4 h-4 mr-1.5" x-show="!copiedFolio" />
+                        <x-icon name="check" class="w-4 h-4" x-show="copiedFolio" />
+                        <x-icon name="copy" class="w-4 h-4" x-show="!copiedFolio" />
                         <span x-text="copiedFolio ? '¡Folio copiado!' : 'Copiar folio'"></span>
                     </x-button>
                 </div>
             </div>
 
-            {{-- Pie de acciones con botón canónico Cerrar --}}
+            {{-- Pie de acciones --}}
             <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
                 <x-button
                     type="button"

@@ -9,14 +9,15 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        EnsureTeacherPlanOnboarded.php
  * Ubicación:      app/Http/Middleware/EnsureTeacherPlanOnboarded.php
- * Requerimiento:  RF-SUS-008, ADR-058 (Onboarding Post-Verificación Docente)
+ * Requerimiento:  RF-SUS-008, ADR-058, ADR-060 (Capa Bloqueante de Plan)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        2.0.0
  * Fecha Creación: 18/11/2026
- * Descripción:    Middleware que redirige al docente recién verificado hacia la
- *                 selección inicial de plan o prueba gratuita antes de entrar
- *                 a los módulos operativos web, manteniendo libres las rutas de
- *                 suscripción, verificación, cierre de sesión y API v1.
+ * Descripción:    Middleware que redirige al docente recién verificado hacia
+ *                 el Dashboard (donde opera el overlay bloqueante de selección
+ *                 de plan o prueba gratuita) antes de acceder a los módulos
+ *                 operativos web, manteniendo libres dashboard, suscripción,
+ *                 verificación, aviso de privacidad, cierre de sesión y API v1.
  * ============================================================================
  */
 
@@ -52,9 +53,17 @@ class EnsureTeacherPlanOnboarded
             && $user->needsPlanOnboarding()
             && ! $request->is('api/*')
             && ! $request->expectsJson()
-            && ! $request->routeIs('teacher.subscription.*', 'teacher.verification.*', 'auth.logout')
+            && ! $request->routeIs(
+                'dashboard',
+                'teacher.subscription.*',
+                'teacher.verification.*',
+                'privacy.show.public',
+                'auth.logout',
+            )
         ) {
-            return redirect()->route('teacher.subscription.index', ['onboarding' => 1]);
+            return redirect()
+                ->route('dashboard')
+                ->with('warning', 'Selecciona y confirma tu paquete o prueba gratuita para comenzar a usar la plataforma.');
         }
 
         return $next($request);

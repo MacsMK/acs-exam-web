@@ -60,9 +60,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Driver de evaluación asistida por IA: 'gemini' (GeminiAiEvaluator con
-        // fallback a MockAiEvaluator) o 'mock' (MockAiEvaluator léxico local).
-        $this->app->bind(AiEvaluatorContract::class, static function ($app) {
+        // Driver de evaluación asistida por IA (ADR-059): 'gemini' (GeminiAiEvaluator
+        // con modelo dinámico desde config y fallback a MockAiEvaluator) o 'mock'.
+        $this->app->bind(AiEvaluatorContract::class, static function ($app): AiEvaluatorContract {
             return config('services.ai.driver', 'gemini') === 'gemini'
                 ? $app->make(GeminiAiEvaluator::class)
                 : $app->make(MockAiEvaluator::class);

@@ -3,10 +3,11 @@
     A-CODE SOLUTIONS - ANALIZAMOS, DISEÑAMOS, TRANSFORMAMOS
     ============================================================================
     Archivo:     resources/views/student/groups/index.blade.php
-    Descripción: Vista de Mis Grupos del estudiante.
+    Ubicación:   resources/views/student/groups/index.blade.php
+    Descripción: Catálogo de Mis Grupos del estudiante homologado al UI Kit A-Code.
                  Permite consultar asignaturas matriculadas, docentes titulares,
-                 estado de grupo y salida voluntaria del grupo (RF-GRU-010, RF-GRU-012).
-    Estándares:  MPW-V2 §7.3, §7.8, §8.3, §8.10.4, Tabla 20 (Verbos oficiales).
+                 estado de grupo y salida voluntaria (RF-GRU-010, RF-GRU-012;
+                 MPW-V2 §7.3, §7.4.2, §7.8.2, §8.1–§8.6; MC-V2 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')
@@ -29,9 +30,18 @@
                 'is_closed' => (bool) $group->is_closed,
                 'joined_at' => $group->pivot?->joined_at ? \Carbon\Carbon::parse($group->pivot->joined_at)->format('d/m/Y') : null,
                 'exams_url' => route('student.exams.index'),
+                'grades_url' => route('student.grades.show', $group->id),
                 'leave_url' => route('student.groups.leave', $group->id),
             ])->values()
         ),
+
+        get activeGroupsCount() {
+            return this.groups.filter(g => !g.is_closed).length;
+        },
+
+        get uniqueTeachersCount() {
+            return new Set(this.groups.map(g => g.teacher_name)).size;
+        },
 
         get filteredGroups() {
             const term = this.search.trim().toLowerCase();
@@ -61,30 +71,61 @@
             this.selectedGroup = null;
         }
     }"
+    @keydown.escape.window="closeLeaveModal()"
     class="space-y-6"
 >
-    {{-- Encabezado de sección --}}
-    <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-            <h1 class="text-2xl lg:text-3xl font-bold text-acode-primary tracking-tight">
-                Mis Grupos Matriculados
-            </h1>
-            <p class="mt-1 text-sm text-slate-500">
-                Consulta las materias en las que estás inscrito y gestiona tu pertenencia escolar (RF-GRU-010).
-            </p>
-        </div>
-
-        <div class="flex items-center gap-3">
+    {{-- Nivel 1: Encabezado Institucional --}}
+    <x-page-header
+        title="Mis Grupos Matriculados"
+        subtitle="Consulta las materias en las que estás inscrito, accede a sus evaluaciones y gestiona tu pertenencia escolar."
+    >
+        <x-slot:actions>
             <x-button :href="route('student.groups.join.form')" variant="primary" size="md">
-                <x-icon name="add" class="h-4 w-4 mr-1.5" />
+                <x-icon name="add" class="w-4 h-4" />
                 Unirme a un grupo
             </x-button>
-        </div>
+        </x-slot:actions>
+    </x-page-header>
+
+    {{-- Nivel 2: Tarjetas KPI Reactivas --}}
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <x-kpi-card
+            label="Grupos inscritos"
+            meta="Asignaturas en tu historial"
+            nav-icon="groups"
+            tone="tech"
+        >
+            <x-slot:valueSlot>
+                <span x-text="groups.length">0</span>
+            </x-slot:valueSlot>
+        </x-kpi-card>
+
+        <x-kpi-card
+            label="Grupos activos"
+            meta="Con evaluaciones habilitadas"
+            icon="success"
+            tone="accent"
+        >
+            <x-slot:valueSlot>
+                <span x-text="activeGroupsCount">0</span>
+            </x-slot:valueSlot>
+        </x-kpi-card>
+
+        <x-kpi-card
+            label="Docentes titulares"
+            meta="Profesores asignados"
+            icon="userTie"
+            tone="primary"
+        >
+            <x-slot:valueSlot>
+                <span x-text="uniqueTeachersCount">0</span>
+            </x-slot:valueSlot>
+        </x-kpi-card>
     </div>
 
-    {{-- Barra de búsqueda y filtros --}}
-    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    {{-- Nivel 3: Barra de búsqueda y filtros --}}
+    <div class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div class="w-full lg:max-w-md">
                 <label for="student-group-search" class="mb-2 block text-xs font-semibold text-slate-600">
                     Buscar grupo o asignatura
@@ -98,16 +139,25 @@
                 />
             </div>
 
-            <div>
-                <p class="mb-2 text-xs font-semibold text-slate-600">
-                    Estado del grupo
-                </p>
-                <x-toggle-group
-                    model="filter"
-                    :options="['all' => 'Todos', 'active' => 'Activos', 'closed' => 'Cerrados']"
-                    label="Filtrar grupos por estado"
-                    class="flex-wrap"
-                />
+            <div class="flex flex-wrap items-end gap-3">
+                <div>
+                    <p class="mb-2 text-xs font-semibold text-slate-600">
+                        Estado del grupo
+                    </p>
+                    <x-toggle-group
+                        model="filter"
+                        :options="['all' => 'Todos', 'active' => 'Activos', 'closed' => 'Cerrados']"
+                        label="Filtrar grupos por estado"
+                        class="flex-wrap"
+                    />
+                </div>
+
+                <template x-if="search.trim() !== '' || filter !== 'all'">
+                    <x-button type="button" variant="neutral" size="md" x-on:click="search = ''; filter = 'all'">
+                        <x-icon name="filter" class="w-4 h-4 text-slate-500" />
+                        Limpiar filtros
+                    </x-button>
+                </template>
             </div>
         </div>
     </div>
@@ -120,31 +170,28 @@
             message="Para comenzar a resolver evaluaciones, solicita a tu profesor el folio escolar de tu asignatura e ingrésalo en el sistema."
         >
             <x-button :href="route('student.groups.join.form')" variant="primary" size="md">
-                <x-icon name="add" class="h-4 w-4 mr-1.5" />
+                <x-icon name="add" class="w-4 h-4" />
                 Unirme a un grupo
             </x-button>
         </x-empty-state>
     </template>
 
-    {{-- Listado de grupos --}}
+    {{-- Nivel 4: Listado de grupos --}}
     <div x-show="groups.length > 0" class="space-y-4">
-        <div class="flex items-center justify-between gap-3">
-            <h2 class="text-base font-semibold text-acode-primary">
-                Grupos inscritos
-            </h2>
-            <p class="text-sm text-slate-500">
-                <span x-text="filteredGroups.length"></span>
-                de
-                <span x-text="groups.length"></span>
-                grupos
-            </p>
-        </div>
+        <x-section-header title="Grupos inscritos">
+            <x-slot:actions>
+                <p class="text-xs font-medium text-slate-500">
+                    Mostrando <span class="font-semibold text-acode-primary" x-text="filteredGroups.length"></span>
+                    de <span class="font-semibold text-acode-primary" x-text="groups.length"></span> grupos
+                </p>
+            </x-slot:actions>
+        </x-section-header>
 
         <div x-show="filteredGroups.length > 0"
              class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
 
             <template x-for="group in filteredGroups" :key="group.id">
-                <article class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+                <article class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-acode-tech hover:shadow-md">
                     <div>
                         {{-- Cabecera de tarjeta --}}
                         <div class="flex items-start justify-between gap-3">
@@ -153,10 +200,10 @@
                             </div>
 
                             <span
-                                class="rounded-full px-3 py-1 text-xs font-semibold"
+                                class="rounded-full px-2.5 py-0.5 text-xs font-semibold"
                                 :class="group.is_closed
-                                    ? 'bg-slate-100 text-slate-600'
-                                    : 'bg-acode-accent/15 text-acode-accent border border-acode-accent/30'"
+                                    ? 'bg-slate-100 text-slate-600 border border-slate-200'
+                                    : 'bg-acode-accent/15 text-acode-primary border border-acode-accent/40'"
                                 x-text="group.is_closed ? 'Ciclo cerrado' : 'Activo'">
                             </span>
                         </div>
@@ -190,20 +237,25 @@
 
                     {{-- Acciones de tarjeta --}}
                     <div class="mt-5 flex items-center justify-between gap-2 border-t border-slate-100 pt-4">
-                        <x-button ::href="group.exams_url" class="flex-1">
+                        <x-button ::href="group.exams_url" variant="primary" size="sm" class="flex-1">
                             <x-nav-icon name="exams" class="h-4 w-4" />
-                            Ver exámenes
+                            Abrir exámenes
+                        </x-button>
+
+                        <x-button ::href="group.grades_url" variant="neutral" size="sm" title="Ver calificaciones del grupo">
+                            <x-nav-icon name="grades" class="h-4 w-4 text-acode-tech" />
+                            <span class="hidden sm:inline">Notas</span>
                         </x-button>
 
                         <x-button
                             variant="danger"
+                            size="sm"
                             type="button"
                             x-on:click="openLeaveModal(group)"
                             title="Salir del grupo"
                             aria-label="Salir del grupo"
                         >
                             <x-icon name="delete" class="h-4 w-4" />
-                            <span class="hidden sm:inline">Salir</span>
                         </x-button>
                     </div>
                 </article>
@@ -211,40 +263,39 @@
         </div>
 
         {{-- Sin coincidencias de búsqueda --}}
-        <div x-show="filteredGroups.length === 0"
-             x-cloak
-             class="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
-            <h3 class="text-base font-semibold text-acode-primary">
-                No encontramos grupos con esos criterios
-            </h3>
-            <p class="mt-2 text-sm text-slate-500">
-                Prueba con otro término de búsqueda o restablece los filtros aplicados.
-            </p>
-            <x-button
-                variant="secondary"
-                size="sm"
-                type="button"
-                x-on:click="search = ''; filter = 'all'"
-                class="mt-4"
+        <div x-show="filteredGroups.length === 0" x-cloak>
+            <x-empty-state
+                icon="search"
+                title="No encontramos grupos con esos criterios"
+                message="Prueba con otro término de búsqueda o restablece los filtros aplicados."
             >
-                Limpiar filtros
-            </x-button>
+                <x-button
+                    variant="secondary"
+                    size="sm"
+                    type="button"
+                    x-on:click="search = ''; filter = 'all'"
+                >
+                    Limpiar filtros
+                </x-button>
+            </x-empty-state>
         </div>
     </div>
 
-    {{-- Modal de confirmación de salida voluntaria de grupo (RF-GRU-012) --}}
+    {{-- Modal institucional de confirmación de salida voluntaria de grupo (MPW-V2 §8.6, RF-GRU-012) --}}
     <div
         x-show="leaveModalOpen"
         x-cloak
         x-transition.opacity
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+        role="dialog"
+        aria-modal="true"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
     >
         <div
             @click.outside="closeLeaveModal()"
-            class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4"
+            class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl space-y-4"
         >
             <div class="flex items-start gap-4">
-                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100 text-acode-danger">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-acode-danger/10 text-acode-danger">
                     <x-icon name="warning" class="h-6 w-6" />
                 </div>
                 <div>
@@ -258,20 +309,21 @@
                 </div>
             </div>
 
-            <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 leading-relaxed">
-                <p class="font-semibold text-amber-950 mb-1">Advertencia de antecedentes académicos (RF-GRU-012):</p>
-                <p>Al confirmar, perderás la pertenencia al grupo y el acceso a sus exámenes y recursos. No se permite la salida si tienes un intento de examen en curso en este grupo.</p>
+            <div class="rounded-xl border border-acode-warning/60 bg-acode-warning/15 p-3.5 text-xs text-acode-primary leading-relaxed">
+                <p class="font-semibold mb-1">Advertencia de pertenencia académica</p>
+                <p class="text-slate-700">Al confirmar, perderás el acceso a los exámenes y recursos del grupo. No se permite la salida si tienes un intento de examen en curso en este grupo.</p>
             </div>
 
             <div class="flex items-center justify-end gap-3 pt-2">
-                <x-button type="button" variant="neutral" size="sm" @click="closeLeaveModal()">
-                    Cancelar operación
+                <x-button type="button" variant="neutral" size="md" @click="closeLeaveModal()">
+                    Cancelar
                 </x-button>
 
                 <form :action="selectedGroup ? selectedGroup.leave_url : '#'" method="POST" class="inline">
                     @csrf
-                    <x-button type="submit" variant="danger" size="sm">
-                        Confirmar salida
+                    @method('DELETE')
+                    <x-button type="submit" variant="danger" size="md">
+                        Eliminar inscripción
                     </x-button>
                 </form>
             </div>

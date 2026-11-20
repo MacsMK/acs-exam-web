@@ -37,7 +37,7 @@
             {{-- Tipo de reactivo --}}
             @if ($mode === 'create')
                 <div class="space-y-2">
-                    <label class="block text-[13px] font-medium text-slate-800">
+                    <label class="block text-sm font-medium text-slate-800">
                         Tipo de reactivo <span class="text-acode-danger font-bold ml-0.5" aria-hidden="true">*</span>
                     </label>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Tipo de reactivo">
@@ -364,7 +364,7 @@
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-[13px] font-medium text-slate-800 mb-1">Concepto / Premisa</label>
+                                <label class="block text-sm font-medium text-slate-800 mb-1">Concepto / Premisa</label>
                                 <x-form.input
                                     type="text"
                                     x-bind:name="'concepts[' + i + ']'"
@@ -382,7 +382,7 @@
                                 ></p>
                             </div>
                             <div>
-                                <label class="block text-[13px] font-medium text-slate-800 mb-1">Definición / Respuesta</label>
+                                <label class="block text-sm font-medium text-slate-800 mb-1">Definición / Respuesta</label>
                                 <x-form.input
                                     type="text"
                                     x-bind:name="'definitions[' + i + ']'"
@@ -495,7 +495,7 @@
                             class="mt-0.5 h-4 w-4 rounded-md border-slate-300 text-acode-tech focus:ring-acode-tech cursor-pointer"
                         />
                         <label for="is_find_error" class="cursor-pointer select-none">
-                            <span class="block text-[13px] font-medium text-slate-800">Modo «Encuentra y corrige el error»</span>
+                            <span class="block text-sm font-medium text-slate-800">Modo «Encuentra y corrige el error»</span>
                             <span class="block text-xs text-slate-500">Exige código inicial defectuoso para que el alumno lo depure.</span>
                         </label>
                     </div>

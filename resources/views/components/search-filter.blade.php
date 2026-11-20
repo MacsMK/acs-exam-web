@@ -11,7 +11,7 @@
     'autoSubmit' => false,
 ])
 
-<div {{ $attributes->merge(['class' => 'bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-6']) }}>
+<div {{ $attributes->merge(['class' => 'bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5']) }}>
     <form
         method="{{ $method }}"
         action="{{ $action }}"

@@ -1269,6 +1269,18 @@ class TeacherVerificationService
                 ]);
             }
 
+            if ($validated['payment_status'] === 'paid') {
+                $verification = TeacherVerification::where('user_id', $lockedTeacher->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($verification !== null && $verification->plan_onboarding_completed_at === null) {
+                    $verification->forceFill([
+                        'plan_onboarding_completed_at' => now(),
+                    ])->save();
+                }
+            }
+
             AuditLog::create([
                 'user_id' => $admin->id,
                 'action' => 'teacher.subscription_assigned',

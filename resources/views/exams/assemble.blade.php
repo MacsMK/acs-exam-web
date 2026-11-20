@@ -40,7 +40,7 @@
     @endphp
 
     <div
-        class="mx-auto max-w-7xl space-y-6"
+        class="space-y-6"
         x-data="{
             activeTab: @js($defaultTab),
             bankInventory: @js($bankInventory),
@@ -124,27 +124,26 @@
         }"
     >
         {{-- Encabezado --}}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-                <a href="{{ route('exams.index') }}" class="inline-flex items-center gap-1.5 text-sm font-semibold text-acode-tech hover:underline">
+        <x-page-header
+            :title="$exam->title"
+            subtitle="Construye apartados con sorteo equitativo por banco o selecciona reactivos manualmente."
+            :breadcrumbs="[
+                ['label' => 'Exámenes', 'href' => route('exams.index')],
+                ['label' => $exam->title],
+                ['label' => 'Armar reactivos'],
+            ]"
+        >
+            <x-slot:actions>
+                <x-button :href="route('exams.index')" variant="neutral" size="md">
                     <x-icon name="arrowLeft" class="w-4 h-4" />
-                    Volver a mis exámenes
-                </a>
-                <h1 class="mt-2 text-2xl sm:text-3xl font-bold text-acode-primary tracking-tight">
-                    {{ $exam->title }}
-                </h1>
-                @if ($exam->description)
-                    <p class="mt-1 text-sm text-slate-500 max-w-3xl">{{ $exam->description }}</p>
-                @endif
-            </div>
-
-            <div class="flex items-center gap-2 shrink-0">
-                <x-button :href="route('exams.edit', $exam)" variant="neutral" size="sm">
-                    <x-icon name="edit" class="w-3.5 h-3.5" />
-                    Editar datos y grupos
+                    Volver
                 </x-button>
-            </div>
-        </div>
+                <x-button :href="route('exams.edit', $exam)" variant="neutral" size="md">
+                    <x-icon name="edit" class="w-4 h-4" />
+                    Editar datos
+                </x-button>
+            </x-slot:actions>
+        </x-page-header>
 
         @include('exams.partials._stepper', ['currentStep' => 2, 'exam' => $exam])
 
@@ -664,7 +663,7 @@
                                         @csrf
                                         @method('PUT')
                                         <div class="sm:col-span-5">
-                                            <label class="block text-[13px] font-medium text-slate-800 mb-1">Título del apartado</label>
+                                            <label class="block text-xs font-medium text-slate-800 mb-1">Título del apartado</label>
                                             <x-form.input
                                                 type="text"
                                                 name="title"
@@ -675,7 +674,7 @@
                                             />
                                         </div>
                                         <div class="sm:col-span-4">
-                                            <label class="block text-[13px] font-medium text-slate-800 mb-1">Materia (opcional)</label>
+                                            <label class="block text-xs font-medium text-slate-800 mb-1">Materia (opcional)</label>
                                             <x-form.input
                                                 type="text"
                                                 name="subject_tag"
@@ -701,7 +700,7 @@
                                     @php
                                         $q = $examQuestion->question;
                                     @endphp
-                                    <div class="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-blue-50/50 transition">
+                                    <div class="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-acode-surface/50 transition">
                                         <div class="flex items-start gap-3 min-w-0">
                                             <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-acode-surface text-xs font-bold text-acode-primary">
                                                 {{ $loop->iteration }}

@@ -1,9 +1,10 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Layout: exam-runner.blade.php (MPW-V2 §7.2, §7.7, §8.10.2, ADR-020) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Layout: exam-runner.blade.php (MPW-V2 §7.2, §7.7, §8.10.2, ADR-020, ADR-042) --}}
 <!DOCTYPE html>
 <html lang="es" class="h-full">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Presentando examen') · A-Code Solutions</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -118,7 +119,7 @@
             }
         });
 
-        // Sensor anti-fraude de pérdida de foco o cambio de pestaña (MPW-V2 §7.7, RNF-SEG-001)
+        // Sensor anti-fraude de pérdida de foco o cambio de pestaña (MPW-V2 §7.7, ADR-042, RNF-SEG-001)
         let focusLossWarnings = 0;
         document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'hidden') {
@@ -129,6 +130,37 @@
                         'Alerta de Supervisión Anti-Trampa',
                         `Se ha detectado un cambio de pestaña o ventana (${focusLossWarnings}). Esta incidencia ha sido registrada en tu intento de examen.`
                     );
+                }
+
+                if (window.acodeIncidentEndpoint) {
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+                    fetch(window.acodeIncidentEndpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken
+                        },
+                        body: JSON.stringify({ incident_type: 'tab_switch' }),
+                        keepalive: true
+                    })
+                        .then((response) => response.json().catch(() => null))
+                        .then((data) => {
+                            if (data && data.cancelled === true && data.redirect_url) {
+                                if (typeof AcodeAlert !== 'undefined') {
+                                    AcodeAlert.error(
+                                        'Intento cancelado por límite de incidentes',
+                                        'Has superado el máximo permitido de cambios de pestaña o ventana durante el examen. Serás redirigido al resumen de tu intento.'
+                                    ).then(() => {
+                                        window.location.href = data.redirect_url;
+                                    });
+                                } else {
+                                    window.location.href = data.redirect_url;
+                                }
+                            }
+                        })
+                        .catch(() => {});
                 }
             }
         });

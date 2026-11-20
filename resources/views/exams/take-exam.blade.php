@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/take-exam.blade.php (MPW-V2 §5.5, §7.3, §7.5.1, §7.7, §7.8.2, §8.9.1, ADR-020) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/take-exam.blade.php (MPW-V2 §5.5, §7.3, §7.5.1, §7.7, §7.8.2, §8.9.1, ADR-020, ADR-042) --}}
 @extends('layouts.exam-runner')
 
 @section('title', 'Presentando examen · ' . $attempt->exam->title)
@@ -168,3 +168,11 @@
         </div>
     </div>
 @endsection
+
+@push('scripts')
+    @if (\Illuminate\Support\Facades\Route::has('attempts.incident'))
+        <script>
+            window.acodeIncidentEndpoint = @js(route('attempts.incident', $attempt));
+        </script>
+    @endif
+@endpush

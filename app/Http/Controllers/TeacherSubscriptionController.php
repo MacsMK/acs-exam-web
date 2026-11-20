@@ -98,6 +98,8 @@ class TeacherSubscriptionController extends Controller
     ): RedirectResponse {
         /** @var User $teacher */
         $teacher = $request->user();
+        $wasOnboarding = $teacher->needsPlanOnboarding();
+        $fromOverlay = $request->boolean('onboarding_overlay');
 
         $transaction = $this->teacherSubscriptionService->processInstantCheckout(
             $teacher,
@@ -108,19 +110,35 @@ class TeacherSubscriptionController extends Controller
         );
 
         if ($transaction->status === PaymentTransaction::STATUS_PAID) {
+            $targetRoute = ($wasOnboarding || $fromOverlay)
+                ? 'dashboard'
+                : 'teacher.subscription.index';
+
             return redirect()
-                ->route('teacher.subscription.index')
+                ->route($targetRoute)
                 ->with(
                     'status',
                     "¡Pago aprobado! Tu plan {$package->name} quedó activo de inmediato (Folio {$transaction->reference_code}).",
                 );
         }
 
+        $failureMessage = $transaction->failure_message
+            ?? 'No fue posible procesar el pago, intenta nuevamente.';
+
+        if ($fromOverlay) {
+            return redirect()
+                ->route('dashboard')
+                ->with('onboarding_selected_package_id', $package->id)
+                ->withInput($request->except(['card_number', 'card_cvv', 'card_expiry']))
+                ->withErrors([
+                    'payment_gateway' => $failureMessage,
+                ]);
+        }
+
         return back()
             ->withInput($request->except(['card_number', 'card_cvv', 'card_expiry']))
             ->withErrors([
-                'payment_gateway' => $transaction->failure_message
-                    ?? 'No fue posible procesar el pago, intenta nuevamente.',
+                'payment_gateway' => $failureMessage,
             ]);
     }
 

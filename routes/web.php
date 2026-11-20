@@ -194,6 +194,14 @@ Route::middleware('auth')->group(function (): void {
         Route::post('exams/{exam}/revision/{attempt}', [TeacherReviewController::class, 'update'])
             ->whereNumber(['exam', 'attempt'])
             ->name('exams.revision.update');
+        Route::post('exams/{exam}/revision/{attempt}/respuestas/{answer}/evaluar-ia', [TeacherReviewController::class, 'evaluateWithAi'])
+            ->whereNumber(['exam', 'attempt', 'answer'])
+            ->middleware('throttle:30,1')
+            ->name('exams.revision.evaluate-ai');
+        Route::post('exams/{exam}/revision/{attempt}/evaluar-ia-lote', [TeacherReviewController::class, 'evaluateAttemptWithAi'])
+            ->whereNumber(['exam', 'attempt'])
+            ->middleware('throttle:10,1')
+            ->name('exams.revision.evaluate-ai-batch');
 
         // Módulos funcionales docentes (sustituyen coming-soon)
         Route::get('docente/revision', [TeacherReviewController::class, 'globalIndex'])->name('teacher.reviews.index');
@@ -251,6 +259,10 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('intentos/{attempt}', [AttemptController::class, 'show'])->name('attempts.show');
     Route::post('intentos/{attempt}/responder', [AttemptController::class, 'answer'])->name('attempts.answer');
+    Route::post('intentos/{attempt}/incidente', [AttemptController::class, 'incident'])
+        ->whereNumber('attempt')
+        ->middleware('throttle:30,1')
+        ->name('attempts.incident');
     Route::post('intentos/{attempt}/terminar', [AttemptController::class, 'finish'])->name('attempts.finish');
     Route::get('intentos/{attempt}/resultado', [AttemptController::class, 'result'])->name('attempts.result');
 });

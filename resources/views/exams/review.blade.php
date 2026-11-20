@@ -9,6 +9,13 @@
         $resolvedPoints = (float) ($totalPoints ?? $publishChecklist['total_weight'] ?? 0);
         $attemptsCount = (int) ($exam->student_attempts_count ?? 0);
         $opStatus = $exam->operationalStatus();
+        $opStatusLabels = [
+            'draft' => 'Borrador',
+            'scheduled' => 'Programado',
+            'active' => 'Activo',
+            'closed' => 'Cerrado',
+        ];
+        $opStatusLabel = $opStatusLabels[$opStatus] ?? 'Borrador';
 
         $resultModes = [
             'final_score' => 'Calificación final inmediata',
@@ -52,7 +59,7 @@
     @endphp
 
     <div
-        class="mx-auto max-w-6xl space-y-6"
+        class="space-y-6"
         x-data="{
             confirmAction(formId, title, text, confirmText, isDanger = false) {
                 if (typeof AcodeAlert !== 'undefined') {
@@ -88,24 +95,22 @@
         }"
     >
         {{-- Encabezado --}}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-                <a href="{{ route('exams.configuration', $exam) }}" class="inline-flex items-center gap-1.5 text-sm font-semibold text-acode-tech hover:underline">
+        <x-page-header
+            title="Revisar y publicar examen"
+            subtitle="Verifica las 5 condiciones de integridad antes de habilitar el examen para tus estudiantes."
+            :breadcrumbs="[
+                ['label' => 'Exámenes', 'href' => route('exams.index')],
+                ['label' => $exam->title, 'href' => route('exams.configuration', $exam)],
+                ['label' => 'Revisar y publicar'],
+            ]"
+        >
+            <x-slot:actions>
+                <x-button :href="route('exams.index')" variant="neutral" size="md">
                     <x-icon name="arrowLeft" class="w-4 h-4" />
-                    Volver a Configuración
-                </a>
-                <h1 class="mt-2 text-2xl sm:text-3xl font-bold text-acode-primary tracking-tight">
-                    Revisar y publicar examen
-                </h1>
-                <p class="mt-1 text-sm text-slate-500">
-                    Verifica las 5 condiciones de integridad antes de habilitar el examen para tus estudiantes.
-                </p>
-            </div>
-
-            <x-button :href="route('exams.index')" variant="neutral" size="sm">
-                Volver al listado
-            </x-button>
-        </div>
+                    Volver
+                </x-button>
+            </x-slot:actions>
+        </x-page-header>
 
         @include('exams.partials._stepper', ['currentStep' => 4, 'exam' => $exam, 'totalPoints' => $resolvedPoints])
 
@@ -121,26 +126,34 @@
         @endif
 
         {{-- Resumen KPI del Examen --}}
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <x-card padding="p-4">
-                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Apartados</p>
-                <p class="mt-1 text-2xl font-bold text-acode-primary">{{ $exam->sections->count() }}</p>
-            </x-card>
-            <x-card padding="p-4">
-                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Reactivos</p>
-                <p class="mt-1 text-2xl font-bold text-acode-primary">{{ $totalQuestions }}</p>
-            </x-card>
-            <x-card padding="p-4">
-                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Ponderación</p>
-                <p class="mt-1 font-mono text-2xl font-bold {{ ($publishChecklist['exact_weight'] ?? false) ? 'text-acode-accent' : 'text-acode-warning-dark' }}">
-                    {{ number_format($resolvedPoints, 2) }} / 100
-                </p>
-            </x-card>
-            <x-card padding="p-4">
-                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Grupos asignados</p>
-                <p class="mt-1 text-2xl font-bold text-acode-primary">{{ $exam->groups->count() }}</p>
-            </x-card>
-        </div>
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" aria-label="Resumen estructural del examen">
+            <x-kpi-card
+                label="Apartados"
+                :value="$exam->sections->count()"
+                icon="squares2x2"
+                tone="tech"
+            />
+            <x-kpi-card
+                label="Reactivos"
+                :value="$totalQuestions"
+                icon="document"
+                tone="primary"
+            />
+            <x-kpi-card
+                label="Ponderación"
+                :value="number_format($resolvedPoints, 2)"
+                meta="/ 100.00 pts"
+                icon="reportBar"
+                :tone="($publishChecklist['exact_weight'] ?? false) ? 'accent' : 'warning'"
+                :mono="true"
+            />
+            <x-kpi-card
+                label="Grupos asignados"
+                :value="$exam->groups->count()"
+                icon="userGroup"
+                tone="tech"
+            />
+        </section>
 
         @if (! $exam->is_published)
             {{-- Checklist Pre-Publicación 5/5 y Formulario Real de Publicación --}}
@@ -221,7 +234,7 @@
                     </div>
 
                     <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600 space-y-1">
-                        <p><strong>Estado operativo:</strong> {{ ucfirst($opStatus) }}</p>
+                        <p><strong>Estado operativo:</strong> {{ $opStatusLabel }}</p>
                         <p><strong>Intentos registrados:</strong> {{ $attemptsCount }}</p>
                         <p><strong>Visibilidad:</strong> {{ $resultModes[$exam->result_visibility_mode] ?? $exam->result_visibility_mode }}</p>
                     </div>
@@ -307,9 +320,10 @@
             <x-card title="Configuración general" class="lg:col-span-5">
                 @if (! $exam->is_published)
                     <x-slot:actions>
-                        <a href="{{ route('exams.configuration', $exam) }}" class="text-xs font-semibold text-acode-tech hover:underline">
+                        <x-button :href="route('exams.configuration', $exam)" variant="neutral" size="sm">
+                            <x-icon name="edit" class="w-3.5 h-3.5" />
                             Editar
-                        </a>
+                        </x-button>
                     </x-slot:actions>
                 @endif
 
@@ -356,9 +370,10 @@
             <x-card title="Apartados y reactivos" class="lg:col-span-7">
                 @if ($exam->supportsStructuralEdit())
                     <x-slot:actions>
-                        <a href="{{ route('exams.assemble', $exam) }}" class="text-xs font-semibold text-acode-tech hover:underline">
-                            Armar / Editar
-                        </a>
+                        <x-button :href="route('exams.assemble', $exam)" variant="neutral" size="sm">
+                            <x-icon name="edit" class="w-3.5 h-3.5" />
+                            Editar
+                        </x-button>
                     </x-slot:actions>
                 @endif
 

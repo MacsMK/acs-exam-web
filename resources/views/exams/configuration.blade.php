@@ -43,7 +43,7 @@
     @endphp
 
     <div
-        class="mx-auto max-w-7xl space-y-6"
+        class="space-y-6"
         x-data="{
             gradingScale: @js($initialScale),
             visibilityMode: @js($initialVisibility),
@@ -136,20 +136,22 @@
         }"
     >
         {{-- Encabezado --}}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-                <a href="{{ route('exams.assemble', $exam) }}" class="inline-flex items-center gap-1.5 text-sm font-semibold text-acode-tech hover:underline">
+        <x-page-header
+            title="Pesos y reglas de aplicación"
+            subtitle="Distribuye los 100.00 puntos entre los reactivos, asigna grupos y define la visibilidad de resultados."
+            :breadcrumbs="[
+                ['label' => 'Exámenes', 'href' => route('exams.index')],
+                ['label' => $exam->title, 'href' => route('exams.assemble', $exam)],
+                ['label' => 'Pesos y reglas'],
+            ]"
+        >
+            <x-slot:actions>
+                <x-button :href="route('exams.assemble', $exam)" variant="neutral" size="md">
                     <x-icon name="arrowLeft" class="w-4 h-4" />
-                    Volver a Armar reactivos
-                </a>
-                <h1 class="mt-2 text-2xl sm:text-3xl font-bold text-acode-primary tracking-tight">
-                    Pesos y reglas de aplicación
-                </h1>
-                <p class="mt-1 text-sm text-slate-500">
-                    Distribuye los 100.00 puntos entre los reactivos, asigna grupos y define la visibilidad de resultados.
-                </p>
-            </div>
-        </div>
+                    Volver
+                </x-button>
+            </x-slot:actions>
+        </x-page-header>
 
         @include('exams.partials._stepper', ['currentStep' => 3, 'exam' => $exam, 'totalPoints' => $initialPoints])
 
@@ -229,90 +231,85 @@
                             </div>
                         </div>
 
-                        <div class="p-6 overflow-x-auto">
-                            <div class="overflow-hidden rounded-xl border border-slate-200">
-                                <table class="w-full min-w-[520px] text-left text-sm border-collapse">
-                                    <thead class="bg-acode-primary text-xs font-semibold uppercase tracking-wider text-white">
+                        <div class="p-6">
+                            <x-table>
+                                <x-slot:header>
+                                    <x-table.th>Reactivo</x-table.th>
+                                    <x-table.th class="w-36">Puntos (0.01)</x-table.th>
+                                    <x-table.th class="w-36">Tiempo (seg.)</x-table.th>
+                                </x-slot:header>
+
+                                @forelse ($exam->sections->sortBy('sort_order') as $section)
+                                    <tr class="!bg-acode-surface hover:!bg-acode-surface">
+                                        <th colspan="3" class="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-acode-primary">
+                                            {{ $section->title }}
+                                        </th>
+                                    </tr>
+                                    @forelse ($section->examQuestions->sortBy('sort_order') as $examQuestion)
                                         <tr>
-                                            <th class="px-4 py-3">Reactivo</th>
-                                            <th class="px-4 py-3 w-36">Puntos (0.01)</th>
-                                            <th class="px-4 py-3 w-36">Tiempo (seg.)</th>
+                                            <x-table.td>
+                                                <p class="font-semibold text-acode-primary text-sm">
+                                                    {{ $loop->iteration }}. {{ $examQuestion->question?->title ?? 'Reactivo #' . $examQuestion->question_id }}
+                                                </p>
+                                                <p class="text-xs text-slate-500 mt-0.5 line-clamp-1">
+                                                    {{ \Illuminate\Support\Str::limit($examQuestion->question?->stem ?? '', 90) }}
+                                                </p>
+                                            </x-table.td>
+                                            <x-table.td>
+                                                <input
+                                                    type="number"
+                                                    name="questions[{{ $examQuestion->id }}][points_weight]"
+                                                    min="0.01"
+                                                    max="100"
+                                                    step="0.01"
+                                                    required
+                                                    data-points-input
+                                                    @input="recalculate()"
+                                                    @disabled($isReadOnly)
+                                                    value="{{ old('questions.' . $examQuestion->id . '.points_weight', number_format((float) $examQuestion->points_weight, 2, '.', '')) }}"
+                                                    aria-label="Puntos del reactivo {{ $examQuestion->id }}"
+                                                    class="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 font-mono text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-acode-tech focus:border-acode-tech disabled:bg-slate-100"
+                                                >
+                                            </x-table.td>
+                                            <x-table.td>
+                                                <input
+                                                    type="number"
+                                                    name="questions[{{ $examQuestion->id }}][time_limit_seconds]"
+                                                    min="1"
+                                                    step="1"
+                                                    required
+                                                    data-time-input
+                                                    @input="recalculate()"
+                                                    @disabled($isReadOnly)
+                                                    value="{{ old('questions.' . $examQuestion->id . '.time_limit_seconds', (int) $examQuestion->time_limit_seconds) }}"
+                                                    aria-label="Tiempo límite del reactivo {{ $examQuestion->id }}"
+                                                    class="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 font-mono text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-acode-tech focus:border-acode-tech disabled:bg-slate-100"
+                                                >
+                                            </x-table.td>
                                         </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-slate-200 bg-white">
-                                        @forelse ($exam->sections->sortBy('sort_order') as $section)
-                                            <tr class="bg-acode-surface">
-                                                <th colspan="3" class="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-acode-primary">
-                                                    {{ $section->title }}
-                                                </th>
-                                            </tr>
-                                            @forelse ($section->examQuestions->sortBy('sort_order') as $examQuestion)
-                                                <tr class="even:bg-slate-50/60 hover:bg-blue-50/70 transition-colors">
-                                                    <td class="px-4 py-3">
-                                                        <p class="font-semibold text-acode-primary text-sm">
-                                                            {{ $loop->iteration }}. {{ $examQuestion->question?->title ?? 'Reactivo #' . $examQuestion->question_id }}
-                                                        </p>
-                                                        <p class="text-xs text-slate-500 mt-0.5 line-clamp-1">
-                                                            {{ \Illuminate\Support\Str::limit($examQuestion->question?->stem ?? '', 90) }}
-                                                        </p>
-                                                    </td>
-                                                    <td class="px-4 py-3">
-                                                        <input
-                                                            type="number"
-                                                            name="questions[{{ $examQuestion->id }}][points_weight]"
-                                                            min="0.01"
-                                                            max="100"
-                                                            step="0.01"
-                                                            required
-                                                            data-points-input
-                                                            @input="recalculate()"
-                                                            @disabled($isReadOnly)
-                                                            value="{{ old('questions.' . $examQuestion->id . '.points_weight', number_format((float) $examQuestion->points_weight, 2, '.', '')) }}"
-                                                            aria-label="Puntos del reactivo {{ $examQuestion->id }}"
-                                                            class="h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 font-mono text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-acode-tech disabled:bg-slate-100"
-                                                        >
-                                                    </td>
-                                                    <td class="px-4 py-3">
-                                                        <input
-                                                            type="number"
-                                                            name="questions[{{ $examQuestion->id }}][time_limit_seconds]"
-                                                            min="1"
-                                                            step="1"
-                                                            required
-                                                            data-time-input
-                                                            @input="recalculate()"
-                                                            @disabled($isReadOnly)
-                                                            value="{{ old('questions.' . $examQuestion->id . '.time_limit_seconds', (int) $examQuestion->time_limit_seconds) }}"
-                                                            aria-label="Tiempo límite del reactivo {{ $examQuestion->id }}"
-                                                            class="h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 font-mono text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-acode-tech disabled:bg-slate-100"
-                                                        >
-                                                    </td>
-                                                </tr>
-                                            @empty
-                                                <tr>
-                                                    <td colspan="3" class="px-4 py-4 text-xs text-slate-500">
-                                                        Este apartado no tiene reactivos.
-                                                    </td>
-                                                </tr>
-                                            @endforelse
-                                        @empty
-                                            <tr>
-                                                <td colspan="3" class="py-6">
-                                                    <x-empty-state
-                                                        icon="document"
-                                                        title="No hay reactivos asignados"
-                                                        message="Regresa a la Etapa 2 para sortear o seleccionar reactivos del banco."
-                                                    >
-                                                        <x-button :href="route('exams.assemble', $exam)" variant="primary" size="sm">
-                                                            Volver a Armar reactivos
-                                                        </x-button>
-                                                    </x-empty-state>
-                                                </td>
-                                            </tr>
-                                        @endforelse
-                                    </tbody>
-                                </table>
-                            </div>
+                                    @empty
+                                        <tr>
+                                            <x-table.td colspan="3" class="text-xs text-slate-500">
+                                                Este apartado no tiene reactivos.
+                                            </x-table.td>
+                                        </tr>
+                                    @endforelse
+                                @empty
+                                    <tr>
+                                        <x-table.td colspan="3" class="py-6">
+                                            <x-empty-state
+                                                icon="document"
+                                                title="No hay reactivos asignados"
+                                                message="Regresa a la Etapa 2 para sortear o seleccionar reactivos del banco."
+                                            >
+                                                <x-button :href="route('exams.assemble', $exam)" variant="primary" size="sm">
+                                                    Volver a Armar reactivos
+                                                </x-button>
+                                            </x-empty-state>
+                                        </x-table.td>
+                                    </tr>
+                                @endforelse
+                            </x-table>
                         </div>
                     </x-card>
 
@@ -398,7 +395,7 @@
                         <div class="space-y-6">
                             <div>
                                 <div class="flex items-center justify-between gap-2 mb-2">
-                                    <p class="text-[13px] font-medium text-slate-800">Escala de calificación</p>
+                                    <p class="text-sm font-medium text-slate-800">Escala de calificación</p>
                                     @if ($hasAttempts)
                                         <x-badge variant="warning">Bloqueada: ya existen intentos</x-badge>
                                     @endif
@@ -437,7 +434,7 @@
                             </div>
 
                             <div>
-                                <p class="text-[13px] font-medium text-slate-800 mb-2">Visibilidad de resultados</p>
+                                <p class="text-sm font-medium text-slate-800 mb-2">Visibilidad de resultados</p>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     @foreach ($visibilityModes as $modeKey => $modeInfo)
                                         <label
@@ -456,7 +453,7 @@
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
                                 <div>
-                                    <p class="text-[13px] font-medium text-slate-800 mb-2">Orden de preguntas</p>
+                                    <p class="text-sm font-medium text-slate-800 mb-2">Orden de preguntas</p>
                                     <div class="space-y-2">
                                         <label class="flex items-start gap-2.5 rounded-xl border border-slate-200 p-3 cursor-pointer">
                                             <input type="radio" name="randomize_question_order" value="1" x-model="randomizeOrder" @disabled($isReadOnly) class="mt-0.5 text-acode-tech">

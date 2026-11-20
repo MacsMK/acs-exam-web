@@ -1139,7 +1139,7 @@ class ExamTeacherWorkflowTest extends TestCase
         $this->actingAs($studentEstimated)->get(route('attempts.result', $submittedEst->fresh()))
             ->assertOk()
             ->assertSee('Calificación preliminar estimada')
-            ->assertSee('70.00')
+            ->assertSee('7.00')
             ->assertDontSee('SECRETO-AI-FEEDBACK-EST');
 
         $this->app['auth']->forgetGuards();

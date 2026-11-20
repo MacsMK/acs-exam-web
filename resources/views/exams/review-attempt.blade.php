@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/review-attempt.blade.php (MPW-V2 §4.1.2, §7, §8, RF-IAR-002, RW-11) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/review-attempt.blade.php (MPW-V2 §4.1.2, §7, §8, RF-IAR-001..014, RF-EVA-004..009, RW-11, ADR-059) --}}
 @extends('layouts.app')
 
 @section('title', 'Recoteje de Intento: ' . ($attempt->student?->full_name ?? 'Estudiante'))
@@ -12,36 +12,79 @@
             'open' => 'Pregunta abierta',
             'code' => 'Código fuente',
         ];
+        $extractQualitativeText = static function (mixed $payload): string {
+            if (is_string($payload)) {
+                return trim($payload);
+            }
+            if (is_array($payload)) {
+                foreach (['text', 'code', 'answer', 'given_answer'] as $key) {
+                    if (isset($payload[$key]) && is_string($payload[$key])) {
+                        return trim($payload[$key]);
+                    }
+                }
+            }
+
+            return '';
+        };
+        $qualitativeAnswers = $attempt->answers->filter(
+            static fn ($ans): bool => in_array((string) ($ans->examQuestion?->question?->question_type ?? ''), ['open', 'code'], true)
+        );
+        $pendingUsableAiCount = $qualitativeAnswers->filter(
+            static fn ($ans): bool => $extractQualitativeText($ans->answer_payload) !== ''
+                && $ans->ai_model_used !== 'none'
+                && ($ans->ai_evaluated_at === null || (bool) $ans->ai_is_fallback)
+        )->count();
+        $otherErrors = collect($errors->getMessages())
+            ->except(['ai_credits'])
+            ->flatten();
+        $attemptStatusLabels = [
+            'in_progress' => 'En progreso',
+            'submitted' => 'Enviado',
+            'expired' => 'Expirado',
+            'cancelled_by_incident' => 'Cancelado por incidencia',
+            'graded' => 'Calificado',
+        ];
+        $attemptStatusLabel = $attemptStatusLabels[$attempt->status] ?? 'En curso';
     @endphp
 
-    <div class="space-y-6 max-w-5xl mx-auto">
+    <div class="space-y-6">
         {{-- Breadcrumbs y Encabezado --}}
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-                <nav class="flex items-center space-x-2 text-xs font-semibold text-slate-500 mb-2">
-                    <a href="{{ route('exams.index') }}" class="hover:text-acode-primary transition">Exámenes</a>
-                    <span>/</span>
-                    <a href="{{ route('exams.revision.index', $exam) }}" class="hover:text-acode-primary transition">{{ $exam->title }}</a>
-                    <span>/</span>
-                    <span class="text-acode-primary font-bold">Intento #{{ $attempt->id }}</span>
-                </nav>
-                <h1 class="text-2xl sm:text-3xl font-bold text-acode-primary tracking-tight">Recoteje de Evaluación Docente</h1>
-                <p class="text-sm text-slate-600 mt-1">
-                    Revisa las respuestas del estudiante, la evaluación asistida por IA y ajusta la calificación definitiva.
-                </p>
+        <x-page-header
+            title="Recoteje de intento"
+            subtitle="Revisa las respuestas del estudiante, solicita sugerencias de IA bajo demanda y ajusta la calificación definitiva."
+            :breadcrumbs="[
+                ['label' => 'Revisión', 'href' => route('teacher.reviews.index')],
+                ['label' => $exam->title, 'href' => route('exams.revision.index', $exam)],
+                ['label' => 'Recoteje de intento'],
+            ]"
+        >
+            <x-slot:actions>
+                <x-button :href="route('exams.revision.index', $exam)" variant="neutral" size="md">
+                    <x-icon name="arrowLeft" class="w-4 h-4" />
+                    Volver
+                </x-button>
+            </x-slot:actions>
+        </x-page-header>
+
+        {{-- Alerta específica de saldo de créditos IA (RF-EVA-004 / RF-EVA-005) --}}
+        @if ($errors->has('ai_credits'))
+            <div class="p-4 rounded-xl bg-acode-danger/10 border border-acode-danger/35 text-sm text-acode-primary flex items-start gap-3" role="alert">
+                <x-icon name="warning" class="w-5 h-5 shrink-0 text-acode-danger mt-0.5" />
+                <div class="space-y-1">
+                    <p class="font-bold text-acode-danger">{{ $errors->first('ai_credits') }}</p>
+                    <p class="text-xs text-slate-700">
+                        Puedes calificar y guardar manualmente todas las respuestas cualitativas sin necesidad de créditos de IA, o revisar tu plan en
+                        <a href="{{ route('teacher.subscription.index') }}" class="font-semibold text-acode-tech hover:underline">Suscripción</a>.
+                    </p>
+                </div>
             </div>
+        @endif
 
-            <x-button :href="route('exams.revision.index', $exam)" variant="neutral" size="md">
-                <x-icon name="arrowLeft" class="w-4 h-4" />
-                Volver a Lista de Intentos
-            </x-button>
-        </div>
-
-        @if ($errors->any())
+        @if ($otherErrors->isNotEmpty())
             <div class="p-4 rounded-xl bg-acode-danger/10 border border-acode-danger/30 text-acode-danger text-sm" role="alert">
                 <p class="font-bold mb-1">Por favor corrige los siguientes errores:</p>
                 <ul class="list-disc list-inside space-y-1">
-                    @foreach ($errors->all() as $error)
+                    @foreach ($otherErrors as $error)
                         <li>{{ $error }}</li>
                     @endforeach
                 </ul>
@@ -52,12 +95,58 @@
             <div class="rounded-xl border border-acode-warning/50 bg-acode-warning/15 p-4 text-sm text-acode-primary flex items-start gap-2.5">
                 <x-icon name="lock" class="w-5 h-5 shrink-0 text-acode-warning-dark mt-0.5" />
                 <div>
-                    <p class="font-bold">Intento en modo solo lectura ({{ $attempt->status }})</p>
+                    <p class="font-bold">Intento en modo solo lectura ({{ $attemptStatusLabel }})</p>
                     <p class="text-xs text-slate-700 mt-0.5">
-                        Solo los intentos en estado <strong>entregado</strong> admiten recoteje docente.
+                        Solo los intentos en estado <strong>entregado</strong> admiten recoteje docente y evaluación bajo demanda con IA.
                     </p>
                 </div>
             </div>
+        @endif
+
+        {{-- Banner de saldo de créditos IA y evaluación en lote (FUERA del form de recoteje) --}}
+        @if ($qualitativeAnswers->isNotEmpty())
+            <x-card padding="p-4 sm:p-5" class="border-acode-tech/30 bg-gradient-to-r from-white via-white to-acode-surface/70">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-acode-tech/10 text-acode-tech">
+                            <x-nav-icon name="ai-credits" class="w-5 h-5" />
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="text-xs font-bold uppercase tracking-wider text-acode-tech">Créditos de IA disponibles</span>
+                                @if (! empty($aiCreditSummary['is_unlimited']))
+                                    <x-badge variant="accent">Ilimitados</x-badge>
+                                @elseif (! empty($aiCreditSummary['is_suspended']))
+                                    <x-badge variant="danger">Suscripción suspendida (0 disponibles)</x-badge>
+                                @else
+                                    <x-badge :variant="$aiCreditSummary['variant'] ?? 'tech'">
+                                        {{ number_format((int) ($aiCreditSummary['remaining'] ?? 0)) }} / {{ number_format((int) ($aiCreditSummary['limit'] ?? 0)) }} disponibles
+                                    </x-badge>
+                                @endif
+                            </div>
+                            <p class="text-xs text-slate-600">
+                                Plan <strong>{{ $aiCreditSummary['package_name'] ?? 'Docente' }}</strong>
+                                · {{ $aiCreditSummary['cycle_label'] ?? 'Ciclo vigente' }}.
+                                La IA actúa como sugerencia bajo demanda; las respuestas en blanco o en respaldo local no descuentan créditos.
+                            </p>
+                        </div>
+                    </div>
+
+                    @if ($canSubmitRecoteje && $pendingUsableAiCount > 0)
+                        <form
+                            method="POST"
+                            action="{{ route('exams.revision.evaluate-ai-batch', [$exam, $attempt]) }}"
+                            class="shrink-0"
+                        >
+                            @csrf
+                            <x-button type="submit" variant="secondary" size="md" class="w-full sm:w-auto">
+                                <x-icon name="code" class="w-4 h-4" />
+                                Evaluar pendientes con IA ({{ $pendingUsableAiCount }})
+                            </x-button>
+                        </form>
+                    @endif
+                </div>
+            </x-card>
         @endif
 
         {{-- Tarjeta de Datos del Alumno y Resumen --}}
@@ -92,7 +181,7 @@
             </div>
         </x-card>
 
-        {{-- Formulario de Recoteje --}}
+        {{-- Formulario principal de Recoteje Docente (SIN formularios anidados) --}}
         <form action="{{ route('exams.revision.update', [$exam, $attempt]) }}" method="POST" class="space-y-6">
             @csrf
 
@@ -109,6 +198,7 @@
                     $maxPoints = round((float) ($examQuestion?->points_weight ?? 0), 2);
                     $payload = $answer->answer_payload;
                     $questionable = $question?->questionable;
+                    $hasAnswerText = $isAiQuestion && $extractQualitativeText($payload) !== '';
                 @endphp
 
                 <x-card padding="p-6" class="space-y-4 {{ $isAiQuestion ? 'border-acode-tech/30' : 'border-slate-200 bg-slate-50/40' }}">
@@ -127,7 +217,15 @@
                         </div>
 
                         @if ($isAiQuestion)
-                            <x-badge variant="warning">Evaluado por IA · Recotejo manual habilitado</x-badge>
+                            @if ($answer->ai_evaluated_at === null)
+                                <x-badge variant="warning">Pendiente de evaluación · Recotejo manual habilitado</x-badge>
+                            @elseif ($answer->ai_model_used === 'none')
+                                <x-badge variant="neutral">Respuesta en blanco (0 pts)</x-badge>
+                            @elseif ($answer->ai_is_fallback)
+                                <x-badge variant="warning">Respaldo local · Recotejo manual habilitado</x-badge>
+                            @else
+                                <x-badge variant="accent">Evaluado por IA · Recotejo manual habilitado</x-badge>
+                            @endif
                         @else
                             <x-badge variant="neutral">Reactivo Objetivo (Solo lectura)</x-badge>
                         @endif
@@ -157,10 +255,12 @@
                                 $selectedOption = $selectedIdx !== null
                                     ? $optionsList->firstWhere('index', (int) $selectedIdx)
                                     : null;
+                                $selectedLetter = is_numeric($selectedIdx) ? chr(65 + (int) $selectedIdx) : '';
                                 $correctIdx = $questionable?->correct_option_index;
                                 $correctOption = $correctIdx !== null
                                     ? $optionsList->firstWhere('index', (int) $correctIdx)
                                     : null;
+                                $correctLetter = is_numeric($correctIdx) ? chr(65 + (int) $correctIdx) : '';
                             @endphp
                             <div class="p-3.5 bg-white border border-slate-200 rounded-xl text-sm space-y-2">
                                 <div class="flex flex-wrap items-center justify-between gap-2">
@@ -168,9 +268,9 @@
                                         <span class="font-semibold text-slate-700">Opción seleccionada:</span>
                                         <span class="ml-1.5 font-bold text-acode-primary">
                                             @if ($selectedOption)
-                                                [{{ $selectedIdx }}] {{ $selectedOption['text'] ?? '' }}
+                                                {{ $selectedLetter }}. {{ $selectedOption['text'] ?? '' }}
                                             @elseif ($selectedIdx !== null)
-                                                Índice #{{ $selectedIdx }}
+                                                Opción {{ $selectedLetter }}
                                             @else
                                                 Sin respuesta
                                             @endif
@@ -182,7 +282,7 @@
                                 </div>
                                 @if ($correctOption)
                                     <p class="text-xs text-slate-500">
-                                        <strong>Respuesta correcta:</strong> [{{ $correctIdx }}] {{ $correctOption['text'] ?? '' }}
+                                        <strong>Respuesta correcta:</strong> {{ $correctLetter }}. {{ $correctOption['text'] ?? '' }}
                                     </p>
                                 @endif
                             </div>
@@ -240,34 +340,100 @@
                                     default => '// Sin código enviado',
                                 };
                             @endphp
-                            <div class="border border-slate-300 border-l-4 border-l-acode-primary bg-slate-100 rounded-lg p-4 font-mono text-[13px] text-acode-ink overflow-x-auto leading-relaxed">
+                            <div class="border border-slate-300 border-l-4 border-l-acode-primary bg-slate-100 rounded-lg p-4 font-mono text-xs text-acode-ink overflow-x-auto leading-relaxed">
                                 <pre class="whitespace-pre-wrap">{{ $codeText }}</pre>
                             </div>
                         @endif
                     </div>
 
                     @if ($isAiQuestion)
-                        <div class="bg-acode-surface/80 border border-acode-tech/25 rounded-xl p-4 space-y-2.5">
-                            <div class="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-acode-primary">
-                                <span class="flex items-center gap-1.5">
-                                    <x-icon name="code" class="w-4 h-4 text-acode-tech" />
-                                    Evaluación Asistida por IA
-                                </span>
-                                <span>
-                                    Similitud: {{ number_format((float) $answer->ai_similarity_score, 1) }}% ·
-                                    {{ $answer->ai_meets_goal ? 'Cumple Objetivo' : 'No Cumple Objetivo' }}
-                                </span>
-                            </div>
-                            <p class="text-xs text-slate-600 italic">
-                                "{{ $answer->ai_feedback ?? 'Sin retroalimentación de IA registrada.' }}"
-                            </p>
-                        </div>
+                        {{-- Panel de Evaluación Asistida por IA bajo demanda (RF-IAR-001..014) --}}
+                        @if ($answer->ai_evaluated_at === null)
+                            <div class="bg-acode-surface/60 border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div class="flex items-start gap-2.5">
+                                    <x-icon name="clock" class="w-4 h-4 text-acode-tech shrink-0 mt-0.5" />
+                                    <div class="text-xs text-slate-700 space-y-0.5">
+                                        <p class="font-semibold text-acode-primary">
+                                            Pendiente de evaluación (califica manualmente o solicita una sugerencia de IA bajo demanda)
+                                        </p>
+                                        @if (! $hasAnswerText)
+                                            <p class="text-slate-500">
+                                                Respuesta en blanco: no consume créditos de IA y corresponde asignar 0.00 pts.
+                                            </p>
+                                        @endif
+                                    </div>
+                                </div>
 
+                                @if ($canSubmitRecoteje && $hasAnswerText)
+                                    <x-button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        onclick="window.acodeSubmitAiEvaluation({{ $answer->id }}, false, false)"
+                                        class="shrink-0"
+                                    >
+                                        <x-icon name="code" class="w-4 h-4" />
+                                        Evaluar con IA
+                                    </x-button>
+                                @endif
+                            </div>
+                        @else
+                            <div class="bg-acode-surface/80 border border-acode-tech/25 rounded-xl p-4 space-y-3">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="flex items-center gap-1.5 text-xs font-bold text-acode-primary">
+                                            <x-icon name="code" class="w-4 h-4 text-acode-tech" />
+                                            Evaluación Asistida por IA
+                                        </span>
+
+                                        @if ($answer->ai_model_used === 'none')
+                                            <x-badge variant="neutral">Respuesta en blanco (0 pts)</x-badge>
+                                        @elseif ($answer->ai_is_fallback)
+                                            <x-badge variant="warning">Respaldo local (sin cobro)</x-badge>
+                                        @else
+                                            <x-badge variant="info">Sugerencia IA · {{ $answer->ai_model_used ?? 'Gemini' }}</x-badge>
+                                        @endif
+                                    </div>
+
+                                    <div class="flex flex-wrap items-center gap-2 text-xs font-bold text-acode-primary">
+                                        <span>Similitud: {{ number_format((float) $answer->ai_similarity_score, 1) }}%</span>
+                                        <span class="text-slate-400">·</span>
+                                        <span class="{{ $answer->ai_meets_goal ? 'text-acode-accent-dark' : 'text-acode-danger' }}">
+                                            {{ $answer->ai_meets_goal ? 'Cumple objetivo' : 'No cumple objetivo' }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <p class="text-xs text-slate-600 italic leading-relaxed">
+                                    "{{ $answer->ai_feedback ?? 'Sin retroalimentación de IA registrada.' }}"
+                                </p>
+
+                                @if ($canSubmitRecoteje && $answer->ai_model_used !== 'none' && $hasAnswerText)
+                                    <div class="pt-2 border-t border-acode-tech/15 flex flex-wrap items-center justify-between gap-2">
+                                        <span class="text-xs text-slate-500">
+                                            Evaluado el {{ $answer->ai_evaluated_at->format('d/m/Y H:i') }}
+                                        </span>
+
+                                        <x-button
+                                            type="button"
+                                            variant="neutral"
+                                            size="sm"
+                                            onclick="window.acodeRequestAiReevaluation({{ $answer->id }})"
+                                        >
+                                            <x-icon name="code" class="w-3.5 h-3.5 text-acode-tech" />
+                                            Re-evaluar con IA
+                                        </x-button>
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+
+                        {{-- Campos de recoteje docente --}}
                         <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 pt-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
                             <input type="hidden" name="reviews[{{ $reviewIndex }}][answer_id]" value="{{ $answer->id }}">
 
                             <div class="sm:col-span-4">
-                                <label class="block text-[13px] font-medium text-slate-800 mb-1">
+                                <label class="block text-sm font-medium text-slate-800 mb-1">
                                     Calificación Docente (Máx. {{ number_format($maxPoints, 2) }} pts)
                                 </label>
                                 <x-form.input
@@ -284,7 +450,7 @@
                             </div>
 
                             <div class="sm:col-span-8">
-                                <label class="block text-[13px] font-medium text-slate-800 mb-1">
+                                <label class="block text-sm font-medium text-slate-800 mb-1">
                                     Notas de Retroalimentación del Maestro (Opcional)
                                 </label>
                                 <x-form.input
@@ -330,5 +496,84 @@
                 </div>
             @endif
         </form>
+
+        {{-- Formularios dedicados para evaluación/re-evaluación individual con IA (FUERA del form de recoteje) --}}
+        @if ($canSubmitRecoteje)
+            @foreach ($qualitativeAnswers as $qualAnswer)
+                <form
+                    id="ai-eval-form-{{ $qualAnswer->id }}"
+                    action="{{ route('exams.revision.evaluate-ai', [$exam, $attempt, $qualAnswer]) }}"
+                    method="POST"
+                    class="hidden"
+                >
+                    @csrf
+                    <input type="hidden" name="is_reevaluation" value="0">
+                    <input type="hidden" name="dismiss_warning" value="0">
+                </form>
+            @endforeach
+        @endif
     </div>
 @endsection
+
+@push('scripts')
+<script>
+    (function () {
+        const skipReevaluationWarning = @js((bool) ($skipAiReevaluationWarning ?? false));
+
+        window.acodeSubmitAiEvaluation = function (answerId, isReevaluation, dismissWarning) {
+            const form = document.getElementById(`ai-eval-form-${answerId}`);
+            if (!form) {
+                return;
+            }
+            const reevalInput = form.querySelector('input[name="is_reevaluation"]');
+            const dismissInput = form.querySelector('input[name="dismiss_warning"]');
+            if (reevalInput) {
+                reevalInput.value = isReevaluation ? '1' : '0';
+            }
+            if (dismissInput) {
+                dismissInput.value = dismissWarning ? '1' : '0';
+            }
+            form.submit();
+        };
+
+        window.acodeRequestAiReevaluation = function (answerId) {
+            if (skipReevaluationWarning || typeof window.Swal === 'undefined') {
+                window.acodeSubmitAiEvaluation(answerId, true, false);
+                return;
+            }
+
+            window.Swal.fire({
+                icon: 'warning',
+                iconColor: '#F4B942',
+                title: '¿Re-evaluar respuesta con IA?',
+                html: `
+                    <p class="text-sm text-slate-600 leading-relaxed mb-4">
+                        Solicitar una nueva evaluación con IA consumirá <strong>1 crédito adicional</strong> de tu saldo si produce una evaluación utilizable. Si ocurre un respaldo local no se descontarán créditos.
+                    </p>
+                    <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
+                        <input id="acode-dismiss-ai-warning" type="checkbox" class="rounded border-slate-300 text-acode-primary focus:ring-acode-tech">
+                        <span>No mostrar de nuevo</span>
+                    </label>
+                `,
+                showCancelButton: true,
+                confirmButtonColor: '#142B4A',
+                cancelButtonColor: '#64748B',
+                confirmButtonText: 'Re-evaluar con IA',
+                cancelButtonText: 'Cancelar',
+                reverseButtons: true,
+                customClass: {
+                    popup: 'rounded-2xl shadow-xl font-sans',
+                    confirmButton: 'px-5 py-2.5 rounded-lg text-sm font-semibold',
+                    cancelButton: 'px-5 py-2.5 rounded-lg text-sm font-semibold'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const checkbox = document.getElementById('acode-dismiss-ai-warning');
+                    const dismiss = Boolean(checkbox && checkbox.checked);
+                    window.acodeSubmitAiEvaluation(answerId, true, dismiss);
+                }
+            });
+        };
+    })();
+</script>
+@endpush

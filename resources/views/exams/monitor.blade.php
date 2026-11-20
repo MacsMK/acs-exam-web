@@ -191,110 +191,90 @@
                 this.alerts = this.alerts.filter((a) => a.id !== id);
             }
         }"
-        class="mx-auto max-w-7xl space-y-6"
+        class="space-y-6"
     >
         {{-- Encabezado --}}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-                <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                    <a href="{{ route('exams.index') }}" class="hover:text-acode-tech">Exámenes</a>
-                    <span>/</span>
-                    <span class="text-acode-primary">Supervisión en Tiempo Real</span>
-                </div>
-                <div class="flex flex-wrap items-center gap-3">
-                    <h1 class="text-2xl lg:text-3xl font-bold text-acode-primary tracking-tight">{{ $exam->title }}</h1>
+        <x-page-header
+            :title="'Monitoreo en vivo · ' . $exam->title"
+            subtitle="Supervisa en tiempo real la conexión de tus estudiantes, su progreso y posibles incidencias de seguridad."
+            :breadcrumbs="[
+                ['label' => 'Exámenes', 'href' => route('exams.index')],
+                ['label' => $exam->title, 'href' => route('exams.review', $exam)],
+                ['label' => 'Monitoreo'],
+            ]"
+        >
+            <x-slot:badge>
+                <span
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all"
+                    :class="socketConnected ? 'bg-acode-accent/15 text-acode-accent-dark border border-acode-accent/30' : 'bg-acode-warning/15 text-acode-warning-dark border border-acode-warning/40'"
+                >
                     <span
-                        class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all"
-                        :class="socketConnected ? 'bg-acode-accent/15 text-acode-accent-dark border border-acode-accent/30' : 'bg-acode-warning/15 text-acode-warning-dark border border-acode-warning/40'"
-                    >
-                        <span
-                            class="w-2 h-2 rounded-full"
-                            :class="socketConnected ? 'bg-acode-accent animate-pulse' : 'bg-acode-warning'"
-                        ></span>
-                        <span x-text="connectionLabel"></span>
-                    </span>
-                </div>
-                <p class="text-sm text-slate-600 mt-1">
-                    Monitoreo activo de alumnos, entregas y detección inmediata de sospechas anti-trampa.
-                </p>
-            </div>
+                        class="w-2 h-2 rounded-full"
+                        :class="socketConnected ? 'bg-acode-accent animate-pulse' : 'bg-acode-warning'"
+                    ></span>
+                    <span x-text="connectionLabel"></span>
+                </span>
+            </x-slot:badge>
 
-            <div class="flex flex-wrap items-center gap-2">
-                <x-button :href="route('exams.index')" variant="neutral" size="sm">
+            <x-slot:actions>
+                <x-button :href="route('exams.index')" variant="neutral" size="md">
                     <x-icon name="arrowLeft" class="w-4 h-4" />
-                    Volver a Exámenes
+                    Volver
                 </x-button>
-                <x-button :href="route('exams.assemble', $exam)" variant="secondary" size="sm">
+                <x-button :href="route('exams.assemble', $exam)" variant="secondary" size="md">
                     <x-icon name="document" class="w-4 h-4" />
-                    Ver Estructura
+                    Abrir estructura
                 </x-button>
-            </div>
-        </div>
+            </x-slot:actions>
+        </x-page-header>
 
         {{-- Tarjetas KPI en Tiempo Real --}}
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <x-card class="flex flex-col justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 shrink-0 rounded-xl bg-acode-surface flex items-center justify-center text-acode-tech">
-                        <x-icon name="userGroup" class="w-5 h-5" />
-                    </div>
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Matriculados</p>
-                </div>
-                <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <p class="text-[28px] leading-9 font-bold text-acode-primary tabular-nums">{{ $totalEnrolled }}</p>
-                    <p class="text-xs text-slate-500">En grupos asignados</p>
-                </div>
-            </x-card>
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" aria-label="Métricas de monitoreo en tiempo real">
+            <x-kpi-card
+                label="Matriculados"
+                :value="$totalEnrolled"
+                meta="En grupos asignados"
+                icon="userGroup"
+                tone="tech"
+            />
 
-            <x-card class="border-acode-accent/40 flex flex-col justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 shrink-0 rounded-xl bg-acode-accent/15 flex items-center justify-center text-acode-accent-dark">
-                        <x-icon name="clock" class="w-5 h-5" />
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                        <p class="text-xs font-semibold uppercase tracking-wider text-acode-accent-dark">En Examen</p>
-                        <span class="w-2 h-2 rounded-full bg-acode-accent animate-ping"></span>
-                    </div>
-                </div>
-                <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <p class="text-[28px] leading-9 font-bold text-acode-accent-dark tabular-nums" x-text="inProgress"></p>
-                    <p class="text-xs text-acode-accent-dark">Respondiendo en vivo</p>
-                </div>
-            </x-card>
-
-            <x-card class="border-acode-tech/30 flex flex-col justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 shrink-0 rounded-xl bg-acode-tech/15 flex items-center justify-center text-acode-tech">
-                        <x-icon name="success" class="w-5 h-5" />
-                    </div>
-                    <p class="text-xs font-semibold uppercase tracking-wider text-acode-tech">Entregados</p>
-                </div>
-                <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <p class="text-[28px] leading-9 font-bold text-acode-primary tabular-nums" x-text="submitted"></p>
-                    <p class="text-xs text-slate-500">Finalizados</p>
-                </div>
-            </x-card>
-
-            <div
-                class="rounded-xl p-5 border shadow-sm transition-all flex flex-col justify-between"
-                :class="incidents > 0 ? 'bg-acode-danger/10 border-acode-danger/40 ring-2 ring-acode-danger/20' : 'bg-white border-slate-200'"
+            <x-kpi-card
+                label="En examen"
+                meta="Respondiendo en vivo"
+                icon="clock"
+                tone="accent"
             >
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center" :class="incidents > 0 ? 'bg-acode-danger/20 text-acode-danger-dark' : 'bg-slate-100 text-slate-500'">
-                        <x-icon name="shield" class="w-5 h-5" />
-                    </div>
-                    <p class="text-xs font-semibold uppercase tracking-wider" :class="incidents > 0 ? 'text-acode-danger-dark' : 'text-slate-500'">
-                        Incidentes Anti-Fraude
-                    </p>
-                </div>
-                <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <p class="text-[28px] leading-9 font-bold tabular-nums" :class="incidents > 0 ? 'text-acode-danger-dark' : 'text-acode-primary'" x-text="incidents"></p>
-                    <p class="text-xs" :class="incidents > 0 ? 'text-acode-danger-dark' : 'text-slate-500'">
-                        Cambios de pestaña / app
-                    </p>
-                </div>
-            </div>
-        </div>
+                <x-slot:valueSlot>
+                    <span class="inline-flex items-center gap-2 text-acode-accent-dark">
+                        <span x-text="inProgress"></span>
+                        <span class="w-2.5 h-2.5 rounded-full bg-acode-accent animate-ping"></span>
+                    </span>
+                </x-slot:valueSlot>
+            </x-kpi-card>
+
+            <x-kpi-card
+                label="Entregados"
+                meta="Finalizados"
+                icon="success"
+                tone="tech"
+            >
+                <x-slot:valueSlot>
+                    <span x-text="submitted"></span>
+                </x-slot:valueSlot>
+            </x-kpi-card>
+
+            <x-kpi-card
+                label="Incidentes anti-fraude"
+                meta="Cambios de pestaña / app"
+                icon="shield"
+                tone="danger"
+                x-bind:class="incidents > 0 ? '!bg-acode-danger/10 !border-acode-danger/40 ring-2 ring-acode-danger/20' : ''"
+            >
+                <x-slot:valueSlot>
+                    <span x-bind:class="incidents > 0 ? 'text-acode-danger-dark' : 'text-acode-primary'" x-text="incidents"></span>
+                </x-slot:valueSlot>
+            </x-kpi-card>
+        </section>
 
         {{-- Alertas en Tiempo Real --}}
         <template x-if="alerts.length > 0">
@@ -329,16 +309,16 @@
             </div>
         </template>
 
-        {{-- Tabla de Alumnos en Vivo --}}
-        <x-card>
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-                <div>
-                    <h2 class="text-lg font-bold text-acode-primary">Supervisión Individual de Alumnos</h2>
-                    <p class="text-xs text-slate-500">Actualización reactiva en vivo vía Laravel Reverb</p>
-                </div>
+        {{-- Barra de búsqueda/filtro y Tabla de Alumnos en Vivo (sin doble tarjeta) --}}
+        <section class="space-y-4" aria-label="Supervisión individual de alumnos">
+            <div class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <x-section-header
+                    title="Supervisión individual de alumnos"
+                    subtitle="Actualización reactiva en vivo vía Laravel Reverb"
+                />
 
-                <div class="flex flex-wrap items-center gap-2.5">
-                    <div class="relative w-56">
+                <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+                    <div class="relative w-full sm:w-56">
                         <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
                             <x-icon name="search" class="w-4 h-4" />
                         </div>
@@ -351,7 +331,7 @@
                         />
                     </div>
 
-                    <div class="w-48">
+                    <div class="w-full sm:w-48">
                         <x-form.select size="sm" x-model="statusFilter" aria-label="Filtrar alumnos por estado">
                             <option value="all">Todos los estados</option>
                             <option value="in_progress">En examen</option>
@@ -459,6 +439,6 @@
                     </template>
                 </x-table>
             </div>
-        </x-card>
+        </section>
     </div>
 @endsection
