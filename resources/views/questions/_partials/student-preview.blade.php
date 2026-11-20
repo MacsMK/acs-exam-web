@@ -24,9 +24,10 @@
             </span>
         </div>
 
-        {{-- Enunciado (con whitespace-pre-line) --}}
-        <div class="text-sm text-slate-700 whitespace-pre-line leading-5 mb-5 break-words min-h-[3rem]">
+        {{-- Enunciado: whitespace-pre-wrap conserva espacios y sangrías (RF-BAN-014) --}}
+        <div class="text-sm text-slate-700 leading-5 mb-5 break-words min-h-[3rem]">
             <span
+                class="whitespace-pre-wrap"
                 x-show="stem.trim().length > 0"
                 x-text="stem"
             ></span>

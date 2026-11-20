@@ -119,9 +119,8 @@
                     <span class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
                         Enunciado o Planteamiento Principal
                     </span>
-                    <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm leading-6 whitespace-pre-line">
-                        {{ $question->stem }}
-                    </div>
+                    {{-- whitespace-pre-wrap conserva espacios y sangrías del código en el enunciado (RF-BAN-014) --}}
+                    <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm leading-6 whitespace-pre-wrap break-words">{{ $question->stem }}</div>
                 </div>
             </div>
         </x-card>
@@ -469,7 +468,7 @@
                     {{-- Enunciado original de referencia --}}
                     <div class="p-3 bg-white rounded-lg border border-slate-200 text-sm">
                         <span class="font-semibold text-slate-500 block text-xs uppercase tracking-wider mb-1">Enunciado Original de Referencia</span>
-                        <p class="text-slate-700 whitespace-pre-line leading-5">"{{ $question->stem }}"</p>
+                        <p class="text-slate-700 whitespace-pre-wrap break-words leading-5">"{{ $question->stem }}"</p>
                     </div>
 
                     @if ($errors->paraphrase->any() || $errors->has('stem'))
@@ -532,9 +531,7 @@
                                         Registrada {{ $paraphrase->created_at?->diffForHumans() ?? 'recientemente' }}
                                     </span>
                                 </div>
-                                <p class="text-sm text-slate-700 leading-5">
-                                    {{ $paraphrase->stem }}
-                                </p>
+                                <p class="text-sm text-slate-700 leading-5 whitespace-pre-wrap break-words">{{ $paraphrase->stem }}</p>
                             </div>
 
                             <form

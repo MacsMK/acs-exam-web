@@ -141,7 +141,7 @@
                                 <x-badge variant="info">Enunciado con paráfrasis anti-copia</x-badge>
                             @endif
                         </div>
-                        <p class="whitespace-pre-line leading-relaxed">{{ $answer->served_stem_snapshot ?: ($question?->stem ?? 'Sin enunciado') }}</p>
+                        <p class="whitespace-pre-wrap break-words leading-relaxed">{{ $answer->served_stem_snapshot ?: ($question?->stem ?? 'Sin enunciado') }}</p>
                     </div>
 
                     {{-- Respuesta del Alumno (Renderizado seguro ante arrays o escalares) --}}

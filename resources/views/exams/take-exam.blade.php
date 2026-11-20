@@ -28,9 +28,8 @@
             <h2 class="text-xs font-bold uppercase tracking-wider text-acode-tech mb-3">
                 Reactivo activo
             </h2>
-            <div class="text-sm text-slate-700 mb-6 whitespace-pre-line leading-relaxed">
-                {{ $current['question']['stem'] }}
-            </div>
+            {{-- whitespace-pre-wrap conserva espacios y sangrías del código en el enunciado (RF-BAN-014) --}}
+            <div class="text-sm text-slate-700 mb-6 whitespace-pre-wrap break-words leading-relaxed">{{ $current['question']['stem'] }}</div>
 
             {{-- Formulario de Respuesta por Tipo de Reactivo --}}
             <form
