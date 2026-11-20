@@ -7,6 +7,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Presentando examen') · A-Code Solutions</title>
 
+    <link rel="icon" type="image/png" href="{{ asset('images/branding/isotipo.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -67,11 +68,10 @@
     <header class="sticky top-0 z-40 h-14 bg-acode-navy text-white shadow-md border-b border-white/10 select-none">
         <div class="max-w-4xl mx-auto px-4 h-full flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <x-logo variant="compact" class="w-7 h-7 text-white" />
-                <div class="flex flex-col">
-                    <span class="font-bold text-sm tracking-tight text-white leading-tight">A-Code Solutions</span>
-                    <span class="text-[10px] text-white/70">Modo de evaluación supervisada</span>
-                </div>
+                {{-- Logotipo oficial para fondo oscuro (MPW-V2 §8.1) --}}
+                <img src="{{ asset('images/branding/logo-fondo-claro.png') }}" alt="A-Code Solutions" class="h-8 w-auto object-contain">
+                <span aria-hidden="true" class="h-6 w-px bg-white/20"></span>
+                <span class="text-xs text-white/70">Modo de evaluación supervisada</span>
             </div>
 
             @auth
