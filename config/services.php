@@ -41,8 +41,21 @@ return [
 
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY', env('AI_API_KEY')),
-        'model' => env('GEMINI_MODEL', 'gemini-1.5-flash'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
         'timeout' => (int) env('GEMINI_TIMEOUT', 15),
+        'circuit_failure_threshold' => (int) env('GEMINI_CIRCUIT_FAILURE_THRESHOLD', 3),
+        'circuit_cooldown_seconds' => (int) env('GEMINI_CIRCUIT_COOLDOWN_SECONDS', 60),
+    ],
+
+    'sep_cedula' => [
+        'driver' => env('SEP_CEDULA_DRIVER', 'manual'),
+        'api_url' => env('SEP_CEDULA_API_URL'),
+        'api_key' => env('SEP_CEDULA_API_KEY'),
+        'timeout' => (int) env('SEP_CEDULA_TIMEOUT', 10),
+    ],
+
+    'payment_gateway' => [
+        'driver' => env('PAYMENT_GATEWAY_DRIVER', 'simulated'),
     ],
 
     'slack' => [

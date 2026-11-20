@@ -9,12 +9,14 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        DashboardController.php
  * Ubicación:      app/Http/Controllers/DashboardController.php
- * Requerimiento:  RF-AUT-002, RF-REP-001, RW-02 (Panel Operativo Post-Login, MPW-V2 §7.9)
+ * Requerimiento:  RF-AUT-002, RF-REP-001, RF-SUS-008, RW-02, ADR-057, ADR-060
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        2.0.0
  * Fecha Creación: 08/11/2026
  * Descripción:    Controlador del panel de resumen operativo post-login para
- *                 docentes y alumnos con métricas agregadas normalizadas (MPW-V2 §7.9).
+ *                 superadministradores, docentes verificados (con capa modal
+ *                 bloqueante de selección de plan si requiere onboarding) y
+ *                 alumnos.
  * ============================================================================
  */
 
@@ -23,8 +25,11 @@ namespace App\Http\Controllers;
 use App\Models\Exam;
 use App\Models\StudentAttempt;
 use App\Models\User;
+use App\Services\TeacherSubscriptionService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 /**
  * Controlador del panel de resumen operativo post-login (Módulo 2, MPW-V2 §7.9).
@@ -33,7 +38,23 @@ use Illuminate\Http\Request;
  */
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request): \Illuminate\Http\Response|\Illuminate\Http\RedirectResponse|View
+    /**
+     * Inicializa el controlador inyectando el servicio de suscripciones docentes.
+     *
+     * @param TeacherSubscriptionService $teacherSubscriptionService Servicio de onboarding y planes.
+     */
+    public function __construct(
+        private readonly TeacherSubscriptionService $teacherSubscriptionService,
+    ) {
+    }
+
+    /**
+     * Enruta al usuario autenticado a su panel según rol, acreditación y onboarding.
+     *
+     * @param Request $request Solicitud HTTP del usuario autenticado.
+     * @return Response|RedirectResponse|View
+     */
+    public function __invoke(Request $request): Response|RedirectResponse|View
     {
         /** @var User $user */
         $user = $request->user();
@@ -43,6 +64,25 @@ class DashboardController extends Controller
         }
 
         if ($user->role === 'teacher') {
+            if (! $user->isVerifiedTeacher()) {
+                return redirect()->route('teacher.verification.status');
+            }
+
+            if ($user->needsPlanOnboarding()) {
+                return view('dashboard.teacher', [
+                    'groupsCount' => 0,
+                    'questionsCount' => 0,
+                    'examsCount' => 0,
+                    'passedCount' => 0,
+                    'failedCount' => 0,
+                    'averageScore' => 0.0,
+                    'recentExams' => collect(),
+                    'recentGroups' => collect(),
+                    'showPlanOnboardingOverlay' => true,
+                    'onboardingOverlay' => $this->teacherSubscriptionService->getOnboardingOverlayData($user),
+                ]);
+            }
+
             return $this->teacherDashboard($user);
         }
 
@@ -51,6 +91,9 @@ class DashboardController extends Controller
 
     /**
      * Métricas agregadas y colecciones operativas para el panel docente (§7.9).
+     *
+     * @param User $teacher Cuenta docente verificada con onboarding completado.
+     * @return View
      */
     private function teacherDashboard(User $teacher): View
     {
@@ -95,11 +138,16 @@ class DashboardController extends Controller
             'averageScore' => $averageScore,
             'recentExams' => $recentExams,
             'recentGroups' => $recentGroups,
+            'showPlanOnboardingOverlay' => false,
+            'onboardingOverlay' => null,
         ]);
     }
 
     /**
      * Métricas agregadas y colecciones operativas para el panel del alumno (§7.9).
+     *
+     * @param User $student Cuenta de alumno autenticada.
+     * @return View
      */
     private function studentDashboard(User $student): View
     {

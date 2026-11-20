@@ -15,8 +15,11 @@
     --color-acode-tech-dark: #1D4F85;
     --color-acode-cyan: #16A6A1;
     --color-acode-accent: #16A6A1;
+    --color-acode-accent-dark: #11807C;
     --color-acode-warning: #F4B942;
+    --color-acode-warning-dark: #D97706;
     --color-acode-danger: #DC2626;
+    --color-acode-danger-dark: #B91C1C;
     --color-acode-surface: #E9F0F5;
     --color-acode-ink: #0F172A;
 }

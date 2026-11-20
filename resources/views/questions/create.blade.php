@@ -19,7 +19,7 @@
     @endphp
 
     <div
-        class="mx-auto max-w-6xl space-y-6"
+        class="space-y-6"
         x-data="acodeQuestionForm({
             formId: 'create-question-form',
             type: @js($initialType),
@@ -45,19 +45,17 @@
             serverErrors: @js($errors->toArray()),
         })"
     >
-        {{-- Navegación superior --}}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <nav class="flex items-center gap-2 text-xs text-slate-500 select-none" aria-label="Migas de pan">
-                <a href="{{ route('questions.index') }}" class="hover:text-acode-tech transition flex items-center gap-1 font-medium">
-                    <x-icon name="arrowLeft" class="w-3.5 h-3.5" />
-                    <span>Banco de preguntas</span>
-                </a>
-                <span class="text-slate-300">/</span>
-                <span class="font-semibold text-slate-700">Nueva pregunta</span>
-            </nav>
-
-            <div class="flex items-center gap-2">
-                @if (!empty($quotaSummary))
+        {{-- Cabecera institucional --}}
+        <x-page-header
+            title="Crear reactivo"
+            subtitle="Registra un nuevo reactivo en tu banco docente con vista previa en vivo de cómo lo verá el estudiante."
+            :breadcrumbs="[
+                ['label' => 'Banco de preguntas', 'href' => route('questions.index')],
+                ['label' => 'Crear reactivo'],
+            ]"
+        >
+            @if (!empty($quotaSummary))
+                <x-slot:badge>
                     <x-badge :variant="($quotaSummary['is_unlimited'] ?? false) ? 'success' : (($quotaSummary['remaining'] ?? 0) <= 5 ? 'warning' : 'info')">
                         @if ($quotaSummary['is_unlimited'] ?? false)
                             Plan {{ $quotaSummary['package_name'] ?? 'Pro' }} · Ilimitado
@@ -65,22 +63,21 @@
                             Cuota: {{ $quotaSummary['used'] ?? 0 }} / {{ $quotaSummary['limit'] ?? 0 }} reactivos
                         @endif
                     </x-badge>
-                @endif
+                </x-slot:badge>
+            @endif
 
-                <x-button :href="route('questions.batch.create')" variant="neutral" size="sm">
-                    <x-icon name="add" class="w-3.5 h-3.5 mr-1" />
-                    Captura rápida en lote
+            <x-slot:actions>
+                <x-button :href="route('questions.index')" variant="neutral" size="md">
+                    <x-icon name="arrowLeft" class="w-4 h-4" />
+                    Volver
                 </x-button>
-            </div>
-        </div>
 
-        {{-- Encabezado principal --}}
-        <header>
-            <h1 class="text-2xl font-bold text-acode-primary tracking-tight">Nueva pregunta</h1>
-            <p class="mt-1 text-sm text-slate-500">
-                Completa los tres pasos y verifica en la columna derecha cómo se mostrará el reactivo al estudiante.
-            </p>
-        </header>
+                <x-button :href="route('questions.batch.create')" variant="neutral" size="md">
+                    <x-icon name="add" class="w-4 h-4 text-acode-tech" />
+                    Crear en lote
+                </x-button>
+            </x-slot:actions>
+        </x-page-header>
 
         {{-- Resumen único de errores de validación --}}
         @if ($errors->any())
@@ -121,17 +118,17 @@
             </div>
 
             {{-- Barra inferior de acciones normativas --}}
-            <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-xs">
+            <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
                 <x-unsaved-changes form-id="create-question-form" :cancel-url="route('questions.index')" />
 
                 <div class="flex flex-wrap items-center justify-end gap-2.5">
                     <x-button type="submit" name="save_and_new" value="1" variant="secondary" size="md">
-                        <x-icon name="add" class="w-4 h-4 mr-1.5" />
-                        Guardar y crear otra
+                        <x-icon name="add" class="w-4 h-4" />
+                        Guardar y crear otro
                     </x-button>
 
                     <x-button type="submit" variant="primary" size="md">
-                        <x-icon name="save" class="w-4 h-4 mr-1.5" />
+                        <x-icon name="save" class="w-4 h-4" />
                         Guardar reactivo
                     </x-button>
                 </div>

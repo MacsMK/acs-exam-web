@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 {{--
     ============================================================================
     A-CODE SOLUTIONS - ANALIZAMOS, DISEÑAMOS, TRANSFORMAMOS
@@ -6,9 +5,12 @@
     Archivo:     app.blade.php
     Ubicación:   resources/views/layouts/app.blade.php
     Descripción: Layout maestro de la plataforma.
-                 Navegación lateral docente y navegación para estudiantes.
+                 Navegación lateral retráctil (docente, administración y
+                 estudiantes), topbar institucional y footer de dos secciones
+                 (MPW-V2 §7.3, §7.4.2, §7.8.2, §8.10; MC-V2 §2.4).
     ============================================================================
 --}}
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8">
@@ -17,7 +19,8 @@
     <title>@yield('title', 'A-Code Solutions') · Plataforma de Exámenes</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <script src="https://cdn.tailwindcss.com/3.4.13"></script>
     <script>
@@ -25,16 +28,24 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Inter', 'ui-sans-serif', 'system-ui']
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                        mono: ['Fira Code', 'ui-monospace', 'SFMono-Regular', 'monospace'],
                     },
                     colors: {
                         acode: {
                             primary: '#142B4A',
+                            'primary-dark': '#0E1F36',
+                            navy: '#142B4A',
                             tech: '#2563A6',
+                            'tech-dark': '#1D4F85',
                             accent: '#16A6A1',
+                            'accent-dark': '#11807C',
                             warning: '#F4B942',
+                            'warning-dark': '#D97706',
                             surface: '#E9F0F5',
                             danger: '#DC2626',
+                            'danger-dark': '#B91C1C',
+                            ink: '#0F172A',
                         },
                     },
                 },
@@ -42,18 +53,96 @@
         };
     </script>
 
+    <script>
+        if (localStorage.getItem('acode_sidebar_collapsed') === 'true') {
+            document.documentElement.classList.add('acode-sidebar-collapsed');
+        }
+    </script>
+
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
     <style>
         [x-cloak] {
             display: none !important;
         }
+
+        .acode-sidebar-divider,
+        .acode-brand-collapsed,
+        .acode-icon-expand {
+            display: none;
+        }
+
+        @media (max-width: 1023px) {
+            #acode-sidebar {
+                transition: transform 200ms ease;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            #acode-sidebar {
+                width: 16rem;
+                transform: translateX(0) !important;
+            }
+            #acode-main-shell {
+                padding-left: 16rem;
+            }
+            html.acode-sidebar-collapsed #acode-sidebar {
+                width: 5rem;
+            }
+            html.acode-sidebar-collapsed #acode-main-shell {
+                padding-left: 5rem;
+            }
+            html.acode-sidebar-collapsed .acode-sidebar-label,
+            html.acode-sidebar-collapsed .acode-sidebar-category,
+            html.acode-sidebar-collapsed .acode-brand-expanded,
+            html.acode-sidebar-collapsed .acode-icon-collapse {
+                display: none !important;
+            }
+            html.acode-sidebar-collapsed .acode-sidebar-divider,
+            html.acode-sidebar-collapsed .acode-brand-collapsed {
+                display: block;
+            }
+            html.acode-sidebar-collapsed .acode-icon-expand {
+                display: inline-flex;
+            }
+            html.acode-sidebar-collapsed .acode-sidebar-header {
+                justify-content: center;
+                padding-left: 0.5rem;
+                padding-right: 0.5rem;
+            }
+            html.acode-sidebar-collapsed .acode-sidebar-link {
+                justify-content: center;
+                padding-left: 0;
+                padding-right: 0;
+            }
+            html.acode-sidebar-collapsed .acode-sidebar-footer {
+                padding: 1rem 0.5rem;
+            }
+            html.acode-sidebar-animating #acode-sidebar {
+                transition: width 200ms ease;
+            }
+            html.acode-sidebar-animating #acode-main-shell {
+                transition: padding-left 200ms ease;
+            }
+        }
     </style>
 </head>
 
-<body class="min-h-screen bg-acode-surface font-sans text-slate-700">
+<body class="min-h-screen bg-acode-surface font-sans text-sm text-slate-700 antialiased {{ ! empty($showPlanOnboardingOverlay) ? 'overflow-hidden' : '' }}">
 
 @auth
-    <div x-data="{ sidebarOpen: false, profileOpen: false }"
+    <div x-data="{
+            sidebarOpen: false,
+            sidebarCollapsed: document.documentElement.classList.contains('acode-sidebar-collapsed'),
+            profileOpen: false,
+            toggleCollapse() {
+                const root = document.documentElement;
+                root.classList.add('acode-sidebar-animating');
+                this.sidebarCollapsed = !this.sidebarCollapsed;
+                root.classList.toggle('acode-sidebar-collapsed', this.sidebarCollapsed);
+                localStorage.setItem('acode_sidebar_collapsed', String(this.sidebarCollapsed));
+                setTimeout(() => root.classList.remove('acode-sidebar-animating'), 240);
+            }
+         }"
          class="min-h-screen">
 
             {{-- Fondo del menú móvil --}}
@@ -61,172 +150,318 @@
                  x-cloak
                  x-transition.opacity
                  @click="sidebarOpen = false"
-                 class="fixed inset-0 z-40 bg-black/50 lg:hidden">
+                 class="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm lg:hidden">
             </div>
 
-            {{-- Menú lateral docente --}}
-            <aside
-                class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-acode-primary text-white transform transition-transform duration-200 lg:translate-x-0"
-                :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'">
+            {{-- Menú lateral institucional retráctil (zero-flicker) --}}
+            <aside id="acode-sidebar"
+                   class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-acode-primary text-white -translate-x-full lg:translate-x-0"
+                   :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'">
 
-                <div class="flex min-h-24 items-center justify-between border-b border-white/10 px-6 py-5">
-                    <a href="{{ auth()->user()->role === 'super_admin' ? route('admin.teachers.index') : route('dashboard') }}" class="min-w-0">
-                        <p class="text-base font-bold leading-tight text-white">
+                {{-- Cabecera del menú lateral --}}
+                <div class="acode-sidebar-header flex min-h-20 items-center justify-between gap-2 border-b border-white/10 px-4 py-4">
+                    <a href="{{ auth()->user()->role === 'super_admin' ? route('admin.teachers.index') : (auth()->user()->role === 'teacher' && ! auth()->user()->isVerifiedTeacher() ? route('teacher.verification.status') : route('dashboard')) }}"
+                       class="acode-brand-expanded min-w-0">
+                        <p class="text-sm font-bold leading-snug text-white">
                             Evaluador de Exámenes
                         </p>
-                        <p class="mt-2 text-xs text-white/60">
+                        <p class="mt-1 text-xs text-white/60">
                             @if (auth()->user()->role === 'super_admin')
                                 Panel de Administración
                             @elseif (auth()->user()->role === 'student')
                                 Panel del Estudiante
                             @else
-                                Panel docente
+                                Panel Docente
                             @endif
                         </p>
                     </a>
 
                     <button type="button"
+                            @click="toggleCollapse()"
+                            class="hidden lg:inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/75 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-acode-accent"
+                            :aria-label="sidebarCollapsed ? 'Expandir menú lateral' : 'Contraer menú lateral'"
+                            :title="sidebarCollapsed ? 'Expandir menú lateral' : 'Contraer menú lateral'">
+                        <span class="acode-icon-collapse inline-flex">
+                            <x-icon name="sidebarCollapse" class="h-5 w-5" />
+                        </span>
+                        <span class="acode-icon-expand items-center justify-center">
+                            <x-icon name="sidebarExpand" class="h-5 w-5" />
+                        </span>
+                    </button>
+
+                    <button type="button"
                             @click="sidebarOpen = false"
-                            class="rounded-lg p-2 text-white/70 hover:bg-white/10 lg:hidden"
+                            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/75 transition-colors hover:bg-white/10 hover:text-white lg:hidden"
                             aria-label="Cerrar menú">
-                        ✕
+                        <x-icon name="xMark" class="h-5 w-5" />
                     </button>
                 </div>
 
-                <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-6 text-sm">
+                {{-- Navegación principal --}}
+                <nav aria-label="Menú principal" class="flex-1 space-y-1 overflow-y-auto px-3 py-5 text-sm">
                     @if (auth()->user()->role === 'super_admin')
-                        <div class="px-3 pt-2 pb-2 text-xs font-semibold uppercase text-white/50 tracking-wider">
+                        <div class="acode-sidebar-category px-3 pt-1 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
                             Administración
                         </div>
+
                         <a href="{{ route('admin.teachers.index') }}"
-                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
-                           {{ request()->routeIs('admin.teachers.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                           title="Gestión de Docentes"
+                           @if (request()->routeIs('admin.teachers.*')) aria-current="page" @endif
+                           class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('admin.teachers.*') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
                             <x-nav-icon name="groups" />
-                            <span>Gestión de Docentes</span>
-                        </a>
-                    @elseif (auth()->user()->role === 'student')
-                        <a href="{{ route('dashboard') }}"
-                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
-                           {{ request()->routeIs('dashboard') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
-                            <x-nav-icon name="home" />
-                            <span>Inicio</span>
+                            <span class="acode-sidebar-label truncate">Gestión de Docentes</span>
                         </a>
 
+                        <a href="{{ route('admin.invitations.index') }}"
+                           title="Códigos de Invitación"
+                           @if (request()->routeIs('admin.invitations.*')) aria-current="page" @endif
+                           class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('admin.invitations.*') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                            <x-icon name="key" class="h-5 w-5" />
+                            <span class="acode-sidebar-label truncate">Códigos de Invitación</span>
+                        </a>
+                    @elseif (auth()->user()->role === 'student')
+                        {{-- Categoría: Principal --}}
+                        <div class="acode-sidebar-category px-3 pt-1 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
+                            Principal
+                        </div>
+
+                        <a href="{{ route('dashboard') }}"
+                           title="Inicio"
+                           @if (request()->routeIs('dashboard')) aria-current="page" @endif
+                           class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('dashboard') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                            <x-nav-icon name="home" />
+                            <span class="acode-sidebar-label truncate">Inicio</span>
+                        </a>
+
+                        {{-- Categoría: Mi Aprendizaje --}}
+                        <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
+                            Mi Aprendizaje
+                        </div>
+                        <div class="acode-sidebar-divider my-2 mx-2 border-t border-white/10" aria-hidden="true"></div>
+
                         <a href="{{ route('student.groups.index') }}"
-                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
-                           {{ request()->routeIs('student.groups.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                           title="Mis Grupos"
+                           @if (request()->routeIs('student.groups.index', 'student.groups.leave')) aria-current="page" @endif
+                           class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('student.groups.index', 'student.groups.leave') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
                             <x-nav-icon name="groups" />
-                            <span>Mis Grupos</span>
+                            <span class="acode-sidebar-label truncate">Mis Grupos</span>
                         </a>
 
                         <a href="{{ route('student.exams.index') }}"
-                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
-                           {{ request()->routeIs('student.exams.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                           title="Mis Exámenes"
+                           @if (request()->routeIs('student.exams.*')) aria-current="page" @endif
+                           class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('student.exams.*') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
                             <x-nav-icon name="exams" />
-                            <span>Mis Exámenes</span>
+                            <span class="acode-sidebar-label truncate">Mis Exámenes</span>
                         </a>
 
                         <a href="{{ route('student.grades.index') }}"
-                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
-                           {{ request()->routeIs('student.grades.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                           title="Mis Calificaciones"
+                           @if (request()->routeIs('student.grades.*', 'attempts.result', 'attempts.review')) aria-current="page" @endif
+                           class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('student.grades.*', 'attempts.result', 'attempts.review') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
                             <x-nav-icon name="grades" />
-                            <span>Mis Calificaciones</span>
+                            <span class="acode-sidebar-label truncate">Mis Calificaciones</span>
                         </a>
+
+                        {{-- Categoría: Inscripción --}}
+                        <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
+                            Inscripción
+                        </div>
+                        <div class="acode-sidebar-divider my-2 mx-2 border-t border-white/10" aria-hidden="true"></div>
 
                         <a href="{{ route('student.groups.join.form') }}"
-                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
-                           {{ request()->routeIs('student.groups.join.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                           title="Unirme a un grupo"
+                           @if (request()->routeIs('student.groups.join.*')) aria-current="page" @endif
+                           class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('student.groups.join.*') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
                             <x-nav-icon name="add" />
-                            <span>Unirme a un grupo</span>
+                            <span class="acode-sidebar-label truncate">Unirme a un grupo</span>
                         </a>
                     @else
-                        <a href="{{ route('dashboard') }}"
-                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
-                           {{ request()->routeIs('dashboard') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
-                            <x-nav-icon name="home" />
-                            Inicio
-                        </a>
-
-                        <a href="{{ route('groups.index') }}"
-                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
-                           {{ request()->routeIs('groups.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
-                            <x-nav-icon name="groups" />
-                            Grupos
-                        </a>
-
-                        <a href="{{ route('questions.index') }}"
-                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
-                           {{ request()->routeIs('questions.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
-                            <x-nav-icon name="questions" />
-                            Banco de preguntas
-                        </a>
-
-                        <a href="{{ route('exams.index') }}"
-                           class="flex items-center gap-3 rounded-lg px-4 py-3 transition
-                           {{ request()->routeIs('exams.*') ? 'bg-acode-tech text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
-                            <x-nav-icon name="exams" />
-                            Exámenes
-                        </a>
-
-                        {{-- Secciones docentes activas --}}
-                        @foreach ([
-                            ['route' => 'teacher.reviews.index', 'active' => 'teacher.reviews.*', 'label' => 'Revisión', 'icon' => 'review'],
-                            ['route' => 'teacher.gradebook.hub', 'active' => 'teacher.gradebook.*', 'label' => 'Calificaciones', 'icon' => 'grades'],
-                            ['route' => 'teacher.subscription.index', 'active' => 'teacher.subscription.*', 'label' => 'Suscripción', 'icon' => 'subscription'],
-                            ['route' => 'teacher.ai-credits.index', 'active' => 'teacher.ai-credits.*', 'label' => 'Créditos de IA', 'icon' => 'ai-credits'],
-                        ] as $item)
-
-                            <a href="{{ route($item['route']) }}"
-                            class="flex items-center justify-between gap-2 rounded-lg px-4 py-3 transition
-                            {{ request()->routeIs($item['active'])
-                                ? 'bg-acode-tech font-semibold text-white'
-                                : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
-
+                        @if (auth()->user()->isVerifiedTeacher() && auth()->user()->needsPlanOnboarding())
+                            <a href="{{ route('dashboard') }}"
+                               title="Selección de plan"
+                               @if (request()->routeIs('dashboard')) aria-current="page" @endif
+                               class="acode-sidebar-link flex items-center justify-between gap-2 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('dashboard') ? 'bg-acode-tech font-semibold text-white shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
                                 <span class="flex min-w-0 items-center gap-3">
-                                    <x-nav-icon :name="$item['icon']" />
-                                    <span>{{ $item['label'] }}</span>
+                                    <x-nav-icon name="home" />
+                                    <span class="acode-sidebar-label truncate">Selección de plan</span>
+                                </span>
+                                <span class="acode-sidebar-label shrink-0 rounded-full bg-acode-warning px-2 py-0.5 text-xs font-bold text-acode-primary">
+                                    Pendiente
                                 </span>
                             </a>
-                        @endforeach
+
+                            <a href="{{ route('teacher.subscription.index') }}"
+                               title="Suscripción"
+                               @if (request()->routeIs('teacher.subscription.*')) aria-current="page" @endif
+                               class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('teacher.subscription.*') ? 'bg-acode-tech font-semibold text-white shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <x-nav-icon name="subscription" />
+                                <span class="acode-sidebar-label truncate">Suscripción</span>
+                            </a>
+                        @elseif (auth()->user()->isVerifiedTeacher())
+                            {{-- Categoría: Principal --}}
+                            <div class="acode-sidebar-category px-3 pt-1 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
+                                Principal
+                            </div>
+
+                            <a href="{{ route('dashboard') }}"
+                               title="Inicio"
+                               @if (request()->routeIs('dashboard')) aria-current="page" @endif
+                               class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('dashboard') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <x-nav-icon name="home" />
+                                <span class="acode-sidebar-label truncate">Inicio</span>
+                            </a>
+
+                            {{-- Categoría: Gestión Académica --}}
+                            <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
+                                Gestión Académica
+                            </div>
+                            <div class="acode-sidebar-divider my-2 mx-2 border-t border-white/10" aria-hidden="true"></div>
+
+                            <a href="{{ route('groups.index') }}"
+                               title="Grupos"
+                               @if (request()->routeIs('groups.index', 'groups.create', 'groups.show', 'groups.periods.index')) aria-current="page" @endif
+                               class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('groups.index', 'groups.create', 'groups.show', 'groups.periods.index') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <x-nav-icon name="groups" />
+                                <span class="acode-sidebar-label truncate">Grupos</span>
+                            </a>
+
+                            <a href="{{ route('questions.index') }}"
+                               title="Banco de preguntas"
+                               @if (request()->routeIs('questions.*')) aria-current="page" @endif
+                               class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('questions.*') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <x-nav-icon name="questions" />
+                                <span class="acode-sidebar-label truncate">Banco de preguntas</span>
+                            </a>
+
+                            <a href="{{ route('exams.index') }}"
+                               title="Exámenes"
+                               @if (request()->routeIs('exams.*') && ! request()->routeIs('exams.revision.*')) aria-current="page" @endif
+                               class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('exams.*') && ! request()->routeIs('exams.revision.*') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <x-nav-icon name="exams" />
+                                <span class="acode-sidebar-label truncate">Exámenes</span>
+                            </a>
+
+                            {{-- Categoría: Evaluación y Resultados --}}
+                            <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
+                                Evaluación y Resultados
+                            </div>
+                            <div class="acode-sidebar-divider my-2 mx-2 border-t border-white/10" aria-hidden="true"></div>
+
+                            <a href="{{ route('teacher.reviews.index') }}"
+                               title="Revisión"
+                               @if (request()->routeIs('teacher.reviews.*', 'exams.revision.*')) aria-current="page" @endif
+                               class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('teacher.reviews.*', 'exams.revision.*') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <x-nav-icon name="review" />
+                                <span class="acode-sidebar-label truncate">Revisión</span>
+                            </a>
+
+                            <a href="{{ route('teacher.gradebook.hub') }}"
+                               title="Calificaciones"
+                               @if (request()->routeIs('teacher.gradebook.*', 'groups.periods.gradebook*')) aria-current="page" @endif
+                               class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('teacher.gradebook.*', 'groups.periods.gradebook*') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <x-nav-icon name="grades" />
+                                <span class="acode-sidebar-label truncate">Calificaciones</span>
+                            </a>
+
+                            {{-- Categoría: Cuenta y Plan --}}
+                            <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
+                                Cuenta y Plan
+                            </div>
+                            <div class="acode-sidebar-divider my-2 mx-2 border-t border-white/10" aria-hidden="true"></div>
+
+                            <a href="{{ route('teacher.subscription.index') }}"
+                               title="Suscripción"
+                               @if (request()->routeIs('teacher.subscription.*')) aria-current="page" @endif
+                               class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('teacher.subscription.*') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <x-nav-icon name="subscription" />
+                                <span class="acode-sidebar-label truncate">Suscripción</span>
+                            </a>
+
+                            <a href="{{ route('teacher.ai-credits.index') }}"
+                               title="Créditos de IA"
+                               @if (request()->routeIs('teacher.ai-credits.*')) aria-current="page" @endif
+                               class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('teacher.ai-credits.*') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <x-nav-icon name="ai-credits" />
+                                <span class="acode-sidebar-label truncate">Créditos de IA</span>
+                            </a>
+
+                            <a href="{{ route('teacher.profile.index') }}"
+                               title="Mi perfil"
+                               @if (request()->routeIs('teacher.profile.*')) aria-current="page" @endif
+                               class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('teacher.profile.*') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <x-nav-icon name="profile" />
+                                <span class="acode-sidebar-label truncate">Mi perfil</span>
+                            </a>
+                        @else
+                            <a href="{{ route('teacher.verification.status') }}"
+                               title="Verificación de cuenta"
+                               @if (request()->routeIs('teacher.verification.*')) aria-current="page" @endif
+                               class="acode-sidebar-link flex items-center justify-between gap-2 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('teacher.verification.*') ? 'bg-acode-tech font-semibold text-white shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                                <span class="flex min-w-0 items-center gap-3">
+                                    <x-icon name="shield" class="h-5 w-5" />
+                                    <span class="acode-sidebar-label truncate">Verificación de cuenta</span>
+                                </span>
+                                @if (auth()->user()->isRejectedTeacherVerification())
+                                    <span class="acode-sidebar-label shrink-0 rounded-full bg-acode-danger px-2 py-0.5 text-xs font-bold text-white">
+                                        Acción
+                                    </span>
+                                @else
+                                    <span class="acode-sidebar-label shrink-0 rounded-full bg-acode-warning px-2 py-0.5 text-xs font-bold text-acode-primary">
+                                        Pendiente
+                                    </span>
+                                @endif
+                            </a>
+                        @endif
                     @endif
                 </nav>
 
-                <div class="border-t border-white/10 px-4 py-5">
-                    <img src="{{ asset('images/branding/logo-fondo-claro.png') }}"
-                        alt="A-Code Solutions"
-                        class="mx-auto max-h-16 w-full object-contain">
+                {{-- Footer de marca institucional --}}
+                <div class="acode-sidebar-footer border-t border-white/10 px-4 py-5">
+                    <div class="acode-brand-expanded">
+                        <img src="{{ asset('images/branding/logo-fondo-claro.png') }}"
+                             alt="A-Code Solutions"
+                             class="mx-auto max-h-14 w-full object-contain">
 
-                    <p class="mt-3 text-center text-xs leading-relaxed text-white/65">
-                        Analizamos, diseñamos, transformamos.
-                    </p>
+                        <p class="mt-3 text-center text-xs leading-relaxed text-white/65">
+                            Analizamos, diseñamos, transformamos.
+                        </p>
+                    </div>
+
+                    <div class="acode-brand-collapsed">
+                        <img src="{{ asset('images/branding/isotipo.png') }}"
+                             alt="A-Code Solutions"
+                             class="mx-auto h-10 w-10 object-contain">
+                    </div>
                 </div>
             </aside>
-            {{-- Contenido principal --}}
-            <div class="flex min-h-screen flex-col lg:pl-64">
 
-                {{-- Encabezado --}}
+            {{-- Contenido principal --}}
+            <div id="acode-main-shell" class="flex min-h-screen flex-col">
+
+                {{-- Encabezado superior --}}
                 <header class="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm sm:px-6 lg:px-8">
 
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
                         <button type="button"
                                 @click="sidebarOpen = true"
-                                class="rounded-lg p-2 text-acode-primary hover:bg-acode-surface lg:hidden"
+                                class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-acode-primary transition hover:bg-acode-surface lg:hidden"
                                 aria-label="Abrir menú">
-                            ☰
+                            <x-icon name="bars3" class="h-5 w-5" />
                         </button>
 
-                        <span class="text-sm font-semibold text-acode-primary sm:text-base">
-                            @yield('title', auth()->user()->role === 'student' ? 'Panel del Estudiante' : (auth()->user()->role === 'super_admin' ? 'Panel de Administración' : 'Panel docente'))
+                        <span class="truncate text-sm font-semibold text-acode-primary sm:text-base">
+                            @yield('title', auth()->user()->role === 'student' ? 'Panel del Estudiante' : (auth()->user()->role === 'super_admin' ? 'Panel de Administración' : 'Panel Docente'))
                         </span>
                     </div>
 
-                    {{-- Perfil --}}
+                    {{-- Menú de perfil --}}
                     <div class="relative" @click.outside="profileOpen = false">
 
                         <button type="button"
                                 @click="profileOpen = !profileOpen"
                                 :aria-expanded="profileOpen.toString()"
-                                class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-slate-100">
+                                class="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-acode-tech">
 
                             <div class="flex h-9 w-9 items-center justify-center rounded-full bg-acode-primary text-sm font-bold text-white">
                                 {{ strtoupper(substr(auth()->user()->first_name, 0, 1)) }}
@@ -236,16 +471,19 @@
                                 {{ auth()->user()->full_name }}
                             </span>
 
-                            <span class="text-xs text-slate-400">▾</span>
+                            <span class="inline-flex text-slate-400 transition-transform duration-200"
+                                  :class="profileOpen ? 'rotate-180' : ''">
+                                <x-icon name="chevronDown" class="h-4 w-4" />
+                            </span>
                         </button>
 
                         <div x-show="profileOpen"
                              x-cloak
                              x-transition
-                             class="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 bg-white py-2 shadow-lg">
+                             class="absolute right-0 mt-2 w-60 rounded-xl border border-slate-200 bg-white py-2 shadow-lg">
 
                             <div class="border-b border-slate-100 px-4 py-3">
-                                <p class="text-sm font-semibold text-acode-primary">
+                                <p class="truncate text-sm font-semibold text-acode-primary">
                                     {{ auth()->user()->full_name }}
                                 </p>
                                 <p class="text-xs text-slate-500">
@@ -259,58 +497,43 @@
                                 </p>
                             </div>
 
-                            @if (auth()->user()->role === 'teacher')
-                                {{-- Acceso al perfil docente --}}
-                                <a href="{{ route('teacher.profile.index') }}"
-                                class="flex min-h-11 items-center gap-3 px-4 py-3 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
-                                    <svg xmlns="http://www.w3.org/2000/svg"
-                                        class="h-5 w-5 shrink-0"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="1.8"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        aria-hidden="true">
-                                        <circle cx="12" cy="8" r="4"/>
-                                        <path d="M4 21v-2a8 8 0 0 1 16 0v2"/>
-                                    </svg>
-
-                                    <span>Mi perfil</span>
+                            @if (auth()->user()->role === 'teacher' && auth()->user()->isVerifiedTeacher())
+                                @if (! auth()->user()->needsPlanOnboarding())
+                                    {{-- Acceso al perfil docente --}}
+                                    <a href="{{ route('teacher.profile.index') }}"
+                                       class="flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
+                                        <x-icon name="userCircle" class="h-5 w-5 text-acode-tech" />
+                                        <span>Mi perfil</span>
+                                    </a>
+                                @endif
+                            @elseif (auth()->user()->role === 'teacher')
+                                <a href="{{ route('teacher.verification.status') }}"
+                                   class="flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
+                                    <x-icon name="shield" class="h-5 w-5 text-acode-tech" />
+                                    <span>Verificación de cuenta</span>
                                 </a>
                             @elseif (auth()->user()->role === 'student')
                                 <a href="{{ route('student.groups.index') }}"
-                                   class="flex min-h-11 items-center gap-3 px-4 py-3 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
-                                    <x-nav-icon name="groups" class="h-5 w-5" />
+                                   class="flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
+                                    <x-nav-icon name="groups" class="h-5 w-5 text-acode-tech" />
                                     <span>Mis grupos</span>
                                 </a>
                                 <a href="{{ route('student.exams.index') }}"
-                                   class="flex min-h-11 items-center gap-3 px-4 py-3 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
-                                    <x-nav-icon name="exams" class="h-5 w-5" />
+                                   class="flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
+                                    <x-nav-icon name="exams" class="h-5 w-5 text-acode-tech" />
                                     <span>Mis exámenes</span>
                                 </a>
                                 <a href="{{ route('student.grades.index') }}"
-                                   class="flex min-h-11 items-center gap-3 px-4 py-3 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
-                                    <x-nav-icon name="grades" class="h-5 w-5" />
+                                   class="flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
+                                    <x-nav-icon name="grades" class="h-5 w-5 text-acode-tech" />
                                     <span>Mis calificaciones</span>
                                 </a>
                             @endif
 
                             {{-- Acceso al aviso de privacidad --}}
                             <a href="{{ route('privacy.show.public') }}"
-                            class="flex min-h-11 items-center gap-3 px-4 py-3 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
-                                <svg xmlns="http://www.w3.org/2000/svg"
-                                    class="h-5 w-5 shrink-0"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="1.8"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    aria-hidden="true">
-                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>
-                                    <path d="M9 12l2 2 4-4"/>
-                                </svg>
+                               class="flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
+                                <x-icon name="shield" class="h-5 w-5 text-slate-500" />
                                 <span>Aviso de privacidad</span>
                             </a>
 
@@ -318,8 +541,9 @@
                             <form method="POST" action="{{ route('auth.logout') }}">
                                 @csrf
                                 <button type="submit"
-                                        class="w-full px-4 py-2 text-left text-sm text-acode-danger hover:bg-red-50">
-                                    Cerrar sesión
+                                        class="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-acode-danger transition hover:bg-acode-danger/10">
+                                    <x-icon name="logout" class="h-5 w-5" />
+                                    <span>Cerrar sesión</span>
                                 </button>
                             </form>
                         </div>
@@ -333,18 +557,36 @@
                         <div x-data="{ show: true }"
                              x-show="show"
                              x-transition.opacity.duration.200ms
-                             class="mb-6 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3.5 text-sm text-emerald-800 shadow-sm">
+                             role="status"
+                             class="mb-6 flex items-center justify-between rounded-xl border border-acode-accent/40 bg-acode-accent/10 px-4 py-3.5 text-sm text-acode-primary shadow-sm">
                             <div class="flex items-center gap-2.5">
-                                <svg class="h-5 w-5 shrink-0 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                </svg>
+                                <x-icon name="success" class="h-5 w-5 text-acode-accent" />
                                 <span class="font-medium">{{ session('status') ?? session('success') }}</span>
                             </div>
                             <button type="button"
                                     @click="show = false"
-                                    class="text-emerald-600 hover:text-emerald-900 focus:outline-none p-1 rounded-lg hover:bg-emerald-100 transition"
+                                    class="rounded-lg p-1 text-acode-primary/70 transition hover:bg-acode-accent/20 hover:text-acode-primary focus:outline-none"
                                     aria-label="Cerrar notificación">
-                                ✕
+                                <x-icon name="xMark" class="h-4 w-4" />
+                            </button>
+                        </div>
+                    @endif
+
+                    @if (session('warning'))
+                        <div x-data="{ show: true }"
+                             x-show="show"
+                             x-transition.opacity.duration.200ms
+                             role="alert"
+                             class="mb-6 flex items-center justify-between rounded-xl border border-acode-warning/60 bg-acode-warning/15 px-4 py-3.5 text-sm text-acode-primary shadow-sm">
+                            <div class="flex items-center gap-2.5">
+                                <x-icon name="warning" class="h-5 w-5 text-acode-warning-dark" />
+                                <span class="font-medium">{{ session('warning') }}</span>
+                            </div>
+                            <button type="button"
+                                    @click="show = false"
+                                    class="rounded-lg p-1 text-acode-primary/70 transition hover:bg-acode-warning/25 hover:text-acode-primary focus:outline-none"
+                                    aria-label="Cerrar advertencia">
+                                <x-icon name="xMark" class="h-4 w-4" />
                             </button>
                         </div>
                     @endif
@@ -353,24 +595,23 @@
                         <div x-data="{ show: true }"
                              x-show="show"
                              x-transition.opacity.duration.200ms
-                             class="mb-6 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-800 shadow-sm">
+                             role="alert"
+                             class="mb-6 flex items-center justify-between rounded-xl border border-acode-danger/30 bg-acode-danger/10 px-4 py-3.5 text-sm text-acode-danger shadow-sm">
                             <div class="flex items-center gap-2.5">
-                                <svg class="h-5 w-5 shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                </svg>
+                                <x-icon name="error" class="h-5 w-5 text-acode-danger" />
                                 <span class="font-medium">{{ session('error') }}</span>
                             </div>
                             <button type="button"
                                     @click="show = false"
-                                    class="text-red-600 hover:text-red-900 focus:outline-none p-1 rounded-lg hover:bg-red-100 transition"
+                                    class="rounded-lg p-1 text-acode-danger/70 transition hover:bg-acode-danger/15 hover:text-acode-danger focus:outline-none"
                                     aria-label="Cerrar alerta">
-                                ✕
+                                <x-icon name="xMark" class="h-4 w-4" />
                             </button>
                         </div>
                     @endif
 
-                    @if ($errors->any() && !request()->routeIs('exams.create', 'questions.create', 'questions.edit', 'questions.batch.create'))
-                        <div class="mb-6 rounded-lg border border-acode-danger/30 bg-acode-danger/10 px-4 py-3 text-sm text-acode-danger">
+                    @if ($errors->any() && empty($showPlanOnboardingOverlay) && !request()->routeIs('exams.*', 'questions.create', 'questions.edit', 'questions.batch.create'))
+                        <div class="mb-6 rounded-xl border border-acode-danger/30 bg-acode-danger/10 px-4 py-3.5 text-sm text-acode-danger">
                             <p class="mb-1 font-semibold">Revisa lo siguiente:</p>
                             <ul class="list-inside list-disc space-y-0.5">
                                 @foreach ($errors->all() as $error)
@@ -389,7 +630,7 @@
                         <div class="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 text-center sm:text-left">
                             <span class="font-semibold text-acode-primary">© 2026 A-Code Solutions.</span>
                             <span>Plataforma Evaluadora de Exámenes. Todos los derechos reservados.</span>
-                            <span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-600">v1.0.0</span>
+                            <span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-600">v1.0.0</span>
                         </div>
                         <nav class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500">
                             <a href="#" class="transition hover:text-acode-tech">Términos del Servicio</a>

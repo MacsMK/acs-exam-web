@@ -13,7 +13,7 @@ declare(strict_types=1);
  *              verificar pertenencia por QR/folio, listar alumnos de un grupo
  *              y salir de un grupo (alumno). Cada grupo incluye su materia, el
  *              nombre del docente y, para el alumno, la fecha en que se unió
- *              (ADR-056).
+ *              (ADR-061).
  * ============================================================================
  */
 
@@ -122,7 +122,7 @@ class GroupController extends Controller
     }
 
     /**
-     * Datos de un grupo para la app (ADR-056). `teacher` debe venir
+     * Datos de un grupo para la app (ADR-061). `teacher` debe venir
      * cargado. `joined_at` solo existe cuando el grupo se obtuvo desde la
      * relación del alumno (tabla acs_group_student); para el docente es null.
      *

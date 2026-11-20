@@ -23,6 +23,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\DB;
 
 use App\Exceptions\SubscriptionLimitExceededException;
+use App\Models\AiCreditUsage;
 use App\Models\Exam;
 use App\Models\Group;
 use App\Models\Question;
@@ -32,11 +33,12 @@ use App\Models\User;
 
 class SubscriptionLimitService
 {
-    // Cotas Oficiales para la Prueba Gratuita Freemium (RF-SUS-008, RF-SUS-010)
+    // Cotas Oficiales para la Prueba Gratuita Freemium (RF-SUS-008, RF-SUS-010, ADR-059)
     public const FREEMIUM_MAX_CUMULATIVE_GROUPS = 1;
     public const FREEMIUM_MAX_CUMULATIVE_EXAMS  = 1;
     public const FREEMIUM_MAX_QUESTIONS         = 50;
     public const FREEMIUM_MAX_STUDENTS_PER_GROUP = 40;
+    public const FREEMIUM_MAX_AI_EVALUATIONS    = 25;
 
     /**
      * Valida si el docente tiene cupo para crear un nuevo grupo escolar.
@@ -301,6 +303,182 @@ class SubscriptionLimitService
                 $currentStudents,
                 $maxStudents,
                 $package?->tier ?? 'freemium'
+            );
+        }
+    }
+
+    /**
+     * Calcula el resumen vigente de créditos de evaluación con IA para el docente
+     * (Freemium histórico acumulado, planes de pago por ciclo vigente o ilimitado Pro).
+     *
+     * @param User $teacher Cuenta docente titular.
+     * @return array{
+     *     used: int,
+     *     limit: ?int,
+     *     remaining: ?int,
+     *     is_unlimited: bool,
+     *     tier: string,
+     *     package_name: string,
+     *     percent: int,
+     *     variant: string,
+     *     is_suspended: bool,
+     *     cycle_label: string
+     * }
+     */
+    public function getAiCreditQuotaSummary(User $teacher): array
+    {
+        try {
+            $package = $this->resolveActivePackage($teacher);
+        } catch (SubscriptionLimitExceededException) {
+            $used = (int) AiCreditUsage::query()
+                ->where('teacher_id', $teacher->id)
+                ->where('status', AiCreditUsage::STATUS_CONSUMED)
+                ->sum('credits_consumed');
+
+            return [
+                'used' => $used,
+                'limit' => 0,
+                'remaining' => 0,
+                'is_unlimited' => false,
+                'tier' => 'suspended',
+                'package_name' => 'Suscripción Suspendida',
+                'percent' => 100,
+                'variant' => 'danger',
+                'is_suspended' => true,
+                'cycle_label' => 'Suscripción suspendida',
+            ];
+        }
+
+        if ($package === null) {
+            $used = (int) AiCreditUsage::query()
+                ->where('teacher_id', $teacher->id)
+                ->where('status', AiCreditUsage::STATUS_CONSUMED)
+                ->sum('credits_consumed');
+
+            $limit = self::FREEMIUM_MAX_AI_EVALUATIONS;
+            $remaining = max(0, $limit - $used);
+            $percent = min(100, (int) round(($used / max(1, $limit)) * 100));
+            $variant = $percent >= 90 ? 'danger' : ($percent >= 75 ? 'warning' : 'tech');
+
+            return [
+                'used' => $used,
+                'limit' => $limit,
+                'remaining' => $remaining,
+                'is_unlimited' => false,
+                'tier' => 'freemium',
+                'package_name' => 'Prueba Gratuita (Freemium)',
+                'percent' => $percent,
+                'variant' => $variant,
+                'is_suspended' => false,
+                'cycle_label' => 'Prueba gratuita (histórico acumulado)',
+            ];
+        }
+
+        $cycleStart = $teacher->subscription?->starts_at ?? now()->startOfMonth();
+        $used = (int) AiCreditUsage::query()
+            ->where('teacher_id', $teacher->id)
+            ->where('status', AiCreditUsage::STATUS_CONSUMED)
+            ->where('created_at', '>=', $cycleStart)
+            ->sum('credits_consumed');
+
+        $limit = $package->ai_requests_limit;
+        $cycleLabel = $teacher->subscription?->starts_at !== null
+            ? 'Ciclo vigente desde '.$teacher->subscription->starts_at->format('d/m/Y')
+            : 'Ciclo mensual vigente';
+
+        if ($limit === null) {
+            return [
+                'used' => $used,
+                'limit' => null,
+                'remaining' => null,
+                'is_unlimited' => true,
+                'tier' => (string) $package->tier,
+                'package_name' => (string) $package->name,
+                'percent' => 0,
+                'variant' => 'accent',
+                'is_suspended' => false,
+                'cycle_label' => $cycleLabel,
+            ];
+        }
+
+        $remaining = max(0, $limit - $used);
+        $percent = min(100, (int) round(($used / max(1, $limit)) * 100));
+        $variant = $percent >= 90 ? 'danger' : ($percent >= 75 ? 'warning' : 'tech');
+
+        return [
+            'used' => $used,
+            'limit' => $limit,
+            'remaining' => $remaining,
+            'is_unlimited' => false,
+            'tier' => (string) $package->tier,
+            'package_name' => (string) $package->name,
+            'percent' => $percent,
+            'variant' => $variant,
+            'is_suspended' => false,
+            'cycle_label' => $cycleLabel,
+        ];
+    }
+
+    /**
+     * Valida si el docente dispone de créditos suficientes para ejecutar N
+     * evaluaciones con IA, aplicando bloqueo pesimista si hay transacción abierta.
+     *
+     * @param User $teacher Cuenta docente solicitante.
+     * @param int $creditsNeeded Cantidad de créditos requeridos.
+     * @return void
+     *
+     * @throws SubscriptionLimitExceededException
+     */
+    public function ensureCanConsumeAiCredits(User $teacher, int $creditsNeeded = 1): void
+    {
+        if ($creditsNeeded <= 0) {
+            return;
+        }
+
+        $subjectTeacher = $teacher;
+
+        if (DB::transactionLevel() > 0) {
+            $subjectTeacher = User::query()
+                ->with('subscription.subscriptionPackage')
+                ->whereKey($teacher->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+        }
+
+        $summary = $this->getAiCreditQuotaSummary($subjectTeacher);
+
+        if ($summary['is_suspended']) {
+            throw new SubscriptionLimitExceededException(
+                'Tu suscripción docente se encuentra temporalmente suspendida por falta de pago.',
+                'ai_credits',
+                $summary['used'],
+                0,
+                'suspended'
+            );
+        }
+
+        if (! $summary['is_unlimited'] && ($summary['remaining'] ?? 0) < $creditsNeeded) {
+            $message = $summary['tier'] === 'freemium'
+                ? sprintf(
+                    'Has agotado tu cupo de %d evaluaciones con IA de la Prueba Gratuita (disponibles: %d, solicitadas: %d). Contrata un plan para continuar.',
+                    $summary['limit'] ?? self::FREEMIUM_MAX_AI_EVALUATIONS,
+                    $summary['remaining'] ?? 0,
+                    $creditsNeeded
+                )
+                : sprintf(
+                    'No cuentas con créditos de IA suficientes en tu paquete %s (disponibles: %d de %d, solicitados: %d). Actualiza tu plan o espera el próximo ciclo.',
+                    $summary['package_name'],
+                    $summary['remaining'] ?? 0,
+                    $summary['limit'] ?? 0,
+                    $creditsNeeded
+                );
+
+            throw new SubscriptionLimitExceededException(
+                $message,
+                'ai_credits',
+                $summary['used'],
+                $summary['limit'],
+                $summary['tier']
             );
         }
     }

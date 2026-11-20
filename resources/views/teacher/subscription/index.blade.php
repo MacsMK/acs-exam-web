@@ -1,159 +1,226 @@
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: teacher/subscription/index.blade.php (MPW-V2 §4.1.2, §7.3, §7.8.2, §8.5, §8.6, Tabla 20) --}}
 @extends('layouts.app')
 
-@section('title', 'Suscripción SaaS y Cuotas')
+@section('title', 'Suscripción y límites de uso')
 
 @section('content')
-<div class="space-y-8 max-w-6xl mx-auto">
+<div class="space-y-6">
     {{-- Encabezado --}}
-    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-5">
-        <div>
-            <h1 class="text-2xl font-bold text-acode-primary">Suscripción SaaS y Límites de Uso</h1>
-            <p class="text-sm text-slate-500 mt-1">
-                Consulte sus cuotas de servicio, vigencia de plan y solicite ampliaciones comerciales de su paquete docente.
-            </p>
-        </div>
-
-        <div class="flex items-center gap-3">
-            @php
-                $waMessage = urlencode("Hola A-Code Solutions, deseo solicitar/renovar un paquete docente para mi cuenta:\nDocente: {$teacher->full_name}\nCorreo: {$teacher->email}\nID: {$teacher->id}");
-            @endphp
-            <a
-                href="https://wa.me/{{ $whatsappNumber }}?text={{ $waMessage }}"
+    <x-page-header
+        title="Suscripción y límites de uso"
+        subtitle="Consulta tus cuotas de servicio, la vigencia de tu plan y activa o renueva tu paquete docente al instante."
+    >
+        <x-slot:actions>
+            <x-button
+                variant="accent"
+                size="md"
+                :href="'https://wa.me/' . $whatsappNumber . '?text=' . urlencode('Hola A-Code Solutions, deseo solicitar/renovar un paquete docente para mi cuenta:' . PHP_EOL . 'Docente: ' . $teacher->full_name . PHP_EOL . 'Correo: ' . $teacher->email . PHP_EOL . 'ID: ' . $teacher->id)"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex items-center gap-2 bg-[#25D366] hover:bg-[#1EBE5D] text-white font-semibold text-sm px-4 py-2.5 rounded-lg shadow-sm transition-all duration-200 hover:shadow active:scale-[0.98]"
             >
-                <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
-                </svg>
-                Atención Comercial por WhatsApp
-            </a>
-        </div>
-    </div>
+                <x-icon name="chat" class="w-4 h-4" />
+                Abrir WhatsApp comercial
+            </x-button>
+        </x-slot:actions>
+    </x-page-header>
 
-    {{-- Estado actual del docente --}}
+    {{-- Banner de Onboarding (docente recién verificado sin paquete ni prueba completada) --}}
+    @if ($isOnboarding ?? false)
+        <x-card class="border-acode-accent/40 bg-gradient-to-r from-acode-accent/10 via-white to-acode-surface/60">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div class="flex items-start gap-3.5">
+                    <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-acode-accent text-white shadow-sm">
+                        <x-icon name="success" class="w-6 h-6" />
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <x-badge variant="accent">Cuenta verificada</x-badge>
+                            <span class="text-xs font-semibold uppercase tracking-wider text-acode-tech">Paso inicial de suscripción</span>
+                        </div>
+                        <p class="text-sm font-medium text-acode-primary leading-relaxed">
+                            ¡Tu cuenta docente ya está verificada! Elige un paquete para activar tus cuotas al instante mediante pago simulado, contrata por WhatsApp o inicia gratis.
+                        </p>
+                    </div>
+                </div>
+
+                <form method="POST" action="{{ route('teacher.subscription.free-trial') }}" class="shrink-0">
+                    @csrf
+                    <x-button type="submit" variant="accent" size="md" class="w-full lg:w-auto">
+                        <x-icon name="check" class="w-4 h-4" />
+                        Continuar con prueba gratuita
+                    </x-button>
+                </form>
+            </div>
+        </x-card>
+    @endif
+
+    {{-- Alerta por suscripción suspendida o vencida --}}
+    @if ($isSuspendedSubscription ?? false)
+        <x-card class="border-acode-danger/40 bg-acode-danger/5">
+            <div class="flex items-start gap-3">
+                <x-icon name="warning" class="w-5 h-5 text-acode-danger shrink-0 mt-0.5" />
+                <div class="space-y-1">
+                    <p class="text-sm font-bold text-acode-danger">Suscripción suspendida o vencida</p>
+                    <p class="text-xs text-slate-700 leading-relaxed">
+                        Tu suscripción anterior requiere renovación para restablecer tus cuotas de paquete. Elige un paquete en el catálogo inferior para reactivar tu plan al instante.
+                    </p>
+                </div>
+            </div>
+        </x-card>
+    @endif
+
+    {{-- Estado actual del docente y consumo de cuotas --}}
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <x-card class="lg:col-span-1 border-acode-tech/30 bg-gradient-to-br from-white to-acode-surface/30">
-            <h3 class="text-sm font-semibold uppercase tracking-wider text-acode-tech mb-1">Plan Actual</h3>
+        <x-card class="lg:col-span-1 border-acode-tech/30 bg-gradient-to-br from-white to-acode-surface/40">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-acode-tech mb-1">Plan actual</h2>
             <div class="flex items-baseline gap-2 mb-2">
                 <span class="text-2xl font-black text-acode-primary">
                     {{ $activePackage ? $activePackage->name : 'Prueba Freemium' }}
                 </span>
             </div>
-            <p class="text-xs text-slate-500 mb-4">
+            <p class="text-xs text-slate-500 mb-4 leading-relaxed">
                 {{ $activePackage ? 'Paquete activo con cuota mensual asignada.' : 'Beneficio gratuito inicial (RF-SUS-010: límite histórico acumulado).' }}
             </p>
 
             <div class="pt-3 border-t border-slate-200/60 text-xs text-slate-600 space-y-2">
-                <div class="flex justify-between">
+                <div class="flex justify-between items-center gap-2">
                     <span>Estado:</span>
-                    <span class="font-semibold text-emerald-700">● Activo</span>
+                    @if ($isSuspendedSubscription ?? false)
+                        <x-badge variant="danger">Suspendido</x-badge>
+                    @else
+                        <x-badge variant="accent">Activo</x-badge>
+                    @endif
                 </div>
-                <div class="flex justify-between">
+                @if (($currentSubscription ?? null)?->expires_at)
+                    <div class="flex justify-between items-center gap-2">
+                        <span>Vigencia:</span>
+                        <span class="font-medium text-slate-800">{{ $currentSubscription->expires_at->format('d/m/Y') }}</span>
+                    </div>
+                @endif
+                <div class="flex justify-between items-center gap-2">
                     <span>Modalidad de pago:</span>
-                    <span class="font-medium text-slate-800">Transferencia / WhatsApp</span>
+                    <span class="font-medium text-slate-800 text-right">
+                        {{ $activePackage ? 'Pago en línea simulado / WhatsApp' : 'Prueba gratuita / WhatsApp' }}
+                    </span>
                 </div>
             </div>
         </x-card>
 
-        {{-- Barras de cuotas y consumo --}}
-        <x-card class="lg:col-span-2 space-y-4">
-            <h3 class="text-base font-bold text-acode-primary mb-3">Consumo de Cuotas del Paquete</h3>
+        {{-- Barras de cuotas y consumo (consumidas desde TeacherSubscriptionService::$quotaMetrics) --}}
+        <x-card class="lg:col-span-2 space-y-5">
+            <h2 class="text-base font-bold text-acode-primary">Consumo de cuotas del paquete</h2>
 
             {{-- Grupos escolares --}}
-            @php
-                $maxGroups = $activePackage?->max_groups ?? 1;
-                $usedGroups = $activePackage ? $activeGroupsCount : $cumulativeGroupsCount;
-                $pctGroups = min(100, (int) round(($usedGroups / max(1, $maxGroups)) * 100));
-            @endphp
             <div>
-                <div class="flex justify-between text-xs font-semibold mb-1">
-                    <span class="text-slate-700">Grupos Escolares Creados</span>
-                    <span class="text-acode-primary">{{ $usedGroups }} / {{ $maxGroups }}</span>
+                <div class="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold mb-1.5">
+                    <div>
+                        <span class="text-slate-700">Grupos escolares</span>
+                        <span class="ml-1.5 font-normal text-slate-500">({{ $quotaMetrics['groups']['description'] }})</span>
+                    </div>
+                    <span class="{{ $quotaMetrics['groups']['is_unlimited'] ? 'text-acode-accent font-bold' : 'text-acode-primary' }}">
+                        {{ $quotaMetrics['groups']['usage_label'] }}
+                    </span>
                 </div>
-                <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div class="h-full {{ $pctGroups >= 100 ? 'bg-acode-danger' : 'bg-acode-tech' }} rounded-full transition-all duration-500" style="width: {{ $pctGroups }}%"></div>
-                </div>
-                @if (!$activePackage && $usedGroups >= 1)
-                    <p class="text-[11px] text-acode-danger mt-1">Cota máxima de prueba gratuita alcanzada. Contrata un plan para agregar más grupos.</p>
+                <x-progress-bar
+                    :value="$quotaMetrics['groups']['percent']"
+                    :variant="$quotaMetrics['groups']['variant']"
+                    label="Grupos escolares creados"
+                />
+                @if (! $activePackage && ! ($isSuspendedSubscription ?? false) && $cumulativeGroupsCount >= 1)
+                    <p class="text-xs text-acode-danger mt-1.5">Alcanzaste el límite de tu prueba gratuita. Contrata un paquete para agregar más grupos.</p>
                 @endif
             </div>
 
             {{-- Banco de preguntas --}}
-            @php
-                $isUnlimitedQuestions = $activePackage !== null && $activePackage->max_questions === null;
-                $maxQuestions = $isUnlimitedQuestions ? null : ($activePackage?->max_questions ?? 50);
-                $pctQuestions = $isUnlimitedQuestions
-                    ? 100
-                    : min(100, (int) round(($questionsCount / max(1, (int) $maxQuestions)) * 100));
-            @endphp
             <div>
-                <div class="flex justify-between text-xs font-semibold mb-1">
-                    <span class="text-slate-700">Reactivos en Banco de Preguntas</span>
-                    @if ($isUnlimitedQuestions)
-                        <span class="text-acode-accent font-bold">{{ $questionsCount }} / Ilimitado</span>
-                    @else
-                        <span class="text-acode-primary">{{ $questionsCount }} / {{ number_format((int) $maxQuestions) }}</span>
-                    @endif
+                <div class="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold mb-1.5">
+                    <div>
+                        <span class="text-slate-700">Reactivos en banco de preguntas</span>
+                        <span class="ml-1.5 font-normal text-slate-500">({{ $quotaMetrics['questions']['description'] }})</span>
+                    </div>
+                    <span class="{{ $quotaMetrics['questions']['is_unlimited'] ? 'text-acode-accent font-bold' : 'text-acode-primary' }}">
+                        {{ $quotaMetrics['questions']['usage_label'] }}
+                    </span>
                 </div>
-                <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    @if ($isUnlimitedQuestions)
-                        <div class="h-full w-full bg-acode-accent rounded-full transition-all duration-500"></div>
-                    @else
-                        <div class="h-full {{ $pctQuestions >= 100 ? 'bg-acode-danger' : 'bg-acode-accent' }} rounded-full transition-all duration-500" style="width: {{ $pctQuestions }}%"></div>
-                    @endif
-                </div>
+                <x-progress-bar
+                    :value="$quotaMetrics['questions']['percent']"
+                    :variant="$quotaMetrics['questions']['variant']"
+                    label="Reactivos en banco de preguntas"
+                />
             </div>
 
             {{-- Exámenes activos --}}
-            @php
-                $maxExams = $activePackage?->max_active_exams ?? 1;
-                $usedExams = $activePackage ? $examsCount : $cumulativeExamsCount;
-                $pctExams = min(100, (int) round(($usedExams / max(1, $maxExams)) * 100));
-            @endphp
             <div>
-                <div class="flex justify-between text-xs font-semibold mb-1">
-                    <span class="text-slate-700">Exámenes Guardados / Activos</span>
-                    <span class="text-acode-primary">{{ $usedExams }} / {{ $maxExams }}</span>
+                <div class="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold mb-1.5">
+                    <div>
+                        <span class="text-slate-700">Exámenes guardados / activos</span>
+                        <span class="ml-1.5 font-normal text-slate-500">({{ $quotaMetrics['exams']['description'] }})</span>
+                    </div>
+                    <span class="{{ $quotaMetrics['exams']['is_unlimited'] ? 'text-acode-accent font-bold' : 'text-acode-primary' }}">
+                        {{ $quotaMetrics['exams']['usage_label'] }}
+                    </span>
                 </div>
-                <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div class="h-full {{ $pctExams >= 100 ? 'bg-acode-danger' : 'bg-acode-primary' }} rounded-full transition-all duration-500" style="width: {{ $pctExams }}%"></div>
+                <x-progress-bar
+                    :value="$quotaMetrics['exams']['percent']"
+                    :variant="$quotaMetrics['exams']['variant']"
+                    label="Exámenes guardados o activos"
+                />
+            </div>
+
+            {{-- Créditos de Inteligencia Artificial --}}
+            <div>
+                <div class="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold mb-1.5">
+                    <div>
+                        <span class="text-slate-700">Créditos de inteligencia artificial</span>
+                        <span class="ml-1.5 font-normal text-slate-500">({{ $quotaMetrics['aiCredits']['description'] }})</span>
+                    </div>
+                    <span class="{{ $quotaMetrics['aiCredits']['is_unlimited'] ? 'text-acode-accent font-bold' : 'text-acode-primary' }}">
+                        {{ $quotaMetrics['aiCredits']['usage_label'] }}
+                    </span>
                 </div>
+                <x-progress-bar
+                    :value="$quotaMetrics['aiCredits']['percent']"
+                    :variant="$quotaMetrics['aiCredits']['variant']"
+                    label="Créditos de inteligencia artificial utilizados"
+                />
             </div>
         </x-card>
     </div>
 
     {{-- Catálogo de Paquetes Oficiales (MPW-V2 Tabla 15) --}}
     <div class="space-y-4">
-        <h2 class="text-xl font-bold text-acode-primary">Catálogo de Paquetes Disponibles</h2>
+        <x-section-header
+            title="Catálogo de paquetes docentes"
+            subtitle="Elige el paquete que mejor se adapte a tus grupos y actívalo de inmediato."
+        />
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            @foreach ($packages as $pkg)
-                @php
-                    $isCurrent = $activePackage && $activePackage->id === $pkg->id;
-                    $pkgWaMessage = urlencode("Hola A-Code Solutions, me interesa contratar/renovar el paquete {$pkg->name} (\${$pkg->monthly_price} MXN/mes) para mi cuenta docente:\nNombre: {$teacher->full_name}\nCorreo: {$teacher->email}");
-                @endphp
-                <x-card class="flex flex-col justify-between relative {{ $isCurrent ? 'ring-2 ring-acode-tech shadow-md' : 'border-slate-200' }}">
-                    @if ($isCurrent)
-                        <span class="absolute -top-3 right-4 bg-acode-tech text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-sm">
-                            Tu Plan Actual
-                        </span>
+            @forelse ($packages as $pkg)
+                <x-card class="flex flex-col justify-between relative {{ ($activePackage && $activePackage->id === $pkg->id) ? 'ring-2 ring-acode-accent shadow-md' : 'border-slate-200' }}">
+                    @if ($activePackage && $activePackage->id === $pkg->id)
+                        <div class="absolute -top-3 right-4 rounded-full bg-white shadow-sm">
+                            <x-badge variant="accent">Tu plan actual</x-badge>
+                        </div>
                     @endif
 
                     <div>
                         <h3 class="text-lg font-bold text-acode-primary mb-1">{{ $pkg->name }}</h3>
                         <div class="flex items-baseline gap-1 my-3">
-                            <span class="text-3xl font-extrabold text-acode-primary">${{ number_format((float) $pkg->monthly_price, 0) }}</span>
+                            <span class="text-3xl font-extrabold text-acode-primary tabular-nums">${{ number_format((float) $pkg->monthly_price, 0) }}</span>
                             <span class="text-xs text-slate-500">MXN / mes</span>
                         </div>
 
                         <ul class="space-y-2.5 text-xs text-slate-600 my-5">
                             <li class="flex items-center gap-2">
-                                <span class="text-acode-accent font-bold">✓</span>
-                                <span>Hasta <strong>{{ $pkg->max_groups ?? 'Ilimitados' }}</strong> grupos escolares</span>
+                                <x-icon name="check" class="w-4 h-4 text-acode-accent shrink-0" />
+                                @if ($pkg->max_groups === null)
+                                    <span><strong>Ilimitados</strong> grupos escolares</span>
+                                @else
+                                    <span>Hasta <strong>{{ number_format((int) $pkg->max_groups) }}</strong> grupos escolares</span>
+                                @endif
                             </li>
                             <li class="flex items-center gap-2">
-                                <span class="text-acode-accent font-bold">✓</span>
+                                <x-icon name="check" class="w-4 h-4 text-acode-accent shrink-0" />
                                 @if ($pkg->max_questions === null)
                                     <span><strong>Ilimitados</strong> reactivos en banco</span>
                                 @else
@@ -161,39 +228,119 @@
                                 @endif
                             </li>
                             <li class="flex items-center gap-2">
-                                <span class="text-acode-accent font-bold">✓</span>
+                                <x-icon name="check" class="w-4 h-4 text-acode-accent shrink-0" />
                                 <span>Hasta <strong>{{ $pkg->max_concurrent_students }}</strong> alumnos en vivo</span>
                             </li>
                             <li class="flex items-center gap-2">
-                                <span class="text-acode-accent font-bold">✓</span>
-                                <span>Hasta <strong>{{ $pkg->max_active_exams }}</strong> exámenes guardados</span>
+                                <x-icon name="check" class="w-4 h-4 text-acode-accent shrink-0" />
+                                @if ($pkg->max_active_exams === null)
+                                    <span><strong>Ilimitados</strong> exámenes guardados</span>
+                                @else
+                                    <span>Hasta <strong>{{ number_format((int) $pkg->max_active_exams) }}</strong> exámenes guardados</span>
+                                @endif
                             </li>
                             <li class="flex items-center gap-2">
-                                <span class="text-acode-accent font-bold">✓</span>
-                                <span>Evaluación con IA Gemini incluida</span>
+                                <x-icon name="check" class="w-4 h-4 text-acode-accent shrink-0" />
+                                <span>{{ $pkg->ai_requests_limit !== null ? 'Hasta ' . number_format((int) $pkg->ai_requests_limit) . ' evaluaciones IA / mes' : 'Evaluaciones con IA ilimitadas' }}</span>
                             </li>
                         </ul>
                     </div>
 
-                    <div class="pt-4 border-t border-slate-100">
-                        @if ($isCurrent)
-                            <x-button variant="neutral" class="w-full" disabled>
-                                Plan Vigente
+                    <div class="pt-4 border-t border-slate-100 space-y-2.5">
+                        @if ($activePackage && $activePackage->id === $pkg->id)
+                            <x-button variant="neutral" size="md" class="w-full" disabled>
+                                Plan vigente
                             </x-button>
                         @else
-                            <a
-                                href="https://wa.me/{{ $whatsappNumber }}?text={{ $pkgWaMessage }}"
+                            <x-button :href="route('teacher.subscription.checkout', $pkg)" variant="primary" size="md" class="w-full">
+                                <x-icon name="lock" class="w-4 h-4" />
+                                Contratar este paquete
+                            </x-button>
+
+                            <x-button
+                                :href="'https://wa.me/' . $whatsappNumber . '?text=' . urlencode('Hola A-Code Solutions, me interesa contratar/renovar el paquete ' . $pkg->name . ' ($' . $pkg->monthly_price . ' MXN/mes) para mi cuenta docente:' . PHP_EOL . 'Nombre: ' . $teacher->full_name . PHP_EOL . 'Correo: ' . $teacher->email)"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                class="inline-flex w-full items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1EBE5D] text-white font-semibold text-sm px-4 py-2.5 rounded-lg shadow-sm transition-all duration-200 active:scale-[0.98]"
+                                variant="neutral"
+                                size="md"
+                                class="w-full"
                             >
+                                <x-icon name="chat" class="w-4 h-4" />
                                 Contratar vía WhatsApp
-                            </a>
+                            </x-button>
                         @endif
                     </div>
                 </x-card>
-            @endforeach
+            @empty
+                <div class="md:col-span-3">
+                    <x-empty-state
+                        icon="document"
+                        title="Sin paquetes disponibles"
+                        message="No hay paquetes de suscripción disponibles en este momento. Contáctanos por WhatsApp para recibir asistencia comercial."
+                    />
+                </div>
+            @endforelse
         </div>
+    </div>
+
+    {{-- Historial de pagos y comprobantes (RF-SUS-013) --}}
+    <div class="space-y-4">
+        <x-section-header
+            title="Historial de pagos"
+            subtitle="Registro de transacciones y comprobantes procesados en tu cuenta docente."
+        />
+
+        <x-table>
+            <x-slot:header>
+                <x-table.th>Folio</x-table.th>
+                <x-table.th>Fecha</x-table.th>
+                <x-table.th>Paquete</x-table.th>
+                <x-table.th>Método</x-table.th>
+                <x-table.th>Monto</x-table.th>
+                <x-table.th>Estado</x-table.th>
+            </x-slot:header>
+
+            @forelse (($transactions ?? collect()) as $tx)
+                <tr>
+                    <x-table.td class="whitespace-nowrap font-mono text-xs font-bold text-acode-primary">
+                        {{ $tx->reference_code }}
+                    </x-table.td>
+                    <x-table.td class="whitespace-nowrap text-xs text-slate-600">
+                        {{ $tx->created_at?->format('d/m/Y H:i') ?? '—' }}
+                    </x-table.td>
+                    <x-table.td class="font-semibold text-acode-primary text-xs">
+                        {{ $tx->package?->name ?? 'Paquete SaaS' }}
+                    </x-table.td>
+                    <x-table.td class="text-xs text-slate-700">
+                        {{ $tx->maskedPaymentSummary() }}
+                    </x-table.td>
+                    <x-table.td class="whitespace-nowrap font-semibold text-acode-primary text-xs tabular-nums">
+                        ${{ number_format((float) $tx->amount, 2) }} MXN
+                    </x-table.td>
+                    <x-table.td>
+                        @if ($tx->status === 'paid')
+                            <x-badge variant="success">Pagado</x-badge>
+                        @else
+                            <x-badge variant="danger">Rechazado</x-badge>
+                            @if ($tx->failure_message)
+                                <p class="mt-1 text-xs text-acode-danger max-w-xs">{{ $tx->failure_message }}</p>
+                            @endif
+                        @endif
+                    </x-table.td>
+                </tr>
+            @empty
+                <tr>
+                    <td colspan="6" class="p-0">
+                        <x-empty-state
+                            class="border-0 shadow-none rounded-none py-8"
+                            icon="document"
+                            title="Sin pagos registrados"
+                            message="Aún no tienes pagos ni comprobantes registrados en tu historial."
+                        />
+                    </td>
+                </tr>
+            @endforelse
+        </x-table>
     </div>
 </div>
 @endsection

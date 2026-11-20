@@ -70,8 +70,8 @@
     <div
         class="font-mono text-sm px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-2 transition-all duration-300 border"
         :class="remaining <= 10
-            ? 'bg-acode-danger/10 text-acode-danger border-acode-danger/30 animate-pulse ring-2 ring-acode-danger/20'
-            : 'bg-acode-surface text-acode-primary border-slate-200'"
+            ? 'bg-acode-danger/10 text-acode-danger border-acode-danger/40 animate-pulse ring-2 ring-acode-danger/20'
+            : 'bg-acode-surface text-acode-primary border-acode-tech/30'"
         role="timer"
         aria-live="polite"
         :aria-label="'Tiempo restante: ' + formattedTime()"

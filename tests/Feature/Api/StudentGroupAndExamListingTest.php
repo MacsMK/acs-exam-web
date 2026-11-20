@@ -8,7 +8,7 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     StudentGroupAndExamListingTest.php
  * Ubicación:   tests/Feature/Api/StudentGroupAndExamListingTest.php
- * Descripción: Datos de las tarjetas del alumno en la API móvil (ADR-056):
+ * Descripción: Datos de las tarjetas del alumno en la API móvil (ADR-061):
  *              materia, docente y fecha de ingreso en api.v1.groups.index y
  *              api.v1.groups.join; docente, grupo con materia, número de
  *              preguntas e intento del alumno en api.v1.exams.index. Incluye

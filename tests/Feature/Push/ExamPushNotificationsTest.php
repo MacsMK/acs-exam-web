@@ -289,7 +289,7 @@ class ExamPushNotificationsTest extends TestCase
             'exam_section_id' => $section->id,
             'question_id' => $question->id,
             'time_limit_seconds' => 60,
-            'points_weight' => 10,
+            'points_weight' => 100,
             'sort_order' => 0,
         ]);
 

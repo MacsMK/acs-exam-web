@@ -21,6 +21,8 @@ use App\Models\StudentAttempt;
 use App\Services\GroupEnrollmentService;
 use DomainException;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Http\RedirectResponse;
 
 class GroupController extends Controller
@@ -54,7 +56,13 @@ class GroupController extends Controller
 
         $group->load([
             'students',
-            'exams',
+            'exams' => static function (BelongsToMany $query) use ($group): void {
+                $query->withCount([
+                    'studentAttempts as group_attempts_count' => static function (Builder $attemptQuery) use ($group): void {
+                        $attemptQuery->where('group_id', $group->id);
+                    },
+                ]);
+            },
             'evaluationPeriods',
         ]);
 

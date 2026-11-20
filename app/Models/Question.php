@@ -287,15 +287,20 @@ class Question extends Model
         $normalizedTerm = Subject::normalizeName($cleanTerm);
         $subjectColumn = $this->qualifyColumn('subject_tag');
 
+        $titleColumn = $this->qualifyColumn('title');
+        $stemColumn = $this->qualifyColumn('stem');
+
         return $query->where(function (Builder $subQuery) use (
             $driver,
             $likeOperator,
             $searchPattern,
             $normalizedTerm,
-            $subjectColumn
+            $subjectColumn,
+            $titleColumn,
+            $stemColumn
         ): void {
-            $subQuery->where($this->qualifyColumn('title'), $likeOperator, $searchPattern)
-                ->orWhere($this->qualifyColumn('stem'), $likeOperator, $searchPattern)
+            $subQuery->where($titleColumn, $likeOperator, $searchPattern)
+                ->orWhere($stemColumn, $likeOperator, $searchPattern)
                 ->orWhere($subjectColumn, $likeOperator, $searchPattern);
 
             if ($normalizedTerm !== '') {
@@ -306,10 +311,33 @@ class Question extends Model
                 });
 
                 if ($driver === 'pgsql') {
-                    $subQuery->orWhereRaw(
-                        $this->normalizedSubjectSqlExpression($subjectColumn) . ' LIKE ?',
-                        [$normalizedPattern]
-                    );
+                    $subQuery
+                        ->orWhereRaw(
+                            $this->foldAccentsSqlExpression($titleColumn, $driver) . ' LIKE ?',
+                            [$normalizedPattern]
+                        )
+                        ->orWhereRaw(
+                            $this->foldAccentsSqlExpression($stemColumn, $driver) . ' LIKE ?',
+                            [$normalizedPattern]
+                        )
+                        ->orWhereRaw(
+                            $this->normalizedSubjectSqlExpression($subjectColumn) . ' LIKE ?',
+                            [$normalizedPattern]
+                        );
+                } else {
+                    $subQuery
+                        ->orWhereRaw(
+                            $this->foldAccentsSqlExpression($titleColumn, $driver) . ' LIKE ?',
+                            [$normalizedPattern]
+                        )
+                        ->orWhereRaw(
+                            $this->foldAccentsSqlExpression($stemColumn, $driver) . ' LIKE ?',
+                            [$normalizedPattern]
+                        )
+                        ->orWhereRaw(
+                            $this->portableNormalizedSubjectSqlExpression($subjectColumn) . ' LIKE ?',
+                            [$normalizedPattern]
+                        );
                 }
             }
         });
@@ -375,7 +403,7 @@ class Question extends Model
 
     /**
      * Aplica comparación tolerante sobre la columna subject_tag para compatibilidad
-     * con reactivos históricos o pruebas sin subject_id asignado.
+     * con reactivos históricos o pruebas sin subject_id asignado en cualquier motor SQL.
      *
      * @param Builder<Question> $query           Subconsulta Eloquent.
      * @param string            $subjectColumn   Columna calificada subject_tag.
@@ -400,6 +428,13 @@ class Question extends Model
             return;
         }
 
+        if ($normalized !== '') {
+            $query->orWhereRaw(
+                $this->portableNormalizedSubjectSqlExpression($subjectColumn) . ' = ?',
+                [$normalized]
+            );
+        }
+
         $query->orWhereRaw(
             "LOWER(TRIM(COALESCE({$subjectColumn}, ''))) = ?",
             [mb_strtolower($cleanSubject, 'UTF-8')]
@@ -416,6 +451,65 @@ class Question extends Model
     private function normalizedSubjectSqlExpression(string $column): string
     {
         return "trim(regexp_replace(translate(lower(regexp_replace(COALESCE({$column}, ''), E'[\\u200B\\u200C\\u200D\\uFEFF]', '', 'g')), 'áéíóúàèìòùäëïöüâêîôûãõñçÁÉÍÓÚÀÈÌÒÙÄËÏÖÜÂÊÎÔÛÃÕÑÇ', 'aeiouaeiouaeiouaeiouaoncaeiouaeiouaeiouaeiouaonc'), '[^a-z0-9+#]+', ' ', 'g'))";
+    }
+
+    /**
+     * Construye una expresión SQL portable (SQLite/MySQL) acotada para normalizar
+     * etiquetas de materia sin exceder la profundidad de pila del parser SQLite.
+     *
+     * @param string $column Columna SQL calificada.
+     * @return string Expresión SQL parametrizable.
+     */
+    private function portableNormalizedSubjectSqlExpression(string $column): string
+    {
+        $expr = $this->foldAccentsSqlExpression($column, 'sqlite', true);
+
+        return "REPLACE({$expr}, '  ', ' ')";
+    }
+
+    /**
+     * Construye una expresión SQL portable para búsqueda textual insensible a
+     * mayúsculas y diacríticos en PostgreSQL, SQLite y MySQL.
+     *
+     * @param string $column Columna SQL calificada.
+     * @param string $driver Nombre del driver de base de datos activo.
+     * @param bool   $trim   Indica si se debe aplicar TRIM al valor base.
+     * @return string
+     */
+    private function foldAccentsSqlExpression(string $column, string $driver, bool $trim = false): string
+    {
+        if ($driver === 'pgsql') {
+            $base = $trim ? "trim(COALESCE({$column}, ''))" : "COALESCE({$column}, '')";
+
+            return "translate(lower({$base}), 'áéíóúàèìòùäëïöüâêîôûãõñçÁÉÍÓÚÀÈÌÒÙÄËÏÖÜÂÊÎÔÛÃÕÑÇ', 'aeiouaeiouaeiouaeiouaoncaeiouaeiouaeiouaeiouaonc')";
+        }
+
+        $expr = $trim
+            ? "LOWER(TRIM(COALESCE({$column}, '')))"
+            : "LOWER(COALESCE({$column}, ''))";
+
+        $replacements = [
+            'Á' => 'a',
+            'á' => 'a',
+            'É' => 'e',
+            'é' => 'e',
+            'Í' => 'i',
+            'í' => 'i',
+            'Ó' => 'o',
+            'ó' => 'o',
+            'Ú' => 'u',
+            'ú' => 'u',
+            'Ü' => 'u',
+            'ü' => 'u',
+            'Ñ' => 'n',
+            'ñ' => 'n',
+        ];
+
+        foreach ($replacements as $from => $to) {
+            $expr = "REPLACE({$expr}, '{$from}', '{$to}')";
+        }
+
+        return $expr;
     }
 
     /**

@@ -359,6 +359,7 @@ class FrontendViewRenderingTest extends TestCase
         $questionsIndex->assertOk();
         $questionsIndex->assertSee($question->title);
         $questionsIndex->assertSee('2 paráfrasis');
+        $questionsIndex->assertDontSee('@js(', false);
 
         // 5. questions.create
         $questionsCreate = $this->actingAs($teacher)->get(route('questions.create'));
@@ -392,6 +393,7 @@ class FrontendViewRenderingTest extends TestCase
         $examsIndex->assertOk();
         $examsIndex->assertSee('Nuevo examen');
         $examsIndex->assertSee($exam->title);
+        $examsIndex->assertDontSee('@js(', false);
 
         // 7. exams.create
         $examsCreate = $this->actingAs($teacher)->get(route('exams.create'));
@@ -404,6 +406,7 @@ class FrontendViewRenderingTest extends TestCase
         $examsAssemble->assertOk();
         $examsAssemble->assertSee($exam->title);
         $examsAssemble->assertSee($question->title);
+        $examsAssemble->assertDontSee('@js(', false);
     }
 
     /**

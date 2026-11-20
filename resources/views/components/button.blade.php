@@ -1,18 +1,19 @@
 {{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-button (MPW-V2 §7.3, §7.8, §8.3, Tabla 27) --}}
 @props([
     'variant' => 'primary', // primary, secondary, accent, warning, danger, neutral
-    'size' => 'md',        // sm, md, lg (Tabla 27)
+    'size' => 'md',        // sm, md, lg (Tabla 14)
     'type' => 'submit',
     'href' => null,
     'loading' => false,
     'disabled' => false,
+    'iconOnly' => false,
 ])
 
 @php
     $sizeClasses = match ($size) {
-        'sm' => 'h-8 px-3 text-xs',
-        'lg' => 'h-12 px-6 text-base',
-        default => 'h-10 px-4 text-sm',
+        'sm' => $iconOnly ? 'h-8 w-8 p-0 text-xs' : 'h-8 px-3 text-xs',
+        'lg' => $iconOnly ? 'h-12 w-12 p-0 text-base' : 'h-12 px-6 text-base',
+        default => $iconOnly ? 'h-10 w-10 p-0 text-sm' : 'h-10 px-4 text-sm',
     };
 
     $variantClasses = match ($variant) {
@@ -24,7 +25,7 @@
         default => 'bg-acode-primary text-white hover:bg-acode-primary-dark focus:ring-acode-tech',
     };
 
-    $baseClasses = 'inline-flex items-center justify-center gap-2 font-semibold rounded-lg transition-all duration-200 ease-in-out hover:shadow-sm active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed select-none ' . $sizeClasses . ' ' . $variantClasses;
+    $baseClasses = 'inline-flex items-center justify-center gap-2 font-semibold rounded-lg transition-all duration-200 ease-in-out hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed select-none ' . $sizeClasses . ' ' . $variantClasses;
 @endphp
 
 @if ($href || $attributes->has(':href'))

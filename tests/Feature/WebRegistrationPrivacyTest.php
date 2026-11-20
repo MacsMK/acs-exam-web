@@ -20,8 +20,13 @@ namespace Tests\Feature;
 
 use App\Models\PrivacyAcceptance;
 use App\Models\PrivacyNotice;
+use App\Models\TeacherInvitationCode;
+use App\Models\TeacherVerification;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class WebRegistrationPrivacyTest extends TestCase
@@ -97,13 +102,16 @@ class WebRegistrationPrivacyTest extends TestCase
 
     public function test_teacher_web_registration_requires_phone_and_current_notice(): void
     {
+        Storage::fake('local');
+        Mail::fake();
+
         $notice = PrivacyNotice::create([
             'version' => '1.0',
             'content' => 'Aviso vigente.',
             'published_at' => now()->subMinute(),
         ]);
 
-        $payload = [
+        $basePayload = [
             'privacy_notice_id' => (string) $notice->id,
             'first_name' => 'Fernando',
             'last_name' => 'Castillo',
@@ -113,14 +121,65 @@ class WebRegistrationPrivacyTest extends TestCase
             'accepts_privacy_notice' => '1',
         ];
 
+        $openVerificationFields = [
+            'institution_name' => 'Universidad Autónoma Metropolitana',
+            'verification_document' => UploadedFile::fake()->create('credencial.pdf', 200, 'application/pdf'),
+        ];
+
         // Docente: el teléfono es obligatorio (RF-AUT-002).
-        $this->post(route('auth.register.teacher.store'), $payload)
+        $this->post(route('auth.register.teacher.store'), $basePayload + $openVerificationFields)
             ->assertSessionHasErrors('phone');
         $this->assertDatabaseMissing('acs_users', ['email' => 'fer.web@example.test']);
 
-        $this->post(route('auth.register.teacher.store'), $payload + ['phone' => '5598765432'])
-            ->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('acs_users', ['email' => 'fer.web@example.test', 'role' => 'teacher']);
+        // Docente: sin código institucional ni comprobante, exige institución y comprobante (ADR-057).
+        $this->post(route('auth.register.teacher.store'), $basePayload + ['phone' => '5598765432'])
+            ->assertSessionHasErrors(['institution_name', 'verification_document']);
+        $this->assertDatabaseMissing('acs_users', ['email' => 'fer.web@example.test']);
+
+        // Vía abierta simplificada: teléfono + aviso vigente + institución + comprobante válido.
+        $this->post(route('auth.register.teacher.store'), $basePayload + [
+            'phone' => '5598765432',
+            'institution_name' => 'Universidad Autónoma Metropolitana',
+            'verification_document' => UploadedFile::fake()->create('credencial.pdf', 200, 'application/pdf'),
+        ])->assertSessionHasNoErrors();
+
+        $openTeacher = User::where('email', 'fer.web@example.test')->firstOrFail();
+        $this->assertSame('teacher', $openTeacher->role);
+        $this->assertSame(TeacherVerification::STATUS_PENDING, $openTeacher->teacher_verification_status);
+        $this->assertDatabaseHas('acs_privacy_acceptances', [
+            'user_id' => $openTeacher->id,
+            'privacy_notice_id' => $notice->id,
+        ]);
+
+        // Vía rápida con código institucional válido + teléfono + aviso vigente (sin comprobante).
+        $admin = User::factory()->create(['role' => 'super_admin']);
+        $invitation = TeacherInvitationCode::create([
+            'code' => 'UAM-9182-7364',
+            'institution_name' => 'Universidad Autónoma Metropolitana',
+            'max_uses' => 5,
+            'uses_count' => 0,
+            'is_active' => true,
+            'created_by' => $admin->id,
+        ]);
+
+        $this->post(route('auth.register.teacher.store'), [
+            'privacy_notice_id' => (string) $notice->id,
+            'first_name' => 'Gabriela',
+            'last_name' => 'Navarro',
+            'email' => 'gaby.codigo@uam.mx',
+            'phone' => '5511223344',
+            'password' => 'Secret1234',
+            'password_confirmation' => 'Secret1234',
+            'accepts_privacy_notice' => '1',
+            'invitation_code' => $invitation->code,
+        ])->assertSessionHasNoErrors();
+
+        $fastTrackTeacher = User::where('email', 'gaby.codigo@uam.mx')->firstOrFail();
+        $this->assertSame(TeacherVerification::STATUS_APPROVED, $fastTrackTeacher->teacher_verification_status);
+        $this->assertDatabaseHas('acs_privacy_acceptances', [
+            'user_id' => $fastTrackTeacher->id,
+            'privacy_notice_id' => $notice->id,
+        ]);
     }
 
     public function test_registration_is_rejected_when_notice_changed_or_is_missing(): void

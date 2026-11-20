@@ -13,6 +13,7 @@ declare(strict_types=1);
  * ============================================================================
  */
 
+use App\Http\Controllers\AdminInvitationCodeController;
 use App\Http\Controllers\AdminTeacherController;
 use App\Http\Controllers\AttemptController;
 use App\Http\Controllers\Auth\LoginController;
@@ -31,6 +32,7 @@ use App\Http\Controllers\TeacherAiCreditsController;
 use App\Http\Controllers\TeacherProfileController;
 use App\Http\Controllers\TeacherReviewController;
 use App\Http\Controllers\TeacherSubscriptionController;
+use App\Http\Controllers\TeacherVerificationController;
 use App\Http\Controllers\WebPrivacyController;
 use Illuminate\Support\Facades\Route;
 
@@ -39,7 +41,9 @@ Route::get('aviso-privacidad', [WebPrivacyController::class, 'show'])->name('pri
 
 Route::middleware('guest')->group(function (): void {
     Route::get('register/docente', [RegisterController::class, 'showTeacherForm'])->name('auth.register.teacher.show');
-    Route::post('register/docente', [RegisterController::class, 'storeTeacher'])->name('auth.register.teacher.store');
+    Route::post('register/docente', [RegisterController::class, 'storeTeacher'])
+        ->middleware('throttle:10,1')
+        ->name('auth.register.teacher.store');
     Route::get('register/alumno', [RegisterController::class, 'showStudentForm'])->name('auth.register.student.show');
     Route::post('register/alumno', [RegisterController::class, 'storeStudent'])->name('auth.register.student.store');
 
@@ -56,7 +60,32 @@ Route::middleware('auth')->group(function (): void {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
 
     Route::middleware('role:teacher')->group(function (): void {
-        Route::resource('groups', GroupController::class)->only(['index', 'create', 'store', 'show']);
+        Route::get('docente/verificacion', [TeacherVerificationController::class, 'show'])
+            ->name('teacher.verification.status');
+        Route::post('docente/verificacion/reenviar', [TeacherVerificationController::class, 'resubmit'])
+            ->middleware('throttle:10,1')
+            ->name('teacher.verification.resubmit');
+        Route::post('docente/verificacion/canjear-codigo', [TeacherVerificationController::class, 'redeemCode'])
+            ->middleware('throttle:10,1')
+            ->name('teacher.verification.redeem-code');
+    });
+
+    Route::middleware(['role:teacher', 'teacher.verified'])->group(function (): void {
+        Route::get('docente/suscripcion', [TeacherSubscriptionController::class, 'index'])
+            ->name('teacher.subscription.index');
+        Route::get('docente/suscripcion/checkout/{package}', [TeacherSubscriptionController::class, 'checkout'])
+            ->whereNumber('package')
+            ->name('teacher.subscription.checkout');
+        Route::post('docente/suscripcion/checkout/{package}', [TeacherSubscriptionController::class, 'processPayment'])
+            ->whereNumber('package')
+            ->middleware('throttle:15,1')
+            ->name('teacher.subscription.pay');
+        Route::post('docente/suscripcion/prueba-gratuita', [TeacherSubscriptionController::class, 'startFreeTrial'])
+            ->middleware('throttle:15,1')
+            ->name('teacher.subscription.free-trial');
+
+        Route::middleware('teacher.plan_onboarded')->group(function (): void {
+            Route::resource('groups', GroupController::class)->only(['index', 'create', 'store', 'show']);
         Route::post('groups/{group}/cerrar', [GroupController::class, 'close'])->name('groups.close');
         Route::post('groups/{group}/reabrir', [GroupController::class, 'reopen'])->name('groups.reopen');
         Route::get('groups/{group}/periodos', [EvaluationPeriodController::class, 'index'])->name('groups.periods.index');
@@ -80,35 +109,117 @@ Route::middleware('auth')->group(function (): void {
             ->name('questions.paraphrase.destroy');
         Route::resource('questions', QuestionController::class);
 
-        Route::resource('exams', ExamController::class)->only(['index', 'create', 'store']);
-        Route::get('exams/{exam}/armar', [ExamController::class, 'assemble'])->name('exams.assemble');
-        Route::post('exams/{exam}/apartados', [ExamController::class, 'storeSection'])->name('exams.sections.store');
-        Route::post('exams/{exam}/propuesta', [ExamController::class, 'generateSectionProposal'])->name('exams.proposals.generate');
-        Route::post('exams/{exam}/propuesta/aceptar', [ExamController::class, 'acceptSectionProposal'])->name('exams.proposals.accept');
-        Route::post('exams/{exam}/propuesta/descartar', [ExamController::class, 'discardSectionProposal'])->name('exams.proposals.discard');
-        Route::post('exams/{exam}/reactivos/{examQuestion}/nuevo-sorteo', [ExamController::class, 'reshuffleQuestion'])->name('exams.questions.reshuffle');
-        Route::post('exams/{exam}/publicar', [ExamController::class, 'publish'])->name('exams.publish');
-        Route::get('exams/{exam}/configuracion', [ExamController::class, 'configuration'])->name('exams.configuration');
-        Route::put('exams/{exam}/configuracion', [ExamController::class, 'updateConfiguration'])->name('exams.configuration.update');
-        Route::get('exams/{exam}/revisar', [ExamController::class, 'review'])->name('exams.review');
-        Route::get('exams/{exam}/monitoreo', [ExamMonitorController::class, 'show'])->name('exams.monitor');
-        Route::get('exams/{exam}/revision', [TeacherReviewController::class, 'index'])->name('exams.revision.index');
-        Route::get('exams/{exam}/revision/{attempt}', [TeacherReviewController::class, 'show'])->name('exams.revision.show');
-        Route::post('exams/{exam}/revision/{attempt}', [TeacherReviewController::class, 'update'])->name('exams.revision.update');
+        Route::resource('exams', ExamController::class)
+            ->only(['index', 'create', 'store', 'edit', 'update', 'destroy'])
+            ->whereNumber('exam');
+        Route::get('exams/{exam}/armar', [ExamController::class, 'assemble'])
+            ->whereNumber('exam')
+            ->name('exams.assemble');
+        Route::post('exams/{exam}/apartados', [ExamController::class, 'storeSection'])
+            ->whereNumber('exam')
+            ->name('exams.sections.store');
+        Route::put('exams/{exam}/apartados/{examSection}', [ExamController::class, 'updateSection'])
+            ->whereNumber(['exam', 'examSection'])
+            ->name('exams.sections.update');
+        Route::delete('exams/{exam}/apartados/{examSection}', [ExamController::class, 'destroySection'])
+            ->whereNumber(['exam', 'examSection'])
+            ->name('exams.sections.destroy');
+        Route::post('exams/{exam}/propuesta', [ExamController::class, 'generateSectionProposal'])
+            ->whereNumber('exam')
+            ->name('exams.proposals.generate');
+        Route::post('exams/{exam}/propuesta/aceptar', [ExamController::class, 'acceptSectionProposal'])
+            ->whereNumber('exam')
+            ->name('exams.proposals.accept');
+        Route::post('exams/{exam}/propuesta/descartar', [ExamController::class, 'discardSectionProposal'])
+            ->whereNumber('exam')
+            ->name('exams.proposals.discard');
+        Route::post('exams/{exam}/reactivos-manuales', [ExamController::class, 'storeManualQuestions'])
+            ->whereNumber('exam')
+            ->name('exams.questions.manual.store');
+        Route::post('exams/{exam}/reactivos/{examQuestion}/nuevo-sorteo', [ExamController::class, 'reshuffleQuestion'])
+            ->whereNumber(['exam', 'examQuestion'])
+            ->name('exams.questions.reshuffle');
+        Route::delete('exams/{exam}/reactivos/{examQuestion}', [ExamController::class, 'destroyQuestion'])
+            ->whereNumber(['exam', 'examQuestion'])
+            ->name('exams.questions.destroy');
+        Route::post('exams/{exam}/publicar', [ExamController::class, 'publish'])
+            ->whereNumber('exam')
+            ->name('exams.publish');
+        Route::post('exams/{exam}/despublicar', [ExamController::class, 'unpublish'])
+            ->whereNumber('exam')
+            ->name('exams.unpublish');
+        Route::post('exams/{exam}/cerrar', [ExamController::class, 'close'])
+            ->whereNumber('exam')
+            ->name('exams.close');
+        Route::patch('exams/{exam}/visibilidad-resultados', [ExamController::class, 'releaseResults'])
+            ->whereNumber('exam')
+            ->name('exams.results.release');
+        Route::get('exams/{exam}/configuracion', [ExamController::class, 'configuration'])
+            ->whereNumber('exam')
+            ->name('exams.configuration');
+        Route::put('exams/{exam}/configuracion', [ExamController::class, 'updateConfiguration'])
+            ->whereNumber('exam')
+            ->name('exams.configuration.update');
+        Route::get('exams/{exam}/revisar', [ExamController::class, 'review'])
+            ->whereNumber('exam')
+            ->name('exams.review');
+        Route::get('exams/{exam}/monitoreo', [ExamMonitorController::class, 'show'])
+            ->whereNumber('exam')
+            ->name('exams.monitor');
+        Route::get('exams/{exam}/revision', [TeacherReviewController::class, 'index'])
+            ->whereNumber('exam')
+            ->name('exams.revision.index');
+        Route::get('exams/{exam}/revision/{attempt}', [TeacherReviewController::class, 'show'])
+            ->whereNumber(['exam', 'attempt'])
+            ->name('exams.revision.show');
+        Route::post('exams/{exam}/revision/{attempt}', [TeacherReviewController::class, 'update'])
+            ->whereNumber(['exam', 'attempt'])
+            ->name('exams.revision.update');
+        Route::post('exams/{exam}/revision/{attempt}/respuestas/{answer}/evaluar-ia', [TeacherReviewController::class, 'evaluateWithAi'])
+            ->whereNumber(['exam', 'attempt', 'answer'])
+            ->middleware('throttle:30,1')
+            ->name('exams.revision.evaluate-ai');
+        Route::post('exams/{exam}/revision/{attempt}/evaluar-ia-lote', [TeacherReviewController::class, 'evaluateAttemptWithAi'])
+            ->whereNumber(['exam', 'attempt'])
+            ->middleware('throttle:10,1')
+            ->name('exams.revision.evaluate-ai-batch');
 
         // Módulos funcionales docentes (sustituyen coming-soon)
         Route::get('docente/revision', [TeacherReviewController::class, 'globalIndex'])->name('teacher.reviews.index');
         Route::get('docente/calificaciones', [EvaluationPeriodController::class, 'hub'])->name('teacher.gradebook.hub');
-        Route::get('docente/suscripcion', [TeacherSubscriptionController::class, 'index'])->name('teacher.subscription.index');
         Route::get('docente/creditos-ia', [TeacherAiCreditsController::class, 'index'])->name('teacher.ai-credits.index');
         Route::get('perfil', [TeacherProfileController::class, 'show'])->name('teacher.profile.index');
         Route::put('perfil', [TeacherProfileController::class, 'update'])->name('teacher.profile.update');
+        });
     });
 
     Route::middleware('role:super_admin')->prefix('admin')->name('admin.')->group(function (): void {
         Route::get('docentes', [AdminTeacherController::class, 'index'])->name('teachers.index');
-        Route::post('docentes/{teacher}/toggle', [AdminTeacherController::class, 'toggleStatus'])->name('teachers.toggle');
-        Route::post('docentes/{teacher}/assign', [AdminTeacherController::class, 'assignPackage'])->name('teachers.assign');
+        Route::post('docentes/{teacher}/toggle', [AdminTeacherController::class, 'toggleStatus'])
+            ->whereNumber('teacher')
+            ->name('teachers.toggle');
+        Route::post('docentes/{teacher}/assign', [AdminTeacherController::class, 'assignPackage'])
+            ->whereNumber('teacher')
+            ->name('teachers.assign');
+        Route::get('docentes/{teacher}/verificacion/documento', [AdminTeacherController::class, 'document'])
+            ->whereNumber('teacher')
+            ->name('teachers.verification.document');
+        Route::post('docentes/{teacher}/verificacion/aprobar', [AdminTeacherController::class, 'approveVerification'])
+            ->whereNumber('teacher')
+            ->name('teachers.verification.approve');
+        Route::post('docentes/{teacher}/verificacion/rechazar', [AdminTeacherController::class, 'rejectVerification'])
+            ->whereNumber('teacher')
+            ->name('teachers.verification.reject');
+
+        Route::get('invitaciones', [AdminInvitationCodeController::class, 'index'])->name('invitations.index');
+        Route::post('invitaciones', [AdminInvitationCodeController::class, 'store'])->name('invitations.store');
+        Route::post('invitaciones/{invitationCode}/toggle', [AdminInvitationCodeController::class, 'toggle'])
+            ->whereNumber('invitationCode')
+            ->name('invitations.toggle');
+        Route::post('invitaciones/{invitationCode}/enviar', [AdminInvitationCodeController::class, 'sendEmail'])
+            ->whereNumber('invitationCode')
+            ->middleware('throttle:20,1')
+            ->name('invitations.send-email');
     });
 
     Route::middleware('role:student')->group(function (): void {
@@ -129,6 +240,10 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('intentos/{attempt}', [AttemptController::class, 'show'])->name('attempts.show');
     Route::post('intentos/{attempt}/responder', [AttemptController::class, 'answer'])->name('attempts.answer');
+    Route::post('intentos/{attempt}/incidente', [AttemptController::class, 'incident'])
+        ->whereNumber('attempt')
+        ->middleware('throttle:30,1')
+        ->name('attempts.incident');
     Route::post('intentos/{attempt}/terminar', [AttemptController::class, 'finish'])->name('attempts.finish');
     Route::get('intentos/{attempt}/resultado', [AttemptController::class, 'result'])->name('attempts.result');
 });

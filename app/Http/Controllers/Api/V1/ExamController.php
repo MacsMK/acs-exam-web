@@ -14,7 +14,7 @@ declare(strict_types=1);
  *              solo lista y reporta avance, nunca cambia estado de
  *              intento. Para el alumno, cada examen incluye el docente, su
  *              grupo con la materia, el número de preguntas y el estado de
- *              su intento (ADR-056).
+ *              su intento (ADR-061).
  * ============================================================================
  */
 
@@ -45,7 +45,7 @@ class ExamController extends Controller
      * api.v1.exams.index. Docente: todos sus exámenes (armados o no).
      * Alumno (RF-EXA-026): solo publicados y asignados a algún grupo suyo que
      * siga abierto (RF-GRU-019, mismo criterio que el panel web), con los
-     * datos de la tarjeta del alumno (ADR-056).
+     * datos de la tarjeta del alumno (ADR-061).
      */
     public function index(Request $request): JsonResponse
     {
@@ -100,7 +100,7 @@ class ExamController extends Controller
     }
 
     /**
-     * Examen visto por el alumno (ADR-056). Requiere `teacher`, `groups`
+     * Examen visto por el alumno (ADR-061). Requiere `teacher`, `groups`
      * (solo los del alumno), `studentAttempts` (solo el suyo) y el conteo
      * `exam_questions_count` ya cargados. Las fechas y la duración se
      * agregan cuando se resuelva la fecha por grupo (CAM-002).

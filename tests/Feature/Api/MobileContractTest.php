@@ -28,6 +28,8 @@ use App\Models\MultipleChoiceItem;
 use App\Models\OpenItem;
 use App\Models\PrivacyNotice;
 use App\Models\Question;
+use App\Models\StudentAnswer;
+use App\Models\StudentAttempt;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -240,6 +242,35 @@ class MobileContractTest extends TestCase
         $progress->assertOk();
         $progress->assertJsonPath('data.answered_count', 1);
         $progress->assertJsonPath('data.total_count', 1);
+
+        // --- tras la entrega con reactivos cualitativos (RF-IAR-001 / RF-EVA-009), queda pendiente hasta recoteje ---
+        $pendingGrades = $this->withFreshToken($studentToken)->getJson('/api/v1/grades');
+        $pendingGrades->assertOk();
+        $pendingRows = $pendingGrades->json('data.data');
+        $this->assertNotEmpty($pendingRows);
+        $this->assertSame('Examen de prueba', $pendingRows[0]['exam_name']);
+        $this->assertSame('pending', $pendingRows[0]['status']);
+        $this->assertNull($pendingRows[0]['score']);
+        $this->assertNull($pendingRows[0]['is_passing']);
+
+        // --- el docente realiza el recoteje de las respuestas abierta y de código para publicar la calificación ---
+        $attempt = StudentAttempt::where('exam_id', $exam->id)
+            ->where('student_id', $student->id)
+            ->firstOrFail();
+        $qualitativeAnswers = StudentAnswer::query()
+            ->where('student_attempt_id', $attempt->id)
+            ->whereHas('examQuestion.question', static fn ($q) => $q->whereIn('question_type', ['open', 'code']))
+            ->orderBy('id')
+            ->get();
+        $this->assertCount(2, $qualitativeAnswers);
+
+        $this->app['auth']->forgetGuards();
+        $this->actingAs($teacher)->post(route('exams.revision.update', [$exam, $attempt]), [
+            'reviews' => $qualitativeAnswers->map(static fn (StudentAnswer $ans): array => [
+                'answer_id' => $ans->id,
+                'score' => 10.0,
+            ])->all(),
+        ])->assertRedirect(route('exams.revision.show', [$exam, $attempt]));
 
         // --- la calificación ya terminada alimenta /grades y /grades/statistics ---
         $grades = $this->withFreshToken($studentToken)->getJson('/api/v1/grades');

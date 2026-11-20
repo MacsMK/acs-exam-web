@@ -1,121 +1,188 @@
-{{-- ============================================================================
-A-CODE SOLUTIONS - ANALIZAMOS, DISEÑAMOS, TRANSFORMAMOS
-============================================================================
-Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
-Archivo:        review-index.blade.php
-Ubicación:      resources/views/exams/review-index.blade.php
-Requerimiento:  RF-IAR-002, RF-EVA-009, RW-11 (Listado de Intentos para Recoteje)
-Autor:          Equipo 4 (A-Code Solutions)
-Versión:        1.0.0
-Fecha Creación: 08/11/2026
-============================================================================ --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/review-index.blade.php (MPW-V2 §4.1.2, §7, §8, RF-IAR-002, RW-11) --}}
 @extends('layouts.app')
 
 @section('title', 'Revisiones de Examen: ' . $exam->title)
 
 @section('content')
-<div class="space-y-6">
-    {{-- Encabezado y Breadcrumbs --}}
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-            <nav class="flex items-center space-x-2 text-xs font-semibold text-slate-500 mb-2">
-                <a href="{{ route('exams.index') }}" class="hover:text-acode-primary transition">Exámenes</a>
-                <span>/</span>
-                <span class="text-acode-primary font-bold">{{ $exam->title }}</span>
-                <span>/</span>
-                <span class="text-slate-400">Intentos y Recoteje</span>
-            </nav>
-            <h1 class="text-2xl font-bold text-acode-primary">Revisiones de Examen</h1>
-            <p class="text-sm text-slate-600 mt-1">Supervisa y ajusta las calificaciones asistidas por IA de los estudiantes que presentaron el examen.</p>
-        </div>
+    @php
+        $hasActiveFilters = filled($filters['search'] ?? null)
+            || (filled($filters['status'] ?? null) && ($filters['status'] ?? 'all') !== 'all');
 
-        <a href="{{ route('exams.index') }}" class="inline-flex items-center text-sm font-semibold text-acode-tech hover:text-acode-tech-dark">
-            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
-            Volver a Exámenes
-        </a>
-    </div>
+        $attemptsCollection = $attempts->getCollection();
+        $registeredAttemptsCount = (int) $attempts->total();
+        $pendingRecotejeCount = $attemptsCollection->filter(
+            static fn ($att): bool => $att->status === 'submitted'
+                && $att->answers->contains(
+                    static fn ($ans): bool => in_array($ans->examQuestion?->question?->question_type, ['open', 'code'], true)
+                        && $ans->teacher_recoteje_score === null
+                )
+        )->count();
+        $validatedGradesCount = $attemptsCollection->filter(
+            static fn ($att): bool => $att->final_score !== null
+        )->count();
 
-    {{-- Tabla de Intentos --}}
-    <x-card padding="p-0" class="overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse text-sm">
-                <thead>
-                    <tr class="bg-acode-primary text-white text-xs uppercase tracking-wider">
-                        <th class="py-3 px-4 font-semibold">Estudiante</th>
-                        <th class="py-3 px-4 font-semibold">Estado</th>
-                        <th class="py-3 px-4 font-semibold">Fecha de Envío</th>
-                        <th class="py-3 px-4 font-semibold text-right">Puntaje Objetivo</th>
-                        <th class="py-3 px-4 font-semibold text-right">Estimado IA</th>
-                        <th class="py-3 px-4 font-semibold text-right">Calificación Final</th>
-                        <th class="py-3 px-4 font-semibold text-center">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-200 bg-white">
-                    @forelse ($attempts as $attempt)
-                        @php
-                            $hasPendingAi = $attempt->answers->contains(fn ($ans) => in_array($ans->examQuestion?->question?->question_type, ['open', 'code'], true) && $ans->teacher_recoteje_score === null);
-                        @endphp
-                        <tr class="hover:bg-slate-50 transition">
-                            <td class="py-3.5 px-4 font-medium text-slate-900">
-                                <div class="font-bold text-acode-navy">{{ $attempt->student->name }}</div>
-                                <div class="text-xs text-slate-500">{{ $attempt->student->email }}</div>
-                            </td>
-                            <td class="py-3.5 px-4">
+        $attemptStatusLabels = [
+            'in_progress' => 'En progreso',
+            'submitted' => 'Entregado',
+            'expired' => 'Expirado',
+            'cancelled_by_incident' => 'Cancelado por incidencias',
+            'graded' => 'Calificado',
+        ];
+    @endphp
+
+    <div class="space-y-6">
+        {{-- Encabezado y Breadcrumbs --}}
+        <x-page-header
+            :title="$exam->title"
+            subtitle="Revisa las entregas de tus estudiantes y valida las calificaciones asistidas por IA."
+            :breadcrumbs="[
+                ['label' => 'Revisión', 'href' => route('teacher.reviews.index')],
+                ['label' => $exam->title],
+            ]"
+        >
+            <x-slot:actions>
+                <x-button :href="route('teacher.reviews.index')" variant="neutral" size="md">
+                    <x-icon name="arrowLeft" class="w-4 h-4" />
+                    Volver
+                </x-button>
+            </x-slot:actions>
+        </x-page-header>
+
+        {{-- KPIs Resumen de Entregas --}}
+        <section class="grid grid-cols-1 sm:grid-cols-3 gap-5" aria-label="Resumen de entregas del examen">
+            <x-kpi-card
+                label="Entregas registradas"
+                :value="$registeredAttemptsCount"
+                icon="document"
+                tone="tech"
+            />
+            <x-kpi-card
+                label="Pendientes de recoteje"
+                :value="$pendingRecotejeCount"
+                :icon="$pendingRecotejeCount > 0 ? 'warning' : 'success'"
+                :tone="$pendingRecotejeCount > 0 ? 'warning' : 'neutral'"
+            />
+            <x-kpi-card
+                label="Calificaciones validadas"
+                :value="$validatedGradesCount"
+                icon="success"
+                tone="accent"
+            />
+        </section>
+
+        {{-- Búsqueda y filtro por estado de recoteje --}}
+        <x-search-filter
+            :action="route('exams.revision.index', $exam)"
+            search-name="search"
+            :search-value="$filters['search'] ?? ''"
+            placeholder="Buscar estudiante por nombre o correo…"
+            :clear-url="route('exams.revision.index', $exam)"
+            :clear-keys="['search', 'status']"
+            :has-active-filters="$hasActiveFilters"
+        >
+            <x-slot:filters>
+                <div class="w-full sm:w-56">
+                    <x-form.select name="status" size="md" aria-label="Filtrar intentos por estado">
+                        <option value="all" @selected(($filters['status'] ?? 'all') === 'all')>Todos los intentos</option>
+                        <option value="pending_recoteje" @selected(($filters['status'] ?? '') === 'pending_recoteje')>Requiere Recoteje</option>
+                        <option value="graded" @selected(($filters['status'] ?? '') === 'graded')>Calificados</option>
+                        <option value="cancelled" @selected(($filters['status'] ?? '') === 'cancelled')>Cancelados por incidencias</option>
+                    </x-form.select>
+                </div>
+            </x-slot:filters>
+        </x-search-filter>
+
+        {{-- Tabla de Intentos --}}
+        @if ($attempts->isEmpty())
+            <x-empty-state
+                icon="document"
+                :title="$hasActiveFilters ? 'Sin intentos con esos filtros' : 'No hay intentos presentados para este examen aún'"
+                :message="$hasActiveFilters
+                    ? 'Intenta limpiar los filtros de búsqueda.'
+                    : 'Los intentos aparecerán aquí en cuanto los estudiantes comiencen o entreguen su evaluación.'"
+            />
+        @else
+            <x-table>
+                <x-slot:header>
+                    <x-table.th>Estudiante</x-table.th>
+                    <x-table.th>Estado</x-table.th>
+                    <x-table.th>Fecha de Envío</x-table.th>
+                    <x-table.th align="right">Puntaje Objetivo</x-table.th>
+                    <x-table.th align="right">Estimado IA</x-table.th>
+                    <x-table.th align="right">Calificación Final</x-table.th>
+                    <x-table.th align="center">Acciones</x-table.th>
+                </x-slot:header>
+
+                @forelse ($attempts as $attempt)
+                    @php
+                        $hasPendingAi = $attempt->status === 'submitted'
+                            && $attempt->answers->contains(
+                                fn ($ans): bool => in_array($ans->examQuestion?->question?->question_type, ['open', 'code'], true)
+                                    && $ans->teacher_recoteje_score === null
+                            );
+                    @endphp
+                    <tr>
+                        <x-table.td class="font-medium text-slate-900">
+                            <div class="font-bold text-acode-primary">{{ $attempt->student?->full_name ?? 'Estudiante' }}</div>
+                            <div class="text-xs text-slate-500">{{ $attempt->student?->email ?? '—' }}</div>
+                        </x-table.td>
+
+                        <x-table.td>
+                            <div class="flex flex-wrap items-center gap-1.5">
                                 @if ($attempt->status === 'submitted')
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-                                        Entregado
-                                    </span>
+                                    <x-badge variant="accent">Entregado</x-badge>
                                 @elseif ($attempt->status === 'cancelled_by_incident')
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
-                                        Cancelado por Incidencias
-                                    </span>
+                                    <x-badge variant="danger">Cancelado por Incidencias</x-badge>
+                                @elseif ($attempt->status === 'expired')
+                                    <x-badge variant="warning">Expirado</x-badge>
                                 @else
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
-                                        {{ $attempt->status }}
-                                    </span>
+                                    <x-badge variant="neutral">{{ $attemptStatusLabels[$attempt->status] ?? 'En curso' }}</x-badge>
                                 @endif
 
                                 @if ($hasPendingAi)
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 ml-1">
-                                        Requiere Recoteje
-                                    </span>
+                                    <x-badge variant="warning">Requiere Recoteje</x-badge>
                                 @endif
-                            </td>
-                            <td class="py-3.5 px-4 text-xs text-slate-600">
-                                {{ $attempt->submitted_at ? $attempt->submitted_at->format('d/m/Y H:i') : 'En curso' }}
-                            </td>
-                            <td class="py-3.5 px-4 text-right font-mono text-slate-700">
-                                {{ number_format((float) $attempt->objective_score, 1) }}
-                            </td>
-                            <td class="py-3.5 px-4 text-right font-mono text-slate-700">
-                                {{ number_format((float) $attempt->ai_estimated_score, 1) }}
-                            </td>
-                            <td class="py-3.5 px-4 text-right font-mono font-bold {{ $attempt->final_score !== null ? 'text-acode-navy' : 'text-slate-400' }}">
-                                {{ $attempt->final_score !== null ? number_format((float) $attempt->final_score, 1) : 'Pendiente' }}
-                            </td>
-                            <td class="py-3.5 px-4 text-center">
-                                <a href="{{ route('exams.revision.show', [$exam, $attempt]) }}" class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-acode-surface hover:bg-slate-200 text-acode-navy border border-slate-300 transition">
-                                    <span>Recotejar</span>
-                                    <svg class="w-3.5 h-3.5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                                </a>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="7" class="py-8 text-center text-slate-500">
-                                No hay intentos presentados para este examen aún.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
+                            </div>
+                        </x-table.td>
 
-        @if ($attempts->hasPages())
-            <div class="p-4 border-t border-slate-200">
+                        <x-table.td class="text-xs text-slate-600 whitespace-nowrap">
+                            {{ $attempt->submitted_at ? $attempt->submitted_at->format('d/m/Y H:i') : 'En curso' }}
+                        </x-table.td>
+
+                        <x-table.td align="right" class="font-mono text-slate-700">
+                            {{ number_format((float) $attempt->objective_score, 2) }}
+                        </x-table.td>
+
+                        <x-table.td align="right" class="font-mono text-slate-700">
+                            {{ number_format((float) $attempt->ai_estimated_score, 2) }}
+                        </x-table.td>
+
+                        <x-table.td align="right" class="font-mono font-bold {{ $attempt->final_score !== null ? 'text-acode-primary' : 'text-slate-400' }}">
+                            {{ $attempt->final_score !== null ? number_format((float) $attempt->final_score, 2) : 'Pendiente' }}
+                        </x-table.td>
+
+                        <x-table.td align="center" class="whitespace-nowrap">
+                            <x-button :href="route('exams.revision.show', [$exam, $attempt])" variant="neutral" size="sm">
+                                Abrir recoteje
+                            </x-button>
+                        </x-table.td>
+                    </tr>
+                @empty
+                    <tr>
+                        <x-table.td colspan="7" class="py-8">
+                            <x-empty-state
+                                icon="document"
+                                title="Sin intentos disponibles"
+                                message="No hay intentos presentados para este examen aún."
+                            />
+                        </x-table.td>
+                    </tr>
+                @endforelse
+            </x-table>
+
+            <div class="mt-6 flex justify-end">
                 {{ $attempts->links() }}
             </div>
         @endif
-    </x-card>
-</div>
+    </div>
 @endsection

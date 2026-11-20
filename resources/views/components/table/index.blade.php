@@ -4,7 +4,7 @@
     'footer' => null,
 ])
 
-<div {{ $attributes->merge(['class' => 'bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6']) }}>
+<div {{ $attributes->merge(['class' => 'bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden']) }}>
     <div class="overflow-x-auto w-full">
         <table class="w-full text-sm text-left border-collapse">
             @if (isset($header))
@@ -14,7 +14,7 @@
                     </tr>
                 </thead>
             @endif
-            <tbody class="divide-y divide-slate-200 [&_tr:nth-child(even)]:bg-acode-surface hover:[&_tr]:bg-slate-100/60 transition-colors">
+            <tbody class="divide-y divide-slate-200 bg-white [&_tr:nth-child(even)]:bg-acode-surface/60 hover:[&_tr]:bg-blue-50/70 transition-colors">
                 {{ $slot }}
             </tbody>
         </table>

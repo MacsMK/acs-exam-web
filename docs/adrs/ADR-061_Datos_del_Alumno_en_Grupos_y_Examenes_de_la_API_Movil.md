@@ -1,4 +1,4 @@
-# ADR-056 — Datos del Alumno en los Listados de Grupos y Exámenes de la API Móvil
+# ADR-061 — Datos del Alumno en los Listados de Grupos y Exámenes de la API Móvil
 
 > **Estado:** Aceptado (fechas y duración del examen pendientes de `CAM-002`)  
 > **Fecha:** 15 de Noviembre de 2026  

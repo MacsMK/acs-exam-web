@@ -1,297 +1,413 @@
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/review.blade.php (MPW-V2 §4.1.2, §7, §8, ADR-056) --}}
 @extends('layouts.app')
 
-@section('title', 'Revisión: '.$exam->title)
+@section('title', 'Revisar y publicar: ' . $exam->title)
 
 @section('content')
-@php
-    $totalQuestions = $exam->sections->sum(
-        fn ($section) => $section->examQuestions->count()
-    );
+    @php
+        $totalQuestions = $exam->sections->sum(fn ($section) => $section->examQuestions->count());
+        $resolvedPoints = (float) ($totalPoints ?? $publishChecklist['total_weight'] ?? 0);
+        $attemptsCount = (int) ($exam->student_attempts_count ?? 0);
+        $opStatus = $exam->operationalStatus();
+        $opStatusLabels = [
+            'draft' => 'Borrador',
+            'scheduled' => 'Programado',
+            'active' => 'Activo',
+            'closed' => 'Cerrado',
+        ];
+        $opStatusLabel = $opStatusLabels[$opStatus] ?? 'Borrador';
 
-    $totalPoints = $exam->sections->sum(
-        fn ($section) => $section->examQuestions->sum(
-            fn ($question) => (float) $question->points_weight
-        )
-    );
+        $resultModes = [
+            'final_score' => 'Calificación final inmediata',
+            'estimated_score' => 'Puntaje preliminar estimado',
+            'objective_only_pending' => 'Solo puntaje objetivo (pendiente docente)',
+            'hidden' => 'Resultados ocultos hasta liberación',
+        ];
 
-    $resultModes = [
-        'final_score' => 'Calificación final',
-        'estimated_score' => 'Calificación estimada',
-        'objective_only_pending' => 'Preguntas objetivas, pendientes de revisión',
-        'hidden' => 'Resultados ocultos',
-    ];
+        $checklistItems = [
+            [
+                'label' => 'Al menos 1 apartado creado',
+                'passed' => (bool) ($publishChecklist['has_sections'] ?? false),
+                'fixUrl' => route('exams.assemble', $exam),
+                'fixLabel' => 'Armar apartados',
+            ],
+            [
+                'label' => 'Todos los apartados contienen reactivos',
+                'passed' => (bool) ($publishChecklist['no_empty_sections'] ?? false),
+                'fixUrl' => route('exams.assemble', $exam),
+                'fixLabel' => 'Completar apartados',
+            ],
+            [
+                'label' => 'La suma de ponderaciones es exactamente 100.00 pts',
+                'passed' => (bool) ($publishChecklist['exact_weight'] ?? false),
+                'fixUrl' => route('exams.configuration', $exam),
+                'fixLabel' => 'Ajustar pesos',
+            ],
+            [
+                'label' => 'Al menos 1 grupo escolar abierto asignado',
+                'passed' => (bool) ($publishChecklist['has_open_group'] ?? false),
+                'fixUrl' => route('exams.configuration', $exam),
+                'fixLabel' => 'Asignar grupos',
+            ],
+            [
+                'label' => 'La fecha de cierre es posterior al momento actual',
+                'passed' => (bool) ($publishChecklist['has_future_window'] ?? false),
+                'fixUrl' => route('exams.configuration', $exam),
+                'fixLabel' => 'Actualizar ventana',
+            ],
+        ];
+    @endphp
 
-    $hasSections = $exam->sections->isNotEmpty();
-    $hasQuestions = $totalQuestions > 0;
-    $hasGroups = $exam->groups->isNotEmpty();
-    $hasHundredPoints = abs($totalPoints - 100) < 0.001;
-@endphp
+    <div
+        class="space-y-6"
+        x-data="{
+            confirmAction(formId, title, text, confirmText, isDanger = false) {
+                if (typeof AcodeAlert !== 'undefined') {
+                    AcodeAlert.confirm({
+                        title: title,
+                        text: text,
+                        confirmButtonText: confirmText,
+                        cancelButtonText: 'Cancelar',
+                        isDanger: isDanger,
+                        onConfirm: () => {
+                            const form = document.getElementById(formId);
+                            if (form) form.submit();
+                        },
+                    });
+                    return;
+                }
+                if (confirm(title + '\n' + text)) {
+                    const form = document.getElementById(formId);
+                    if (form) form.submit();
+                }
+            },
 
-<div class="mx-auto max-w-5xl space-y-6">
-    <a href="{{ route('exams.configuration', $exam) }}"
-    class="inline-flex items-center gap-2 text-sm font-semibold text-acode-tech transition hover:underline">
-        <span aria-hidden="true">←</span>
-        Volver a Configuración
-    </a>
-    <div>
-        <p class="text-xs font-semibold uppercase tracking-wide text-acode-tech">
-            Etapa 4 de 4 · Revisión
-        </p>
-        <h1 class="mt-1 text-2xl font-bold text-acode-primary">
-            Revisar examen
-        </h1>
-        <p class="mt-2 text-sm text-slate-500">
-            Comprueba la información del examen antes de su publicación.
-        </p>
-    </div>
+            copyShareToken(token) {
+                if (!token) return;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(token).then(() => {
+                        if (typeof AcodeAlert !== 'undefined') {
+                            AcodeAlert.toast('Folio de examen copiado al portapapeles', 'success');
+                        }
+                    }).catch(() => {});
+                }
+            }
+        }"
+    >
+        {{-- Encabezado --}}
+        <x-page-header
+            title="Revisar y publicar examen"
+            subtitle="Verifica las 5 condiciones de integridad antes de habilitar el examen para tus estudiantes."
+            :breadcrumbs="[
+                ['label' => 'Exámenes', 'href' => route('exams.index')],
+                ['label' => $exam->title, 'href' => route('exams.configuration', $exam)],
+                ['label' => 'Revisar y publicar'],
+            ]"
+        >
+            <x-slot:actions>
+                <x-button :href="route('exams.index')" variant="neutral" size="md">
+                    <x-icon name="arrowLeft" class="w-4 h-4" />
+                    Volver
+                </x-button>
+            </x-slot:actions>
+        </x-page-header>
 
-    {{-- Etapas --}}
-    <div class="rounded-xl border border-slate-200 bg-white p-5">
-        <div class="grid grid-cols-4 gap-2">
-            @foreach (['Datos', 'Preguntas', 'Configuración', 'Revisión'] as $index => $label)
-                <div class="flex flex-col items-center gap-2 text-center">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold
-                        {{ $index === 3
-                            ? 'bg-acode-primary text-white'
-                            : 'bg-acode-accent text-white' }}">
-                        {{ $index < 3 ? '✓' : '4' }}
-                    </span>
-                    <span class="text-xs {{ $index === 3 ? 'font-semibold text-acode-primary' : 'text-slate-500' }}">
-                        {{ $label }}
-                    </span>
-                </div>
-            @endforeach
-        </div>
-    </div>
+        @include('exams.partials._stepper', ['currentStep' => 4, 'exam' => $exam, 'totalPoints' => $resolvedPoints])
 
-    {{-- Resumen general --}}
-    <section class="rounded-xl border border-slate-200 bg-white p-6">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <h2 class="text-lg font-semibold text-acode-primary">
-                {{ $exam->title }}
-            </h2>
-
-            <span class="rounded-full px-3 py-1 text-xs font-semibold
-                {{ $exam->is_published
-                    ? 'bg-acode-accent/10 text-acode-accent'
-                    : 'bg-acode-warning/20 text-acode-primary' }}">
-                {{ $exam->is_published ? 'Publicado' : 'Borrador' }}
-            </span>
-        </div>
-
-        <p class="mt-3 text-sm text-slate-600">
-            {{ $exam->description ?: 'Sin descripción.' }}
-        </p>
-
-        <div class="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-            @foreach ([
-                ['Apartados', $exam->sections->count()],
-                ['Reactivos', $totalQuestions],
-                ['Puntos', number_format($totalPoints, 2)],
-                ['Grupos', $exam->groups->count()],
-            ] as [$label, $value])
-                <div class="rounded-lg bg-slate-50 p-4">
-                    <p class="text-xs text-slate-500">{{ $label }}</p>
-                    <p class="mt-1 text-xl font-bold text-acode-primary">
-                        {{ $value }}
-                    </p>
-                </div>
-            @endforeach
-        </div>
-    </section>
-
-    {{-- Comprobaciones preliminares --}}
-    <section class="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 class="text-lg font-semibold text-acode-primary">
-            Comprobaciones del examen
-        </h2>
-
-        <p class="mt-2 text-sm text-slate-500">
-            Estas comprobaciones son informativas y todavía no sustituyen
-            la validación completa de publicación.
-        </p>
-
-        <div class="mt-5 space-y-3">
-            @foreach ([
-                ['Tiene apartados', $hasSections],
-                ['Tiene reactivos', $hasQuestions],
-                ['Tiene grupos asignados', $hasGroups],
-                ['La ponderación suma 100 puntos', $hasHundredPoints],
-            ] as [$label, $passed])
-                <div class="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3">
-                    <span class="text-sm text-slate-700">{{ $label }}</span>
-
-                    <span class="text-xs font-semibold {{ $passed ? 'text-acode-accent' : 'text-[#DC2626]' }}">
-                        {{ $passed ? 'Cumple' : 'Pendiente' }}
-                    </span>
-                </div>
-            @endforeach
-        </div>
-    </section>
-
-    {{-- Configuración --}}
-    <section class="rounded-xl border border-slate-200 bg-white p-6">
-        <div class="flex items-center justify-between gap-3">
-            <h2 class="text-lg font-semibold text-acode-primary">
-                Configuración
-            </h2>
-
-            @unless ($exam->is_published)
-                <a href="{{ route('exams.configuration', $exam) }}"
-                   class="text-sm font-semibold text-acode-tech hover:underline">
-                    Editar
-                </a>
-            @endunless
-        </div>
-
-        <dl class="mt-5 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-            <div>
-                <dt class="text-slate-500">Escala de calificación</dt>
-                <dd class="mt-1 font-semibold text-acode-primary">
-                    {{ $exam->grading_scale }}
-                </dd>
+        @if ($errors->any())
+            <div class="rounded-xl border border-acode-danger/30 bg-acode-danger/10 px-4 py-3 text-sm text-acode-danger" role="alert">
+                <p class="font-semibold mb-1">No se pudo completar la operación:</p>
+                <ul class="list-inside list-disc space-y-0.5">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
             </div>
+        @endif
 
-            <div>
-                <dt class="text-slate-500">Resultados</dt>
-                <dd class="mt-1 font-semibold text-acode-primary">
-                    {{ $resultModes[$exam->result_visibility_mode] ?? 'No definido' }}
-                </dd>
-            </div>
+        {{-- Resumen KPI del Examen --}}
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" aria-label="Resumen estructural del examen">
+            <x-kpi-card
+                label="Apartados"
+                :value="$exam->sections->count()"
+                icon="squares2x2"
+                tone="tech"
+            />
+            <x-kpi-card
+                label="Reactivos"
+                :value="$totalQuestions"
+                icon="document"
+                tone="primary"
+            />
+            <x-kpi-card
+                label="Ponderación"
+                :value="number_format($resolvedPoints, 2)"
+                meta="/ 100.00 pts"
+                icon="reportBar"
+                :tone="($publishChecklist['exact_weight'] ?? false) ? 'accent' : 'warning'"
+                :mono="true"
+            />
+            <x-kpi-card
+                label="Grupos asignados"
+                :value="$exam->groups->count()"
+                icon="userGroup"
+                tone="tech"
+            />
+        </section>
 
-            <div>
-                <dt class="text-slate-500">Orden de preguntas</dt>
-                <dd class="mt-1 font-semibold text-acode-primary">
-                    {{ $exam->randomize_question_order ? 'Aleatorio' : 'Fijo' }}
-                </dd>
-            </div>
+        @if (! $exam->is_published)
+            {{-- Checklist Pre-Publicación 5/5 y Formulario Real de Publicación --}}
+            <x-card
+                title="Checklist pre-publicación ({{ (int) ($publishChecklist['passed_count'] ?? 0) }} / {{ (int) ($publishChecklist['total_checks'] ?? 5) }} verificaciones)"
+                subtitle="Todas las condiciones deben cumplirse para publicar el examen y notificar a los estudiantes."
+            >
+                <div class="space-y-3">
+                    @foreach ($checklistItems as $item)
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border p-3.5 {{ $item['passed'] ? 'border-acode-accent/30 bg-acode-accent/5' : 'border-acode-danger/30 bg-acode-danger/5' }}">
+                            <div class="flex items-center gap-3">
+                                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full {{ $item['passed'] ? 'bg-acode-accent text-white' : 'bg-acode-danger text-white' }}">
+                                    <x-icon name="{{ $item['passed'] ? 'check' : 'xMark' }}" class="w-4 h-4" />
+                                </span>
+                                <span class="text-sm font-semibold {{ $item['passed'] ? 'text-acode-primary' : 'text-acode-danger' }}">
+                                    {{ $item['label'] }}
+                                </span>
+                            </div>
 
-            <div>
-                <dt class="text-slate-500">Cámara web</dt>
-                <dd class="mt-1 font-semibold text-acode-primary">
-                    {{ $exam->require_webcam ? 'Solicitada' : 'No solicitada' }}
-                </dd>
-            </div>
-
-            <div>
-                <dt class="text-slate-500">Máximo de incidencias</dt>
-                <dd class="mt-1 font-semibold text-acode-primary">
-                    {{ $exam->max_allowed_incidents }}
-                </dd>
-            </div>
-
-            <div>
-                <dt class="text-slate-500">Grupos asignados</dt>
-                <dd class="mt-1 font-semibold text-acode-primary">
-                    {{ $exam->groups->pluck('name')->join(', ') ?: 'Sin grupos' }}
-                </dd>
-            </div>
-
-            <div>
-                <dt class="text-slate-500">Inicio registrado</dt>
-                <dd class="mt-1 font-semibold text-acode-primary">
-                    {{ $exam->starts_at?->format('d/m/Y H:i') ?? 'Sin fecha' }}
-                </dd>
-            </div>
-
-            <div>
-                <dt class="text-slate-500">Término registrado</dt>
-                <dd class="mt-1 font-semibold text-acode-primary">
-                    {{ $exam->ends_at?->format('d/m/Y H:i') ?? 'Sin fecha' }}
-                </dd>
-            </div>
-        </dl>
-
-        <p class="mt-4 text-xs text-slate-500">
-            Los horarios se muestran según la interpretación actual de Laravel.
-            La conversión de zona horaria está pendiente de validación.
-        </p>
-    </section>
-
-    {{-- Apartados y preguntas --}}
-    <section class="space-y-4">
-        <div class="flex items-center justify-between gap-3">
-            <h2 class="text-lg font-semibold text-acode-primary">
-                Apartados y reactivos
-            </h2>
-
-            @unless ($exam->is_published)
-                <a href="{{ route('exams.assemble', $exam) }}"
-                   class="text-sm font-semibold text-acode-tech hover:underline">
-                    Editar
-                </a>
-            @endunless
-        </div>
-
-        @forelse ($exam->sections as $section)
-            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-5 py-4">
-                    <h3 class="font-semibold text-acode-primary">
-                        {{ $section->title }}
-                    </h3>
-
-                    <span class="text-xs text-slate-500">
-                        {{ $section->examQuestions->count() }} reactivos
-                    </span>
+                            @if ($item['passed'])
+                                <x-badge variant="accent">Cumple</x-badge>
+                            @else
+                                <x-button :href="$item['fixUrl']" variant="warning" size="sm">
+                                    {{ $item['fixLabel'] }} →
+                                </x-button>
+                            @endif
+                        </div>
+                    @endforeach
                 </div>
 
-                <div class="divide-y divide-slate-100">
-                    @forelse ($section->examQuestions as $examQuestion)
-                        <div class="flex items-start justify-between gap-4 px-5 py-3">
-                            <p class="text-sm text-slate-700">
-                                {{ $loop->iteration }}.
-                                {{ $examQuestion->question?->title ?? 'Reactivo no disponible' }}
+                <div class="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div class="text-xs text-slate-600 max-w-xl">
+                        @if ($publishChecklist['can_publish'] ?? false)
+                            <p class="font-semibold text-acode-accent text-sm">¡Todo listo para publicar!</p>
+                            <p class="mt-0.5">Al confirmar, el examen quedará visible para los alumnos inscritos en sus grupos y se enviará la notificación correspondiente.</p>
+                        @else
+                            <p class="font-semibold text-acode-primary text-sm">Faltan requisitos por completar</p>
+                            <p class="mt-0.5">Corrige los puntos marcados arriba para habilitar el botón de publicación.</p>
+                        @endif
+                    </div>
+
+                    <form id="publish-exam-form" method="POST" action="{{ route('exams.publish', $exam) }}" class="shrink-0">
+                        @csrf
+                        <x-button
+                            type="button"
+                            variant="accent"
+                            size="lg"
+                            :disabled="! ($publishChecklist['can_publish'] ?? false)"
+                            @click="confirmAction(
+                                'publish-exam-form',
+                                '¿Publicar examen ahora?',
+                                'El examen ' + {{ \Illuminate\Support\Js::from($exam->title) }} + ' quedará disponible para los estudiantes de los grupos asignados en la ventana configurada.',
+                                'Publicar examen',
+                                false
+                            )"
+                        >
+                            <x-icon name="success" class="w-5 h-5" />
+                            Publicar examen
+                        </x-button>
+                    </form>
+                </div>
+            </x-card>
+        @else
+            {{-- Panel de Examen Publicado: Folio y Acciones Operativas --}}
+            <x-card title="Examen publicado y operativo" subtitle="Supervisa el progreso en vivo o gestiona su ciclo de aplicación.">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center mb-5">
+                    <div class="rounded-xl border border-slate-200 bg-acode-surface p-4 flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Token / Folio del examen</p>
+                            <p class="mt-1 font-mono text-base font-bold text-acode-primary truncate select-all">
+                                {{ $exam->share_token }}
                             </p>
+                        </div>
+                        <x-button type="button" variant="neutral" size="sm" @click="copyShareToken({{ \Illuminate\Support\Js::from($exam->share_token) }})">
+                            <x-icon name="copy" class="w-4 h-4" />
+                            Copiar
+                        </x-button>
+                    </div>
 
-                            <span class="shrink-0 text-xs font-medium text-acode-tech">
-                                {{ $examQuestion->points_weight }} puntos
-                            </span>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600 space-y-1">
+                        <p><strong>Estado operativo:</strong> {{ $opStatusLabel }}</p>
+                        <p><strong>Intentos registrados:</strong> {{ $attemptsCount }}</p>
+                        <p><strong>Visibilidad:</strong> {{ $resultModes[$exam->result_visibility_mode] ?? $exam->result_visibility_mode }}</p>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2.5 pt-3 border-t border-slate-100">
+                    <x-button :href="route('exams.monitor', $exam)" variant="secondary" size="md">
+                        <x-icon name="view" class="w-4 h-4" />
+                        Monitoreo en vivo
+                    </x-button>
+
+                    <x-button :href="route('exams.revision.index', $exam)" variant="primary" size="md">
+                        <x-icon name="edit" class="w-4 h-4" />
+                        Recoteje
+                    </x-button>
+
+                    @if (! $exam->isWindowClosed())
+                        <form id="review-close-exam-form" method="POST" action="{{ route('exams.close', $exam) }}" class="inline">
+                            @csrf
+                            <x-button
+                                type="button"
+                                variant="warning"
+                                size="md"
+                                @click="confirmAction(
+                                    'review-close-exam-form',
+                                    '¿Cerrar examen anticipadamente?',
+                                    'Se cerrará inmediatamente la ventana de aplicación y ningún alumno podrá iniciar o enviar nuevos intentos.',
+                                    'Cerrar anticipadamente',
+                                    true
+                                )"
+                            >
+                                Cerrar anticipadamente
+                            </x-button>
+                        </form>
+                    @endif
+
+                    @if ($attemptsCount === 0)
+                        <form id="review-unpublish-exam-form" method="POST" action="{{ route('exams.unpublish', $exam) }}" class="inline">
+                            @csrf
+                            <x-button
+                                type="button"
+                                variant="neutral"
+                                size="md"
+                                @click="confirmAction(
+                                    'review-unpublish-exam-form',
+                                    '¿Despublicar examen?',
+                                    'El examen regresará a estado borrador (no tiene intentos registrados).',
+                                    'Despublicar',
+                                    false
+                                )"
+                            >
+                                Despublicar
+                            </x-button>
+                        </form>
+                    @endif
+
+                    @if ($exam->result_visibility_mode === 'hidden')
+                        <form id="review-release-results-form" method="POST" action="{{ route('exams.results.release', $exam) }}" class="inline">
+                            @csrf
+                            @method('PATCH')
+                            <x-button
+                                type="button"
+                                variant="accent"
+                                size="md"
+                                @click="confirmAction(
+                                    'review-release-results-form',
+                                    '¿Liberar resultados a los alumnos?',
+                                    'Los estudiantes podrán consultar sus calificaciones finales desde su panel.',
+                                    'Liberar resultados',
+                                    false
+                                )"
+                            >
+                                Liberar resultados
+                            </x-button>
+                        </form>
+                    @endif
+                </div>
+            </x-card>
+        @endif
+
+        {{-- Resumen de Configuración y Apartados --}}
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <x-card title="Configuración general" class="lg:col-span-5">
+                @if (! $exam->is_published)
+                    <x-slot:actions>
+                        <x-button :href="route('exams.configuration', $exam)" variant="neutral" size="sm">
+                            <x-icon name="edit" class="w-3.5 h-3.5" />
+                            Editar
+                        </x-button>
+                    </x-slot:actions>
+                @endif
+
+                <dl class="space-y-3 text-xs">
+                    <div class="flex justify-between gap-2 border-b border-slate-100 pb-2">
+                        <dt class="text-slate-500">Escala</dt>
+                        <dd class="font-bold text-acode-primary">{{ $exam->grading_scale }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-2 border-b border-slate-100 pb-2">
+                        <dt class="text-slate-500">Resultados</dt>
+                        <dd class="font-semibold text-acode-primary text-right">{{ $resultModes[$exam->result_visibility_mode] ?? 'No definido' }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-2 border-b border-slate-100 pb-2">
+                        <dt class="text-slate-500">Orden de reactivos</dt>
+                        <dd class="font-semibold text-acode-primary">{{ $exam->randomize_question_order ? 'Aleatorio' : 'Fijo por apartado' }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-2 border-b border-slate-100 pb-2">
+                        <dt class="text-slate-500">Incidencias máximas</dt>
+                        <dd class="font-mono font-bold text-acode-primary">{{ $exam->max_allowed_incidents }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-2 border-b border-slate-100 pb-2">
+                        <dt class="text-slate-500">Inicio</dt>
+                        <dd class="font-semibold text-acode-primary">{{ $exam->starts_at?->format('d/m/Y H:i') ?? 'Sin fecha' }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-2 border-b border-slate-100 pb-2">
+                        <dt class="text-slate-500">Cierre</dt>
+                        <dd class="font-semibold text-acode-primary">{{ $exam->ends_at?->format('d/m/Y H:i') ?? 'Sin fecha' }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500 mb-1.5">Grupos asignados</dt>
+                        <dd class="flex flex-wrap gap-1.5">
+                            @forelse ($exam->groups as $group)
+                                <x-badge :variant="$group->is_closed ? 'neutral' : 'info'">
+                                    {{ $group->name }}{{ $group->is_closed ? ' (Cerrado)' : '' }}
+                                </x-badge>
+                            @empty
+                                <span class="text-slate-400 italic">Sin grupos asignados</span>
+                            @endforelse
+                        </dd>
+                    </div>
+                </dl>
+            </x-card>
+
+            <x-card title="Apartados y reactivos" class="lg:col-span-7">
+                @if ($exam->supportsStructuralEdit())
+                    <x-slot:actions>
+                        <x-button :href="route('exams.assemble', $exam)" variant="neutral" size="sm">
+                            <x-icon name="edit" class="w-3.5 h-3.5" />
+                            Editar
+                        </x-button>
+                    </x-slot:actions>
+                @endif
+
+                <div class="space-y-3">
+                    @forelse ($exam->sections as $section)
+                        <div class="rounded-xl border border-slate-200 overflow-hidden">
+                            <div class="flex items-center justify-between bg-slate-50 px-4 py-2.5 border-b border-slate-100">
+                                <span class="font-bold text-sm text-acode-primary">{{ $section->title }}</span>
+                                <span class="text-xs font-semibold text-slate-500">{{ $section->examQuestions->count() }} reactivo(s)</span>
+                            </div>
+                            <div class="divide-y divide-slate-100">
+                                @forelse ($section->examQuestions as $examQuestion)
+                                    <div class="px-4 py-2.5 flex items-center justify-between gap-3 text-xs">
+                                        <span class="text-slate-700 font-medium truncate">
+                                            {{ $loop->iteration }}. {{ $examQuestion->question?->title ?? 'Reactivo #' . $examQuestion->question_id }}
+                                        </span>
+                                        <span class="font-mono font-bold text-acode-tech shrink-0">
+                                            {{ number_format((float) $examQuestion->points_weight, 2) }} pts
+                                        </span>
+                                    </div>
+                                @empty
+                                    <p class="px-4 py-3 text-xs text-acode-danger">Apartado vacío sin reactivos.</p>
+                                @endforelse
+                            </div>
                         </div>
                     @empty
-                        <p class="px-5 py-4 text-sm text-slate-500">
-                            Apartado sin reactivos.
-                        </p>
+                        <x-empty-state
+                            icon="document"
+                            title="Sin apartados registrados"
+                            message="Regresa a la etapa Armar reactivos para crear apartados."
+                        />
                     @endforelse
                 </div>
-            </div>
-        @empty
-            <div class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
-                <p class="text-sm text-slate-500">
-                    Este examen todavía no tiene apartados.
-                </p>
-            </div>
-        @endforelse
-    </section>
-
-    {{-- Publicación pendiente --}}
-    <section class="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 class="text-lg font-semibold text-acode-primary">
-            Publicación del examen
-        </h2>
-
-        <p class="mt-2 text-sm leading-relaxed text-slate-600">
-            La publicación estará disponible cuando terminemos de implementar
-            y verificar todas las condiciones necesarias para aplicar el examen.
-        </p>
-
-        @unless ($exam->is_published)
-            <button type="button" disabled
-                    class="mt-4 cursor-not-allowed rounded-lg bg-slate-200 px-5 py-3 text-sm font-semibold text-slate-500">
-                Publicar examen · Pendiente
-            </button>
-        @endunless
-    </section>
-
-    <div class="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-between">
-        <a href="{{ route('exams.configuration', $exam) }}"
-           class="rounded-lg border border-slate-300 px-5 py-3 text-center text-sm font-semibold text-acode-primary hover:bg-slate-50">
-            Volver a Configuración
-        </a>
-
-        <a href="{{ route('exams.index') }}"
-           class="rounded-lg bg-acode-primary px-5 py-3 text-center text-sm font-semibold text-white hover:opacity-90">
-            Guardar borrador y salir
-        </a>
+            </x-card>
+        </div>
     </div>
-</div>
 @endsection

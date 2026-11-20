@@ -1,233 +1,263 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: evaluation-periods/gradebook.blade.php (RF-CAL-009, RF-CAL-012, RF-CAL-017, RF-CAL-021, RF-CAL-027, RW-28..31) --}}
+{{--
+    ============================================================================
+    A-CODE SOLUTIONS - ANALIZAMOS, DISEÑAMOS, TRANSFORMAMOS
+    ============================================================================
+    Archivo:     resources/views/evaluation-periods/gradebook.blade.php
+    Ubicación:   resources/views/evaluation-periods/gradebook.blade.php
+    Descripción: Sábana interactiva de captura y cálculo ponderado de
+                 calificaciones por periodo escolar con exportación Excel (.xlsx),
+                 protección ante cambios sin guardar y tokens oficiales acode-*
+                 (RF-CAL-009, RF-CAL-012, RF-CAL-017, RF-CAL-021, RF-CAL-027,
+                 RW-28..31, MPW-V2 §7.3, §7.4.2, §8.1–§8.12).
+    ============================================================================
+--}}
 @extends('layouts.app')
 
 @section('title', 'Control de Calificaciones - ' . $period->name . ' - ' . $group->name)
 
 @section('content')
+@php
+    $weightsTotal = round((float) array_sum($weights), 1);
+@endphp
+
 <div class="space-y-6">
 
-    {{-- Encabezado de Página --}}
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-            <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                <a href="{{ route('groups.index') }}" class="hover:text-acode-tech">Grupos</a>
-                <span>/</span>
-                <a href="{{ route('groups.show', $group) }}" class="hover:text-acode-tech">{{ $group->name }}</a>
-                <span>/</span>
-                <a href="{{ route('groups.periods.index', $group) }}" class="hover:text-acode-tech">Periodos</a>
-                <span>/</span>
-                <span class="text-acode-primary">Control: {{ $period->name }}</span>
-            </div>
-            <h1 class="text-2xl lg:text-3xl font-bold text-acode-primary tracking-tight">Control de Calificaciones</h1>
-            <p class="text-sm text-slate-600 mt-1">
-                Periodo: <strong>{{ $period->name }}</strong> &bull; Grupo: <strong>{{ $group->name }}</strong>
-                ({{ $period->starts_at->format('d/m/Y') }} &mdash; {{ $period->ends_at->format('d/m/Y') }})
-            </p>
-        </div>
-
-        <div class="flex items-center gap-2">
-            <x-button :href="route('groups.periods.index', $group)" variant="neutral" size="sm">
-                <x-icon name="chevronDown" class="w-3.5 h-3.5 rotate-90 mr-1" />
+    {{-- Nivel 1: Encabezado Institucional con Breadcrumbs y Acciones --}}
+    <x-page-header
+        title="Control de Calificaciones"
+        :subtitle="'Periodo: ' . $period->name . ' · Grupo: ' . $group->name . ' (' . $period->starts_at->format('d/m/Y') . ' — ' . $period->ends_at->format('d/m/Y') . ').'"
+        :breadcrumbs="[
+            ['label' => 'Grupos', 'href' => route('groups.index')],
+            ['label' => $group->name, 'href' => route('groups.show', $group)],
+            ['label' => 'Periodos', 'href' => route('groups.periods.index', $group)],
+            ['label' => $period->name],
+        ]"
+    >
+        <x-slot:actions>
+            <x-button :href="route('groups.periods.index', $group)" variant="neutral" size="md">
+                <x-icon name="arrowLeft" class="w-4 h-4" />
                 Volver
             </x-button>
-            <x-button :href="route('groups.periods.gradebook.export', [$group, $period])" variant="secondary" size="sm">
-                <x-icon name="documentText" class="w-4 h-4 mr-1.5 text-emerald-600" />
+
+            <x-button :href="route('groups.periods.gradebook.export', [$group, $period])" variant="secondary" size="md">
+                <x-icon name="downloadReport" class="w-4 h-4" />
                 Descargar reporte Excel
             </x-button>
-            <x-button type="submit" form="gradebook-form" variant="primary" size="sm">
-                <x-icon name="check" class="w-4 h-4 mr-1.5" />
-                Guardar Calificaciones
+
+            <x-button type="submit" form="gradebook-form" variant="primary" size="md">
+                <x-icon name="save" class="w-4 h-4" />
+                Guardar calificaciones
             </x-button>
-        </div>
-    </div>
+        </x-slot:actions>
+    </x-page-header>
 
     @if ($errors->any())
-        <div class="p-4 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-sm font-medium">
-            <p class="font-bold mb-1">Por favor corrige los siguientes errores:</p>
-            <ul class="list-disc list-inside text-xs space-y-0.5">
-                @foreach ($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
+        <div class="rounded-xl border border-acode-danger/30 bg-acode-danger/10 p-4 text-sm font-medium text-acode-danger">
+            <div class="flex items-start gap-2.5">
+                <x-icon name="error" class="w-5 h-5 shrink-0 mt-0.5" />
+                <div>
+                    <p class="font-bold mb-1">Por favor corrige los siguientes errores:</p>
+                    <ul class="list-disc list-inside text-xs space-y-0.5">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            </div>
         </div>
     @endif
 
-    {{-- Tarjeta de Ponderaciones y Reglas del Periodo (RF-CAL-004, RF-CAL-021) --}}
-    <x-card class="bg-gradient-to-r from-slate-50 to-white">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    {{-- Nivel 2: Tarjeta de Fórmula y Ponderaciones Oficiales en Tokens acode-* --}}
+    <x-card>
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>
-                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Fórmula Activa del Periodo</p>
-                <code class="px-2.5 py-1 bg-white border border-slate-300 rounded font-mono text-xs text-acode-tech font-bold select-all">
+                <p class="text-xs font-semibold text-slate-500 mb-1.5">Fórmula activa del periodo</p>
+                <code class="inline-block px-3 py-1.5 bg-acode-surface border border-slate-200 rounded-lg font-mono text-xs text-acode-primary font-bold select-all">
                     {{ $period->formula }}
                 </code>
             </div>
 
-            <div class="flex flex-wrap items-center gap-3">
-                <div class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded text-center">
-                    <span class="block text-[10px] font-semibold uppercase text-blue-700">Exámenes</span>
-                    <span class="text-sm font-bold text-blue-900 font-mono">{{ $weights['exams'] }} %</span>
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                <div class="px-3.5 py-2 rounded-xl border border-acode-tech/25 bg-acode-tech/10 text-center">
+                    <span class="block text-xs font-semibold text-acode-tech">Exámenes</span>
+                    <span class="text-sm font-extrabold text-acode-primary font-mono">{{ $weights['exams'] }} %</span>
                 </div>
-                <div class="px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded text-center">
-                    <span class="block text-[10px] font-semibold uppercase text-indigo-700">Tareas</span>
-                    <span class="text-sm font-bold text-indigo-900 font-mono">{{ $weights['homework'] }} %</span>
+
+                <div class="px-3.5 py-2 rounded-xl border border-acode-accent/30 bg-acode-accent/10 text-center">
+                    <span class="block text-xs font-semibold text-acode-accent-dark">Tareas</span>
+                    <span class="text-sm font-extrabold text-acode-primary font-mono">{{ $weights['homework'] }} %</span>
                 </div>
-                <div class="px-3 py-1.5 bg-purple-50 border border-purple-200 rounded text-center">
-                    <span class="block text-[10px] font-semibold uppercase text-purple-700">Proyectos</span>
-                    <span class="text-sm font-bold text-purple-900 font-mono">{{ $weights['project'] }} %</span>
+
+                <div class="px-3.5 py-2 rounded-xl border border-acode-warning/40 bg-acode-warning/15 text-center">
+                    <span class="block text-xs font-semibold text-acode-warning-dark">Proyectos</span>
+                    <span class="text-sm font-extrabold text-acode-primary font-mono">{{ $weights['project'] }} %</span>
                 </div>
-                <div class="px-3 py-1.5 bg-slate-100 border border-slate-300 rounded text-center">
-                    <span class="block text-[10px] font-semibold uppercase text-slate-700">Otros</span>
-                    <span class="text-sm font-bold text-slate-900 font-mono">{{ $weights['other'] }} %</span>
+
+                <div class="px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-100 text-center">
+                    <span class="block text-xs font-semibold text-slate-600">Otros</span>
+                    <span class="text-sm font-extrabold text-acode-primary font-mono">{{ $weights['other'] }} %</span>
+                </div>
+
+                <div class="col-span-2 sm:col-span-1 px-3.5 py-2 rounded-xl border border-acode-primary/25 bg-acode-primary/10 text-center">
+                    <span class="block text-xs font-semibold text-acode-primary">Total</span>
+                    <span class="text-sm font-extrabold text-acode-primary font-mono">{{ $weightsTotal }} %</span>
                 </div>
             </div>
         </div>
     </x-card>
 
-    {{-- Formulario de Captura de Control de Calificaciones (RF-CAL-009, RF-CAL-027) --}}
-    <form id="gradebook-form" method="POST" action="{{ route('groups.periods.gradebook.save', [$group, $period]) }}">
+    {{-- Nivel 3: Formulario de Captura de Calificaciones (sin doble borde de x-card) --}}
+    <form id="gradebook-form" method="POST" action="{{ route('groups.periods.gradebook.save', [$group, $period]) }}" class="space-y-4">
         @csrf
 
-        <x-card>
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-bold text-acode-primary">Listado de Alumnos ({{ $students->count() }})</h2>
-                <span class="text-xs text-slate-500">Escala de 0 a 100 &bull; Vacío = «Pendiente» (RF-CAL-021)</span>
-            </div>
+        <x-section-header
+            :title="'Listado de alumnos (' . $students->count() . ')'"
+            subtitle="Escala de 0 a 100 · Dejar vacío un campo registra el rubro como «Pendiente»."
+        />
 
-            <x-table>
-                <x-slot:header>
-                    <x-table.th class="sticky left-0 bg-acode-primary z-20">Alumno</x-table.th>
-                    <x-table.th align="center">Exámenes ({{ $weights['exams'] }}%)</x-table.th>
-                    <x-table.th align="center">Tareas ({{ $weights['homework'] }}%)</x-table.th>
-                    <x-table.th align="center">Proyectos ({{ $weights['project'] }}%)</x-table.th>
-                    <x-table.th align="center">Otros ({{ $weights['other'] }}%)</x-table.th>
-                    <x-table.th align="right">Promedio Final</x-table.th>
-                </x-slot:header>
+        <x-table>
+            <x-slot:header>
+                <x-table.th class="sticky left-0 bg-acode-primary z-20">Alumno</x-table.th>
+                <x-table.th align="center">Exámenes ({{ $weights['exams'] }} %)</x-table.th>
+                <x-table.th align="center">Tareas ({{ $weights['homework'] }} %)</x-table.th>
+                <x-table.th align="center">Proyectos ({{ $weights['project'] }} %)</x-table.th>
+                <x-table.th align="center">Otros ({{ $weights['other'] }} %)</x-table.th>
+                <x-table.th align="right">Promedio final</x-table.th>
+            </x-slot:header>
 
-                @forelse ($students as $index => $student)
-                    @php
-                        $grade = $savedGrades->get($student->id);
-                        $examAvg = $examAverages->get($student->id);
-                    @endphp
-                    <tr>
-                        <x-table.td class="sticky left-0 bg-white z-10 border-r border-slate-200 shadow-sm">
-                            <input type="hidden" name="grades[{{ $index }}][student_id]" value="{{ $student->id }}" />
-                            <div class="flex items-center gap-2.5">
-                                <div class="w-8 h-8 rounded-full bg-acode-surface flex items-center justify-center font-bold text-xs text-acode-tech shrink-0">
-                                    {{ strtoupper(substr($student->first_name ?? $student->full_name, 0, 1)) }}
-                                </div>
-                                <div>
-                                    <div class="font-bold text-slate-900 text-sm">{{ $student->full_name }}</div>
-                                    <div class="text-xs text-slate-500">{{ $student->email }}</div>
-                                </div>
+            @forelse ($students as $index => $student)
+                @php
+                    $grade = $savedGrades->get($student->id);
+                    $examAvg = $examAverages->get($student->id);
+                @endphp
+                <tr class="group">
+                    <x-table.td class="sticky left-0 z-10 border-r border-slate-200 shadow-sm {{ $loop->even ? 'bg-acode-surface' : 'bg-white' }} group-hover:bg-acode-surface">
+                        <input type="hidden" name="grades[{{ $index }}][student_id]" value="{{ $student->id }}" />
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-full bg-acode-primary flex items-center justify-center font-bold text-xs text-white shrink-0">
+                                {{ strtoupper(substr($student->first_name ?? $student->full_name, 0, 1)) }}
                             </div>
-                        </x-table.td>
-
-                        {{-- Componente Exámenes --}}
-                        <x-table.td align="center">
-                            <div class="flex flex-col items-center gap-1">
-                                <input
-                                    id="exams_{{ $student->id }}"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    max="100"
-                                    name="grades[{{ $index }}][exams_component]"
-                                    value="{{ old("grades.{$index}.exams_component", $grade?->exams_component) }}"
-                                    placeholder="&mdash;"
-                                    class="w-20 px-2 py-1 text-center font-mono text-sm border border-slate-300 rounded focus:ring-1 focus:ring-acode-tech focus:border-acode-tech"
-                                />
-                                @if ($examAvg !== null && $grade?->exams_component === null)
-                                    <button
-                                        type="button"
-                                        onclick="document.getElementById('exams_{{ $student->id }}').value = '{{ $examAvg }}'"
-                                        class="text-[10px] text-acode-tech hover:underline cursor-pointer flex items-center gap-0.5"
-                                        title="Auto-llenar con el promedio de intentos reales del alumno en el grupo"
-                                    >
-                                        Sugerido: {{ $examAvg }}
-                                    </button>
-                                @endif
+                            <div>
+                                <div class="font-bold text-acode-primary text-sm">{{ $student->full_name }}</div>
+                                <div class="text-xs text-slate-500">{{ $student->email }}</div>
                             </div>
-                        </x-table.td>
+                        </div>
+                    </x-table.td>
 
-                        {{-- Componente Tareas --}}
-                        <x-table.td align="center">
+                    {{-- Componente Exámenes --}}
+                    <x-table.td align="center">
+                        <div class="flex flex-col items-center gap-1">
                             <input
+                                id="exams_{{ $student->id }}"
                                 type="number"
                                 step="0.01"
                                 min="0"
                                 max="100"
-                                name="grades[{{ $index }}][homework_component]"
-                                value="{{ old("grades.{$index}.homework_component", $grade?->homework_component) }}"
+                                name="grades[{{ $index }}][exams_component]"
+                                value="{{ old("grades.{$index}.exams_component", $grade?->exams_component) }}"
                                 placeholder="&mdash;"
-                                class="w-20 px-2 py-1 text-center font-mono text-sm border border-slate-300 rounded focus:ring-1 focus:ring-acode-tech focus:border-acode-tech"
+                                class="w-24 h-8 px-2.5 text-center font-mono text-sm rounded-lg border border-slate-300 bg-white text-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-acode-tech focus:border-acode-tech"
                             />
-                        </x-table.td>
-
-                        {{-- Componente Proyectos --}}
-                        <x-table.td align="center">
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                max="100"
-                                name="grades[{{ $index }}][project_component]"
-                                value="{{ old("grades.{$index}.project_component", $grade?->project_component) }}"
-                                placeholder="&mdash;"
-                                class="w-20 px-2 py-1 text-center font-mono text-sm border border-slate-300 rounded focus:ring-1 focus:ring-acode-tech focus:border-acode-tech"
-                            />
-                        </x-table.td>
-
-                        {{-- Componente Otros --}}
-                        <x-table.td align="center">
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                max="100"
-                                name="grades[{{ $index }}][other_component]"
-                                value="{{ old("grades.{$index}.other_component", $grade?->other_component) }}"
-                                placeholder="&mdash;"
-                                class="w-20 px-2 py-1 text-center font-mono text-sm border border-slate-300 rounded focus:ring-1 focus:ring-acode-tech focus:border-acode-tech"
-                            />
-                        </x-table.td>
-
-                        {{-- Calificación Final Calculada --}}
-                        <x-table.td align="right">
-                            @if ($grade?->final_grade !== null)
-                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-mono font-bold {{ (float) $grade->final_grade >= 60 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
-                                    {{ number_format((float) $grade->final_grade, 2) }}
-                                </span>
-                            @else
-                                <span class="text-xs text-slate-400 italic font-mono">Pendiente</span>
+                            @if ($examAvg !== null && $grade?->exams_component === null)
+                                <button
+                                    type="button"
+                                    onclick="const input = document.getElementById('exams_{{ $student->id }}'); input.value = '{{ $examAvg }}'; input.dispatchEvent(new Event('input', { bubbles: true }));"
+                                    class="text-xs font-medium text-acode-tech hover:underline cursor-pointer"
+                                    title="Auto-llenar con el promedio de intentos reales del alumno en el grupo"
+                                >
+                                    Sugerido: {{ $examAvg }}
+                                </button>
                             @endif
-                        </x-table.td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="6" class="p-0">
-                            <x-empty-state
-                                class="border-0 shadow-none rounded-none py-10"
-                                icon="userGroup"
-                                title="No hay alumnos matriculados en este grupo"
-                                message="Comparte el folio de acceso con tus alumnos para que puedan unirse y calificar sus actividades."
-                            />
-                        </td>
-                    </tr>
-                @endforelse
-            </x-table>
+                        </div>
+                    </x-table.td>
 
-            @if ($students->isNotEmpty())
-                <div class="flex items-center justify-between pt-4 mt-4 border-t border-slate-100">
-                    <p class="text-xs text-slate-500">
-                        Los promedios se calculan automáticamente con el motor aritmético seguro al presionar Guardar.
-                    </p>
+                    {{-- Componente Tareas --}}
+                    <x-table.td align="center">
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            name="grades[{{ $index }}][homework_component]"
+                            value="{{ old("grades.{$index}.homework_component", $grade?->homework_component) }}"
+                            placeholder="&mdash;"
+                            class="w-24 h-8 px-2.5 text-center font-mono text-sm rounded-lg border border-slate-300 bg-white text-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-acode-tech focus:border-acode-tech"
+                        />
+                    </x-table.td>
+
+                    {{-- Componente Proyectos --}}
+                    <x-table.td align="center">
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            name="grades[{{ $index }}][project_component]"
+                            value="{{ old("grades.{$index}.project_component", $grade?->project_component) }}"
+                            placeholder="&mdash;"
+                            class="w-24 h-8 px-2.5 text-center font-mono text-sm rounded-lg border border-slate-300 bg-white text-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-acode-tech focus:border-acode-tech"
+                        />
+                    </x-table.td>
+
+                    {{-- Componente Otros --}}
+                    <x-table.td align="center">
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            name="grades[{{ $index }}][other_component]"
+                            value="{{ old("grades.{$index}.other_component", $grade?->other_component) }}"
+                            placeholder="&mdash;"
+                            class="w-24 h-8 px-2.5 text-center font-mono text-sm rounded-lg border border-slate-300 bg-white text-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-acode-tech focus:border-acode-tech"
+                        />
+                    </x-table.td>
+
+                    {{-- Calificación Final Calculada --}}
+                    <x-table.td align="right">
+                        @if ($grade?->final_grade !== null)
+                            <x-badge :variant="(float) $grade->final_grade >= 60 ? 'accent' : 'danger'" class="font-mono font-bold">
+                                {{ number_format((float) $grade->final_grade, 2) }}
+                            </x-badge>
+                        @else
+                            <span class="text-xs text-slate-400 italic font-mono">Pendiente</span>
+                        @endif
+                    </x-table.td>
+                </tr>
+            @empty
+                <tr>
+                    <td colspan="6" class="p-0">
+                        <x-empty-state
+                            class="border-0 shadow-none rounded-none py-10"
+                            icon="userGroup"
+                            title="No hay alumnos matriculados en este grupo"
+                            message="Comparte el folio de acceso con tus alumnos para que puedan unirse y calificar sus actividades."
+                        />
+                    </td>
+                </tr>
+            @endforelse
+        </x-table>
+
+        @if ($students->isNotEmpty())
+            <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                <p class="text-xs text-slate-500">
+                    Los promedios se calculan automáticamente con el motor aritmético seguro al presionar Guardar calificaciones.
+                </p>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <x-unsaved-changes
+                        form-id="gradebook-form"
+                        :cancel-url="route('groups.periods.index', $group)"
+                    />
+
                     <x-button type="submit" variant="primary" size="md">
-                        <x-icon name="check" class="w-4 h-4 mr-1.5" />
-                        Guardar Calificaciones
+                        <x-icon name="save" class="w-4 h-4" />
+                        Guardar calificaciones
                     </x-button>
                 </div>
-            @endif
-        </x-card>
+            </div>
+        @endif
     </form>
+
 </div>
 @endsection
