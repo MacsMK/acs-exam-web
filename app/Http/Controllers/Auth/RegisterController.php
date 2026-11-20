@@ -27,6 +27,7 @@ use App\Http\Requests\RegisterTeacherRequest;
 use App\Models\TeacherInvitationCode;
 use App\Models\TeacherVerification;
 use App\Services\AuthService;
+use App\Services\ProfilePhotoService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -112,14 +113,19 @@ class RegisterController extends Controller
      * @param RegisterStudentRequest $request Solicitud validada de registro de alumno.
      * @return RedirectResponse
      */
-    public function storeStudent(RegisterStudentRequest $request): RedirectResponse
+    public function storeStudent(RegisterStudentRequest $request, ProfilePhotoService $profilePhotoService): RedirectResponse
     {
         $user = $this->authService->registerWeb(
-            $request->validated(),
+            collect($request->validated())->except('photo')->all(),
             'student',
             $request->input('privacy_notice_id'),
             $request->ip(),
         );
+
+        // Fotografía opcional del estudiante (RF-AUT-008)
+        if ($request->hasFile('photo')) {
+            $profilePhotoService->store($user, $request->file('photo'));
+        }
 
         $request->session()->put('pending_2fa_user_id', $user->id);
 

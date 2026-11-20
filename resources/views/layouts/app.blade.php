@@ -463,9 +463,7 @@
                                 :aria-expanded="profileOpen.toString()"
                                 class="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-acode-tech">
 
-                            <div class="flex h-9 w-9 items-center justify-center rounded-full bg-acode-primary text-sm font-bold text-white">
-                                {{ strtoupper(substr(auth()->user()->first_name, 0, 1)) }}
-                            </div>
+                            <x-avatar :user="auth()->user()" />
 
                             <span class="hidden text-sm font-medium text-acode-primary sm:block">
                                 {{ auth()->user()->full_name }}
@@ -512,7 +510,16 @@
                                     <x-icon name="shield" class="h-5 w-5 text-acode-tech" />
                                     <span>Verificación de cuenta</span>
                                 </a>
-                            @elseif (auth()->user()->role === 'student')
+                            @elseif (in_array(auth()->user()->role, ['student', 'super_admin'], true))
+                                {{-- Perfil del alumno y del superadministrador (RF-AUT-013) --}}
+                                <a href="{{ route('account.profile') }}"
+                                   class="flex min-h-11 items-center gap-3 px-4 py-3 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
+                                    <x-icon name="user" class="h-5 w-5" />
+                                    <span>Mi perfil</span>
+                                </a>
+                            @endif
+
+                            @if (auth()->user()->role === 'student')
                                 <a href="{{ route('student.groups.index') }}"
                                    class="flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
                                     <x-nav-icon name="groups" class="h-5 w-5 text-acode-tech" />
@@ -538,7 +545,20 @@
                             </a>
 
                             <div class="my-1 border-t border-slate-100"></div>
-                            <form method="POST" action="{{ route('auth.logout') }}">
+                            {{-- Cierre de sesión con confirmación previa; si se cancela, la sesión continúa (RF-AUT-012) --}}
+                            <form
+                                method="POST"
+                                action="{{ route('auth.logout') }}"
+                                data-logout-form
+                                x-on:submit.prevent="window.AcodeAlert.confirm({
+                                    title: '¿Cerrar sesión?',
+                                    text: 'Tendrás que volver a ingresar tu correo, contraseña y código de verificación.',
+                                    confirmButtonText: 'Cerrar sesión',
+                                    cancelButtonText: 'Cancelar',
+                                    isDanger: false,
+                                    onConfirm: () => $el.submit(),
+                                })"
+                            >
                                 @csrf
                                 <button type="submit"
                                         class="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-acode-danger transition hover:bg-acode-danger/10">

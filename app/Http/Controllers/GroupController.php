@@ -18,6 +18,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\GroupStoreRequest;
 use App\Models\Group;
 use App\Models\StudentAttempt;
+use App\Models\User;
+use App\Services\SubscriptionLimitService;
 use App\Services\GroupEnrollmentService;
 use DomainException;
 use Illuminate\Contracts\View\View;
@@ -99,11 +101,32 @@ class GroupController extends Controller
         return redirect()->route('groups.show', $group)->with('status', 'Grupo cerrado (cierre semestral, RW-35).');
     }
 
-    public function reopen(Group $group): RedirectResponse
+    /**
+     * Retiro de un estudiante por el docente (RF-GRU-011, RF-GRU-016, ACT-WEB-021).
+     */
+    public function removeStudent(Group $group, User $student): RedirectResponse
+    {
+        $this->authorizeOwnership($group);
+
+        try {
+            $this->groupEnrollmentService->removeStudent($group, $student, auth()->user());
+        } catch (DomainException $e) {
+            return redirect()->route('groups.show', $group)->withErrors(['student' => $e->getMessage()]);
+        }
+
+        return redirect()
+            ->route('groups.show', $group)
+            ->with('status', "Se retiró a {$student->full_name} del grupo. Sus registros académicos se conservan.");
+    }
+
+    public function reopen(Group $group, SubscriptionLimitService $subscriptionLimitService): RedirectResponse
     {
         $this->authorizeOwnership($group);
 
         abort_unless($group->is_closed, 409, 'El grupo ya está activo.');
+
+        // Reabrir vuelve a ocupar un lugar del límite de grupos activos (RF-GRU-014, ACT-WEB-051)
+        $subscriptionLimitService->ensureCanReopenGroup($group->teacher()->firstOrFail());
 
         $group->update([
             'is_closed' => false,

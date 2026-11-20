@@ -13,6 +13,8 @@ declare(strict_types=1);
  * ============================================================================
  */
 
+use App\Http\Controllers\AccountProfileController;
+use App\Http\Controllers\ProfilePhotoController;
 use App\Http\Controllers\AdminInvitationCodeController;
 use App\Http\Controllers\AdminTeacherController;
 use App\Http\Controllers\AttemptController;
@@ -52,12 +54,26 @@ Route::middleware('guest')->group(function (): void {
 
     Route::get('verificar-codigo/{user}', [LoginController::class, 'showTwoFactorForm'])->name('auth.verify-2fa.show');
     Route::post('verificar-codigo', [LoginController::class, 'verifyTwoFactor'])->middleware('throttle:10,1')->name('auth.verify-2fa.store');
+    Route::post('verificar-codigo/reenviar', [LoginController::class, 'resendTwoFactor'])->middleware('throttle:10,1')->name('auth.verify-2fa.resend');
 });
 
 Route::middleware('auth')->group(function (): void {
     Route::post('logout', [LoginController::class, 'logout'])->name('auth.logout');
 
     Route::get('dashboard', DashboardController::class)->name('dashboard');
+
+    // Fotografía de perfil en almacenamiento privado (RF-AUT-008, ACT-WEB-038)
+    Route::get('usuarios/{user}/foto', ProfilePhotoController::class)
+        ->whereNumber('user')
+        ->name('users.photo');
+
+    // Perfil del alumno y del superadministrador (RF-AUT-013, ACT-WEB-050)
+    Route::get('mi-perfil', AccountProfileController::class)
+        ->middleware('role:student,super_admin')
+        ->name('account.profile');
+    Route::post('mi-perfil/foto', [AccountProfileController::class, 'updatePhoto'])
+        ->middleware('role:student')
+        ->name('account.profile.photo');
 
     Route::middleware('role:teacher')->group(function (): void {
         Route::get('docente/verificacion', [TeacherVerificationController::class, 'show'])
@@ -88,6 +104,9 @@ Route::middleware('auth')->group(function (): void {
             Route::resource('groups', GroupController::class)->only(['index', 'create', 'store', 'show']);
         Route::post('groups/{group}/cerrar', [GroupController::class, 'close'])->name('groups.close');
         Route::post('groups/{group}/reabrir', [GroupController::class, 'reopen'])->name('groups.reopen');
+        Route::delete('groups/{group}/alumnos/{student}', [GroupController::class, 'removeStudent'])
+            ->whereNumber('student')
+            ->name('groups.students.remove');
         Route::get('groups/{group}/periodos', [EvaluationPeriodController::class, 'index'])->name('groups.periods.index');
         Route::post('groups/{group}/periodos', [EvaluationPeriodController::class, 'store'])->name('groups.periods.store');
         Route::get('groups/{group}/periodos/{period}/sabana', [EvaluationPeriodController::class, 'gradebook'])->name('groups.periods.gradebook');

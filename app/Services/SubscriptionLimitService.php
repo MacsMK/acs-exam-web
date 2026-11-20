@@ -41,6 +41,46 @@ class SubscriptionLimitService
     public const FREEMIUM_MAX_AI_EVALUATIONS    = 25;
 
     /**
+     * Comprueba el límite de grupos activos antes de reabrir un grupo cerrado
+     * (RF-GRU-014, RF-GRU-020, ACT-WEB-051). Los grupos cerrados no cuentan
+     * como activos, por lo que reabrir uno vuelve a ocupar un lugar del límite.
+     * En la prueba gratuita el límite es el mismo grupo único (RF-SUS-008).
+     *
+     * @param User $teacher Docente propietario del grupo.
+     * @return void
+     *
+     * @throws SubscriptionLimitExceededException Si reabrir excede el límite.
+     */
+    public function ensureCanReopenGroup(User $teacher): void
+    {
+        $package = $this->resolveActivePackage($teacher);
+        $maxGroups = $package === null ? self::FREEMIUM_MAX_CUMULATIVE_GROUPS : $package->max_groups;
+
+        if ($maxGroups === null) {
+            return; // Ilimitado
+        }
+
+        $activeGroups = Group::withoutGlobalScopes()
+            ->where('teacher_id', $teacher->id)
+            ->where('is_closed', false)
+            ->count();
+
+        if ($activeGroups >= $maxGroups) {
+            throw new SubscriptionLimitExceededException(
+                sprintf(
+                    'No se puede reabrir el grupo: ya tienes %d de %d grupos activos permitidos. Cierra otro grupo o sube de nivel para reabrirlo.',
+                    $activeGroups,
+                    $maxGroups
+                ),
+                'groups',
+                $activeGroups,
+                (int) $maxGroups,
+                $package?->tier ?? 'freemium'
+            );
+        }
+    }
+
+    /**
      * Valida si el docente tiene cupo para crear un nuevo grupo escolar.
      *
      * @throws SubscriptionLimitExceededException
