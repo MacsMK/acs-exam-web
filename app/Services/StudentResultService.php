@@ -39,8 +39,84 @@ class StudentResultService
      */
     private const ACCESS_CLOSE_TOLERANCE_SECONDS = 60;
 
-    public function __construct(private readonly AttemptService $attemptService)
+    public function __construct(
+        private readonly AttemptService $attemptService,
+        private readonly GradeCalculatorService $gradeCalculator,
+    ) {
+    }
+
+    /**
+     * Construye el resumen normalizado para la vista web de resultado de intento
+     * (MPW-V2 §5.2.2, ADR-050, ADR-056, ADR-059), evitando lógica de escala en Blade.
+     *
+     * @param StudentAttempt $attempt Intento del alumno con relación exam disponible.
+     * @return array{
+     *     visibilityMode: string,
+     *     isHidden: bool,
+     *     isPendingReview: bool,
+     *     gradingScale: string,
+     *     isHundredScale: bool,
+     *     minPassing: float,
+     *     totalExamWeight: float,
+     *     objectiveScoreRaw: float,
+     *     aiEstimatedScoreRaw: float,
+     *     preliminaryRaw: float,
+     *     preliminaryScore: float,
+     *     finalScore: ?float,
+     *     displayScore: float,
+     *     isPassed: ?bool,
+     *     pendingAiCount: int
+     * }
+     */
+    public function buildWebResultSummary(StudentAttempt $attempt): array
     {
+        $attempt->loadMissing('exam');
+        $exam = $attempt->exam;
+
+        $visibilityMode = (string) ($exam?->result_visibility_mode ?? 'hidden');
+        $isHidden = $visibilityMode === 'hidden';
+        $pendingAiCount = (int) ($attempt->pending_ai_count ?? 0);
+        $isPendingReview = $pendingAiCount > 0 || $attempt->final_score === null;
+
+        $gradingScale = (string) ($exam?->grading_scale ?? '0-10');
+        $isHundredScale = $gradingScale === '0-100';
+        $minPassing = $isHundredScale ? 60.0 : 6.0;
+
+        $totalExamWeight = $exam !== null
+            ? (float) $exam->examQuestions()->sum('points_weight')
+            : 0.0;
+
+        $objectiveScoreRaw = round((float) ($attempt->objective_score ?? 0.0), 2);
+        $aiEstimatedScoreRaw = round((float) ($attempt->ai_estimated_score ?? 0.0), 2);
+        $preliminaryRaw = round($objectiveScoreRaw + $aiEstimatedScoreRaw, 2);
+
+        $preliminaryScore = $exam !== null
+            ? $this->gradeCalculator->normalizeScoreForExam($preliminaryRaw, $exam, $totalExamWeight)
+            : $preliminaryRaw;
+
+        $finalScore = $attempt->final_score !== null ? round((float) $attempt->final_score, 2) : null;
+        $displayScore = $finalScore ?? ($exam !== null
+            ? $this->gradeCalculator->normalizeScoreForExam($objectiveScoreRaw, $exam, $totalExamWeight)
+            : $objectiveScoreRaw);
+        $isPassed = $finalScore !== null ? $finalScore >= $minPassing : null;
+
+        return [
+            'visibilityMode' => $visibilityMode,
+            'isHidden' => $isHidden,
+            'isPendingReview' => $isPendingReview,
+            'gradingScale' => $gradingScale,
+            'isHundredScale' => $isHundredScale,
+            'minPassing' => $minPassing,
+            'totalExamWeight' => round($totalExamWeight, 2),
+            'objectiveScoreRaw' => $objectiveScoreRaw,
+            'aiEstimatedScoreRaw' => $aiEstimatedScoreRaw,
+            'preliminaryRaw' => $preliminaryRaw,
+            'preliminaryScore' => $preliminaryScore,
+            'finalScore' => $finalScore,
+            'displayScore' => $displayScore,
+            'isPassed' => $isPassed,
+            'pendingAiCount' => $pendingAiCount,
+        ];
     }
 
     /**

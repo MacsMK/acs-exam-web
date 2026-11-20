@@ -8,7 +8,7 @@
                  hero institucional y barra de acciones rápidas, tarjetas KPI
                  interactivas, analítica de distribución de calificaciones con
                  grupos recientes y catálogo operativo de exámenes (MPW-V2 §4.1.2,
-                 §5.2.2, §7.2, §7.3, §7.8.2, §7.9, §8, Tabla 20).
+                 §5.2.2, §7.2, §7.3, §7.8.2, §7.9, §8, Tabla 20; MC-V2 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')
@@ -16,20 +16,22 @@
 @section('title', 'Panel Docente')
 
 @section('content')
-<div class="space-y-8">
+<div
+    @if (! empty($showPlanOnboardingOverlay))
+        inert
+        aria-hidden="true"
+        class="space-y-6 pointer-events-none select-none opacity-55"
+    @else
+        class="space-y-6"
+    @endif
+>
 
     {{-- Nivel 1: Hero Institucional + Barra de Acciones Rápidas (Above the Fold) --}}
-    <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-5 rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 shadow-sm">
-        <div class="max-w-2xl">
-            <h1 class="text-2xl sm:text-3xl font-bold text-acode-primary tracking-tight">
-                ¡Hola, {{ auth()->user()->first_name }}!
-            </h1>
-            <p class="mt-2 text-sm text-slate-500 leading-relaxed">
-                Administra tus grupos escolares, alimenta tu banco de reactivos, configura exámenes y da seguimiento académico en tiempo real.
-            </p>
-        </div>
-
-        <div class="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0">
+    <x-page-header
+        :title="'¡Hola, ' . auth()->user()->first_name . '!'"
+        subtitle="Administra tus grupos escolares, alimenta tu banco de reactivos, configura exámenes y da seguimiento académico en tiempo real."
+    >
+        <x-slot:actions>
             <x-button :href="route('groups.create')" variant="neutral" size="md">
                 <x-icon name="add" class="w-4 h-4" />
                 Crear grupo
@@ -44,118 +46,62 @@
                 <x-icon name="add" class="w-4 h-4" />
                 Crear examen
             </x-button>
-        </div>
-    </div>
+        </x-slot:actions>
+    </x-page-header>
 
     {{-- Nivel 2: Grid de 4 Tarjetas KPI Interactivas --}}
     <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
 
         {{-- KPI 1: Mis grupos --}}
-        <a href="{{ route('groups.index') }}"
-           class="group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-acode-tech hover:shadow-md">
-            <div class="flex items-center gap-3">
-                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech transition-transform duration-200 group-hover:scale-105">
-                    <x-nav-icon name="groups" class="h-6 w-6" />
-                </div>
-                <div class="flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition-colors duration-200 group-hover:text-acode-tech">
-                    <span>Mis grupos</span>
-                    <svg class="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
-                    </svg>
-                </div>
-            </div>
-
-            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
-                    {{ $groupsCount }}
-                </p>
-                <p class="text-xs text-slate-500">
-                    Aulas escolares
-                </p>
-            </div>
-        </a>
+        <x-kpi-card
+            label="Mis grupos"
+            :value="$groupsCount"
+            meta="Aulas escolares"
+            nav-icon="groups"
+            tone="tech"
+            :href="route('groups.index')"
+        />
 
         {{-- KPI 2: Banco de preguntas --}}
-        <a href="{{ route('questions.index') }}"
-           class="group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-acode-tech hover:shadow-md">
-            <div class="flex items-center gap-3">
-                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech transition-transform duration-200 group-hover:scale-105">
-                    <x-nav-icon name="questions" class="h-6 w-6" />
-                </div>
-                <div class="flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition-colors duration-200 group-hover:text-acode-tech">
-                    <span>Banco de preguntas</span>
-                    <svg class="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
-                    </svg>
-                </div>
-            </div>
-
-            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
-                    {{ $questionsCount }}
-                </p>
-                <p class="text-xs text-slate-500">
-                    Reactivos registrados
-                </p>
-            </div>
-        </a>
+        <x-kpi-card
+            label="Banco de preguntas"
+            :value="$questionsCount"
+            meta="Reactivos registrados"
+            nav-icon="questions"
+            tone="tech"
+            :href="route('questions.index')"
+        />
 
         {{-- KPI 3: Exámenes creados --}}
-        <a href="{{ route('exams.index') }}"
-           class="group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md">
-            <div class="flex items-center gap-3">
-                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition-transform duration-200 group-hover:scale-105">
-                    <x-nav-icon name="exams" class="h-6 w-6" />
-                </div>
-                <div class="flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition-colors duration-200 group-hover:text-amber-600">
-                    <span>Exámenes creados</span>
-                    <svg class="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
-                    </svg>
-                </div>
-            </div>
-
-            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <p class="text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
-                    {{ $examsCount }}
-                </p>
-                <p class="text-xs text-slate-500">
-                    Evaluaciones activas
-                </p>
-            </div>
-        </a>
+        <x-kpi-card
+            label="Exámenes creados"
+            :value="$examsCount"
+            meta="Evaluaciones activas"
+            nav-icon="exams"
+            tone="warning"
+            :href="route('exams.index')"
+        />
 
         {{-- KPI 4: Promedio general --}}
-        <a href="{{ route('teacher.gradebook.hub') }}"
-           class="group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md">
-            <div class="flex items-center gap-3">
-                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-transform duration-200 group-hover:scale-105">
-                    <x-nav-icon name="grades" class="h-6 w-6" />
-                </div>
-                <div class="flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition-colors duration-200 group-hover:text-emerald-600">
-                    <span>Promedio general</span>
-                    <svg class="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
-                    </svg>
-                </div>
+        <x-kpi-card
+            label="Promedio general"
+            :value="number_format((float) ($averageScore ?? 0), 1)"
+            nav-icon="grades"
+            tone="accent"
+            :href="route('teacher.gradebook.hub')"
+            :mono="true"
+        >
+            <div class="flex flex-wrap items-center gap-1.5">
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-acode-accent/15 px-2.5 py-1 text-xs font-semibold text-acode-primary border border-acode-accent/40">
+                    <span class="h-1.5 w-1.5 rounded-full bg-acode-accent"></span>
+                    {{ (int) ($passedCount ?? 0) }} aprobados
+                </span>
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-acode-danger/10 px-2.5 py-1 text-xs font-semibold text-acode-danger border border-acode-danger/30">
+                    <span class="h-1.5 w-1.5 rounded-full bg-acode-danger"></span>
+                    {{ (int) ($failedCount ?? 0) }} reprobados
+                </span>
             </div>
-
-            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <p class="font-mono text-3xl lg:text-4xl font-extrabold text-acode-primary tracking-tight">
-                    {{ number_format((float) ($averageScore ?? 0), 1) }}
-                </p>
-                <div class="flex flex-wrap items-center gap-1.5">
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200/60">
-                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                        {{ (int) ($passedCount ?? 0) }} aprobados
-                    </span>
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 border border-rose-200/60">
-                        <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
-                        {{ (int) ($failedCount ?? 0) }} reprobados
-                    </span>
-                </div>
-            </div>
-        </a>
+        </x-kpi-card>
 
     </div>
 
@@ -201,15 +147,11 @@
 
         {{-- Columna Derecha (5 cols): Mis Grupos Recientes --}}
         <div class="lg:col-span-5 space-y-4">
-            <div class="flex items-center justify-between">
-                <h2 class="text-base font-bold text-acode-primary tracking-tight">
-                    Grupos Recientes
-                </h2>
-                <a href="{{ route('groups.index') }}"
-                   class="text-xs font-semibold text-acode-tech hover:underline">
-                    Ver todos los grupos →
-                </a>
-            </div>
+            <x-section-header
+                title="Grupos Recientes"
+                action-label="Ver todos los grupos →"
+                :action-href="route('groups.index')"
+            />
 
             <div class="space-y-3">
                 @forelse ($recentGroups ?? collect() as $group)
@@ -264,15 +206,11 @@
 
     {{-- Nivel 4: Catálogo Operativo de Exámenes Recientes --}}
     <div class="space-y-3">
-        <div class="flex items-center justify-between">
-            <h2 class="text-base font-bold text-acode-primary tracking-tight">
-                Exámenes Recientes
-            </h2>
-            <a href="{{ route('exams.index') }}"
-               class="text-xs font-semibold text-acode-tech hover:underline">
-                Ver todos los exámenes →
-            </a>
-        </div>
+        <x-section-header
+            title="Exámenes Recientes"
+            action-label="Ver todos los exámenes →"
+            :action-href="route('exams.index')"
+        />
 
         <x-table>
             <x-slot:header>
@@ -360,4 +298,8 @@
     </div>
 
 </div>
+
+@if (! empty($showPlanOnboardingOverlay) && ! empty($onboardingOverlay))
+    @include('dashboard.partials._plan-onboarding-overlay', ['onboardingOverlay' => $onboardingOverlay])
+@endif
 @endsection

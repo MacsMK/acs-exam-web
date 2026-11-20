@@ -3,8 +3,10 @@
     A-CODE SOLUTIONS - ANALIZAMOS, DISEÑAMOS, TRANSFORMAMOS
     ============================================================================
     Archivo:     resources/views/student/exams/review.blade.php
+    Ubicación:   resources/views/student/exams/review.blade.php
     Descripción: Vista de revisión post-examen con soluciones de referencia y
-                 retroalimentación docente autorizada (RF-REP-005 / P-172).
+                 retroalimentación docente autorizada, homologada al UI Kit A-Code
+                 (RF-REP-005 / P-172; MPW-V2 §7.3, §7.4.2, §8.1–§8.3; MC-V2 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')
@@ -12,61 +14,67 @@
 @section('title', 'Revisión y Soluciones · ' . ($reviewData['exam_name'] ?? $attempt->exam->title))
 
 @section('content')
-<div class="max-w-4xl mx-auto space-y-6">
-    {{-- Navegación superior --}}
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-            <div class="flex items-center gap-2 mb-1">
-                <a href="{{ route('attempts.result', $attempt) }}" class="text-xs font-semibold text-acode-tech hover:underline">
-                    ← Volver al resumen del intento
-                </a>
-            </div>
-            <h1 class="text-2xl lg:text-3xl font-bold text-acode-primary tracking-tight">
-                Revisión de Soluciones y Respuestas
-            </h1>
-            <p class="mt-1 text-sm text-slate-500">
-                {{ $reviewData['exam_name'] ?? $attempt->exam->title }} · Calificación definitiva:
-                <strong class="font-mono text-slate-700">{{ number_format((float) ($attempt->final_score ?? $attempt->objective_score ?? 0.0), 1) }}</strong>
-            </p>
-        </div>
+<div class="space-y-6">
+    {{-- Nivel 1: Encabezado Institucional --}}
+    <x-page-header
+        title="Revisión de Soluciones y Respuestas"
+        :subtitle="($reviewData['exam_name'] ?? $attempt->exam->title) . ' · Compara tus respuestas registradas con las soluciones de referencia autorizadas.'"
+        :breadcrumbs="[
+            ['label' => 'Mis Calificaciones', 'href' => route('student.grades.index')],
+            ['label' => 'Resumen del intento', 'href' => route('attempts.result', $attempt)],
+            ['label' => 'Revisión y soluciones'],
+        ]"
+    >
+        <x-slot:meta>
+            <span>
+                Calificación definitiva:
+                <strong class="font-mono text-acode-primary">
+                    {{ number_format((float) ($attempt->final_score ?? $attempt->objective_score ?? 0.0), 1) }}
+                </strong>
+            </span>
+        </x-slot:meta>
 
-        <div>
-            <x-button :href="route('student.exams.index')" variant="neutral" size="sm">
-                Mis exámenes
+        <x-slot:actions>
+            <x-button :href="route('attempts.result', $attempt)" variant="neutral" size="md">
+                <x-icon name="arrowLeft" class="w-4 h-4" />
+                Volver al resumen
             </x-button>
-        </div>
-    </div>
 
-    {{-- Lista de reactivos con respuestas y soluciones --}}
+            <x-button :href="route('student.exams.index')" variant="secondary" size="md">
+                <x-nav-icon name="exams" class="w-4 h-4" />
+                Abrir exámenes
+            </x-button>
+        </x-slot:actions>
+    </x-page-header>
+
+    {{-- Nivel 2: Lista de reactivos con respuestas y soluciones --}}
     <div class="space-y-4">
-        @foreach ($reviewData['questions'] ?? [] as $index => $q)
+        @forelse ($reviewData['questions'] ?? [] as $index => $q)
             @php
                 $isFullCredit = (float) $q['points_earned'] >= (float) $q['points_possible'] && (float) $q['points_possible'] > 0;
                 $isPartial = (float) $q['points_earned'] > 0 && (float) $q['points_earned'] < (float) $q['points_possible'];
+                $qTypeLabel = match ($q['question_type'] ?? null) {
+                    'multiple_choice' => 'Opción múltiple',
+                    'matching' => 'Relación de columnas',
+                    'open' => 'Pregunta abierta',
+                    'code' => 'Código fuente',
+                    default => '—',
+                };
             @endphp
-            <div class="rounded-xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm space-y-4">
+            <x-card padding="p-5 sm:p-6" class="space-y-4">
                 {{-- Encabezado de la pregunta --}}
                 <div class="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
                     <div class="flex items-start gap-3">
-                        <span class="w-7 h-7 rounded-full bg-acode-surface flex items-center justify-center font-bold text-xs text-acode-tech shrink-0 mt-0.5">
+                        <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-acode-surface text-xs font-bold text-acode-tech">
                             {{ $index + 1 }}
                         </span>
                         <div>
-                            <h2 class="font-semibold text-base text-acode-primary leading-6">{{ $q['title'] }}</h2>
-                            @php
-                                $qTypeLabel = match ($q['question_type'] ?? null) {
-                                    'multiple_choice' => 'Opción múltiple',
-                                    'matching' => 'Relación de columnas',
-                                    'open' => 'Pregunta abierta',
-                                    'code' => 'Código fuente',
-                                    default => '—',
-                                };
-                            @endphp
-                            <p class="text-xs text-slate-500 mt-0.5">Tipo: <span>{{ $qTypeLabel }}</span></p>
+                            <h2 class="text-base font-bold leading-6 text-acode-primary">{{ $q['title'] }}</h2>
+                            <p class="mt-0.5 text-xs text-slate-500">Tipo: {{ $qTypeLabel }}</p>
                         </div>
                     </div>
 
-                    <div class="text-right shrink-0">
+                    <div class="shrink-0 text-right">
                         @if ($isFullCredit)
                             <x-badge variant="accent">Acierto completo</x-badge>
                         @elseif ($isPartial)
@@ -74,40 +82,44 @@
                         @else
                             <x-badge variant="danger">Sin acierto</x-badge>
                         @endif
-                        <p class="text-xs font-mono font-bold text-slate-700 mt-1">
+                        <p class="mt-1 font-mono text-xs font-bold text-slate-700">
                             {{ number_format((float) $q['points_earned'], 2) }} / {{ number_format((float) $q['points_possible'], 2) }} pts
                         </p>
                     </div>
                 </div>
 
                 {{-- Enunciado / Reactivo --}}
-                <div class="rounded-lg bg-slate-50 p-4 border border-slate-100">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Enunciado</p>
-                    <div class="text-sm text-slate-800 leading-relaxed font-sans">
+                <div class="rounded-lg border border-slate-200/70 bg-slate-50 p-4">
+                    <p class="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Enunciado</p>
+                    <div class="font-sans text-sm leading-relaxed text-slate-800">
                         {!! nl2br(e($q['stem'])) !!}
                     </div>
                 </div>
 
                 {{-- Respuesta del estudiante vs Solución de referencia --}}
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {{-- Respuesta del alumno --}}
-                    <div class="rounded-lg border border-slate-200 p-4 bg-white">
-                        <p class="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Tu respuesta</p>
-                        <div class="text-[13px] font-mono text-acode-ink whitespace-pre-wrap bg-slate-100 p-3 rounded border border-slate-200 min-h-16">
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div class="rounded-lg border border-slate-200 bg-white p-4">
+                        <p class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-600">Tu respuesta</p>
+                        <div class="min-h-16 whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-100 p-3 font-mono text-xs leading-relaxed text-acode-ink">
                             {{ is_array($q['student_answer']) ? json_encode($q['student_answer'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : ($q['student_answer'] ?? 'Sin respuesta registrada') }}
                         </div>
                     </div>
 
-                    {{-- Solución canónica --}}
-                    <div class="rounded-lg border border-slate-300 border-l-4 border-l-acode-accent p-4 bg-slate-100">
-                        <p class="text-xs font-bold text-acode-primary uppercase tracking-wider mb-2">Solución de referencia autorizada</p>
-                        <div class="text-[13px] font-mono text-acode-ink whitespace-pre-wrap bg-white p-3 rounded border border-slate-200 min-h-16">
-                            {{ is_array($q['reference_solution']) ? json_encode($q['reference_solution'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : ($q['reference_solution'] ?? 'Consulte al docente') }}
+                    <div class="rounded-lg border border-slate-200 border-l-4 border-l-acode-accent bg-acode-surface/40 p-4">
+                        <p class="mb-2 text-xs font-bold uppercase tracking-wider text-acode-primary">Solución de referencia autorizada</p>
+                        <div class="min-h-16 whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 font-mono text-xs leading-relaxed text-acode-ink">
+                            {{ is_array($q['reference_solution']) ? json_encode($q['reference_solution'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : ($q['reference_solution'] ?? 'Consulta al docente') }}
                         </div>
                     </div>
                 </div>
-            </div>
-        @endforeach
+            </x-card>
+        @empty
+            <x-empty-state
+                icon="document"
+                title="Sin reactivos para mostrar"
+                message="No se encontraron respuestas detalladas disponibles para este intento."
+            />
+        @endforelse
     </div>
 </div>
 @endsection

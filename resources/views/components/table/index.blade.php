@@ -4,7 +4,7 @@
     'footer' => null,
 ])
 
-<div {{ $attributes->merge(['class' => 'bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6']) }}>
+<div {{ $attributes->merge(['class' => 'bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden']) }}>
     <div class="overflow-x-auto w-full">
         <table class="w-full text-sm text-left border-collapse">
             @if (isset($header))

@@ -14,42 +14,43 @@
             'active' => ['label' => 'Activo', 'variant' => 'accent'],
             'closed' => ['label' => 'Cerrado', 'variant' => 'neutral'],
         ];
+        $pendingRecotejeExams = (int) ($stats['pending_recoteje_exams'] ?? 0);
     @endphp
 
-    <div class="mx-auto max-w-7xl space-y-6">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <h1 class="text-2xl sm:text-3xl font-bold text-acode-primary tracking-tight">
-                    Centro de Revisiones Docentes
-                </h1>
-                <p class="text-sm text-slate-500 mt-1">
-                    Recoteja y ajusta calificaciones provisionales emitidas por la IA para reactivos abiertos y de programación.
-                </p>
-            </div>
-
-            <x-button :href="route('exams.index')" variant="neutral" size="md">
-                <x-icon name="document" class="w-4 h-4" />
-                Ir a Mis exámenes
-            </x-button>
-        </div>
+    <div class="space-y-6">
+        <x-page-header
+            title="Centro de revisiones docentes"
+            subtitle="Recoteja y ajusta calificaciones provisionales emitidas por la IA para reactivos abiertos y de programación."
+        >
+            <x-slot:actions>
+                <x-button :href="route('exams.index')" variant="neutral" size="md">
+                    <x-icon name="document" class="w-4 h-4" />
+                    Abrir exámenes
+                </x-button>
+            </x-slot:actions>
+        </x-page-header>
 
         {{-- Resumen rápido --}}
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <x-card padding="p-4">
-                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Exámenes totales</p>
-                <p class="mt-1 text-[28px] leading-9 font-bold text-acode-primary tabular-nums">{{ (int) ($stats['total'] ?? 0) }}</p>
-            </x-card>
-            <x-card padding="p-4">
-                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Exámenes activos</p>
-                <p class="mt-1 text-[28px] leading-9 font-bold text-acode-accent-dark tabular-nums">{{ (int) ($stats['published_active'] ?? 0) }}</p>
-            </x-card>
-            <x-card padding="p-4">
-                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Pendientes de recoteje</p>
-                <p class="mt-1 text-[28px] leading-9 font-bold tabular-nums {{ (int) ($stats['pending_recoteje_exams'] ?? 0) > 0 ? 'text-acode-warning-dark' : 'text-acode-primary' }}">
-                    {{ (int) ($stats['pending_recoteje_exams'] ?? 0) }}
-                </p>
-            </x-card>
-        </div>
+        <section class="grid grid-cols-1 sm:grid-cols-3 gap-5" aria-label="Indicadores del centro de revisiones">
+            <x-kpi-card
+                label="Exámenes totales"
+                :value="(int) ($stats['total'] ?? 0)"
+                nav-icon="exams"
+                tone="tech"
+            />
+            <x-kpi-card
+                label="Exámenes activos"
+                :value="(int) ($stats['published_active'] ?? 0)"
+                icon="clock"
+                tone="accent"
+            />
+            <x-kpi-card
+                label="Pendientes de recoteje"
+                :value="$pendingRecotejeExams"
+                :icon="$pendingRecotejeExams > 0 ? 'warning' : 'success'"
+                :tone="$pendingRecotejeExams > 0 ? 'warning' : 'neutral'"
+            />
+        </section>
 
         {{-- Filtros --}}
         <x-search-filter
@@ -132,7 +133,7 @@
                                 {{ $exam->created_at?->format('d/m/Y') }}
                             </span>
                             <x-button variant="secondary" size="sm" :href="route('exams.revision.index', $exam)">
-                                Revisar intentos
+                                Abrir intentos
                             </x-button>
                         </div>
                     </x-card>

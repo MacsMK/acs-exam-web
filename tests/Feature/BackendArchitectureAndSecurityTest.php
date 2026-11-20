@@ -376,7 +376,7 @@ class BackendArchitectureAndSecurityTest extends TestCase
             {
             }
 
-            public function evaluate(string $studentAnswer, string $referenceAnswer): array
+            public function evaluate(string $studentAnswer, string $referenceAnswer, array $context = []): array
             {
                 $this->calls++;
 
@@ -384,6 +384,8 @@ class BackendArchitectureAndSecurityTest extends TestCase
                     'similarity_score' => 100.0,
                     'meets_goal' => true,
                     'feedback' => 'No debería invocarse en respuestas vacías.',
+                    'is_fallback' => false,
+                    'model' => 'fake-test',
                 ];
             }
         });
@@ -429,6 +431,77 @@ class BackendArchitectureAndSecurityTest extends TestCase
         $this->assertEquals(0.0, (float) $codeAnswer->points_awarded);
         $this->assertEquals(0.0, (float) $codeAnswer->ai_similarity_score);
         $this->assertFalse((bool) $codeAnswer->ai_meets_goal);
+        $this->assertSame('none', $openAnswer->ai_model_used);
+        $this->assertSame('none', $codeAnswer->ai_model_used);
+        $this->assertDatabaseCount('acs_ai_credit_usages', 0);
+    }
+
+    public function test_non_empty_open_and_code_answers_do_not_consume_ai_automatically_on_submission(): void
+    {
+        $aiEvaluationCalls = 0;
+
+        $this->app->instance(AiEvaluatorContract::class, new class($aiEvaluationCalls) implements AiEvaluatorContract {
+            public function __construct(private int &$calls)
+            {
+            }
+
+            public function evaluate(string $studentAnswer, string $referenceAnswer, array $context = []): array
+            {
+                $this->calls++;
+
+                return [
+                    'similarity_score' => 90.0,
+                    'meets_goal' => true,
+                    'feedback' => 'No debería ejecutarse automáticamente al entregar (RF-IAR-001).',
+                    'is_fallback' => false,
+                    'model' => 'fake-test',
+                ];
+            }
+        });
+        $this->app->forgetInstance(AttemptService::class);
+
+        $teacher = $this->createUser('teacher');
+        $student = $this->createUser('student');
+        $studentToken = $this->tokenFor($student);
+
+        [$exam, $section] = $this->createPublishedExamForStudent($teacher, $student);
+
+        [$openQuestion, $openExamQuestion] = $this->attachOpenQuestion($exam, $section, $teacher, 0);
+        [$codeQuestion, $codeExamQuestion] = $this->attachCodeQuestion($exam, $section, $teacher, 1);
+
+        $this->withFreshToken($studentToken)
+            ->postJson('/api/v1/exams/take', ['exam_id' => $exam->id])
+            ->assertOk();
+
+        $this->withFreshToken($studentToken)
+            ->postJson("/api/v1/exams/{$exam->id}/answers", [
+                'question_id' => (string) $openQuestion->id,
+                'text' => 'La fotosíntesis transforma la energía lumínica en energía química.',
+            ])
+            ->assertOk();
+
+        $this->withFreshToken($studentToken)
+            ->postJson("/api/v1/exams/{$exam->id}/answers", [
+                'question_id' => (string) $codeQuestion->id,
+                'code' => 'echo 1;',
+            ])
+            ->assertOk();
+
+        // RF-IAR-001 / ADR-059: la IA es estrictamente bajo demanda del docente, nunca en entrega.
+        $this->assertSame(0, $aiEvaluationCalls);
+        $this->assertDatabaseCount('acs_ai_credit_usages', 0);
+
+        $openAnswer = StudentAnswer::where('exam_question_id', $openExamQuestion->id)->firstOrFail();
+        $codeAnswer = StudentAnswer::where('exam_question_id', $codeExamQuestion->id)->firstOrFail();
+        $attempt = StudentAttempt::where('exam_id', $exam->id)->where('student_id', $student->id)->firstOrFail();
+
+        $this->assertNull($openAnswer->ai_evaluated_at);
+        $this->assertNull($openAnswer->ai_similarity_score);
+        $this->assertNull($codeAnswer->ai_evaluated_at);
+        $this->assertNull($codeAnswer->ai_similarity_score);
+        $this->assertSame('submitted', $attempt->status);
+        $this->assertSame(2, (int) $attempt->pending_ai_count);
+        $this->assertNull($attempt->final_score);
     }
 
     public function test_non_active_attempt_rejects_new_answers_with_409_and_cannot_be_resubmitted(): void

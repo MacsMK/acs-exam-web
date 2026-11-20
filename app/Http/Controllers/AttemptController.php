@@ -125,9 +125,12 @@ class AttemptController extends Controller
     {
         $this->authorizeOwnership($attempt);
 
+        $attempt->load('exam', 'answers.examQuestion.question', 'group.teacher');
+
         return view('exams.result-summary', [
-            'attempt' => $attempt->load('exam', 'answers.examQuestion.question', 'group.teacher'),
+            'attempt' => $attempt,
             'reviewAvailable' => $this->studentResultService->reviewIsAvailable($attempt),
+            'summary' => $this->studentResultService->buildWebResultSummary($attempt),
         ]);
     }
 

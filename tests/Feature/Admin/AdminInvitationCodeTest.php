@@ -238,7 +238,7 @@ class AdminInvitationCodeTest extends TestCase
             'auditable_id' => $verification->id,
         ]);
 
-        // Tras completar 2FA, el primer acceso a /dashboard y /groups redirige a onboarding de plan (ADR-058)
+        // Tras completar 2FA, /dashboard muestra el overlay bloqueante (ADR-060) y /groups redirige a dashboard
         $twoFactorResponse = $this->withSession(['pending_2fa_user_id' => $user->id])
             ->post(route('auth.verify-2fa.store'), [
                 'user_id' => $user->id,
@@ -247,15 +247,21 @@ class AdminInvitationCodeTest extends TestCase
 
         $twoFactorResponse->assertRedirect(route('dashboard'));
         $this->get(route('dashboard'))
-            ->assertRedirect(route('teacher.subscription.index', ['onboarding' => 1]));
+            ->assertOk()
+            ->assertSee('inert', false)
+            ->assertSee('onboarding_overlay', false)
+            ->assertSee('Confirmar prueba gratuita');
         $this->get(route('groups.index'))
-            ->assertRedirect(route('teacher.subscription.index', ['onboarding' => 1]));
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHas('warning');
 
         $this->post(route('teacher.subscription.free-trial'))
             ->assertRedirect(route('dashboard'));
 
         $this->app['auth']->forgetGuards();
-        $this->get(route('dashboard'))->assertOk();
+        $this->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSee('onboarding_overlay', false);
         $this->get(route('groups.index'))->assertOk();
     }
 
@@ -452,7 +458,7 @@ class AdminInvitationCodeTest extends TestCase
                 'invitation_code' => '  prep-2468-aceg ',
             ]);
 
-        $redeemResponse->assertRedirect(route('teacher.subscription.index', ['onboarding' => 1]));
+        $redeemResponse->assertRedirect(route('dashboard'));
         $redeemResponse->assertSessionHasNoErrors();
         $redeemResponse->assertSessionHas('status');
 
@@ -482,19 +488,26 @@ class AdminInvitationCodeTest extends TestCase
         $this->assertNotNull($redeemAudit);
         $this->assertTrue((bool) ($redeemAudit->new_values['document_purged'] ?? false));
 
-        // Primer acceso redirige a onboarding; tras elegir Prueba Gratuita accede 200 OK y mantiene bloqueo de re-canje
+        // Primer acceso muestra overlay bloqueante en /dashboard y redirige /groups a /dashboard (ADR-060)
         $this->actingAs($teacher)
             ->get(route('dashboard'))
-            ->assertRedirect(route('teacher.subscription.index', ['onboarding' => 1]));
+            ->assertOk()
+            ->assertSee('inert', false)
+            ->assertSee('onboarding_overlay', false)
+            ->assertSee('Confirmar prueba gratuita');
         $this->actingAs($teacher)
             ->get(route('groups.index'))
-            ->assertRedirect(route('teacher.subscription.index', ['onboarding' => 1]));
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHas('warning');
 
         $this->actingAs($teacher)
             ->post(route('teacher.subscription.free-trial'))
             ->assertRedirect(route('dashboard'));
 
-        $this->actingAs($teacher->fresh())->get(route('dashboard'))->assertOk();
+        $this->actingAs($teacher->fresh())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSee('onboarding_overlay', false);
         $this->actingAs($teacher->fresh())->get(route('groups.index'))->assertOk();
         $this->actingAs($teacher->fresh())
             ->post(route('teacher.verification.redeem-code'), ['invitation_code' => $invitation->code])

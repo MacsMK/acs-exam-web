@@ -11,10 +11,11 @@ declare(strict_types=1);
  * Ubicación:      app/Models/StudentAnswer.php
  * Requerimiento:  RF-EVA / RF-REP-005 (Respuesta, IA, Recotejo y Snapshot)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.1.0
+ * Versión:        1.2.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_student_answers (incluye evaluación IA,
- *                 recotejo docente y snapshot de la paráfrasis servida).
+ *                 trazabilidad de fallback/modelo, recotejo docente y snapshot
+ *                 de la paráfrasis servida).
  * ============================================================================
  */
 
@@ -22,6 +23,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Respuesta de un alumno a un reactivo dentro de un intento de examen.
@@ -54,6 +56,8 @@ class StudentAnswer extends Model
         'ai_meets_goal',
         'ai_feedback',
         'ai_evaluated_at',
+        'ai_is_fallback',
+        'ai_model_used',
         'teacher_recoteje_score',
         'teacher_recoteje_notes',
         'answered_at',
@@ -90,6 +94,16 @@ class StudentAnswer extends Model
     }
 
     /**
+     * Registros de consumo de créditos de IA asociados a esta respuesta.
+     *
+     * @return HasMany<AiCreditUsage>
+     */
+    public function aiCreditUsages(): HasMany
+    {
+        return $this->hasMany(AiCreditUsage::class, 'student_answer_id');
+    }
+
+    /**
      * Conversión de atributos (MPW-V2 Tabla 6 Bloque 16).
      *
      * @return array<string, string>
@@ -103,6 +117,7 @@ class StudentAnswer extends Model
             'ai_similarity_score' => 'decimal:2',
             'ai_meets_goal' => 'boolean',
             'ai_evaluated_at' => 'datetime',
+            'ai_is_fallback' => 'boolean',
             'teacher_recoteje_score' => 'decimal:2',
             'answered_at' => 'datetime',
         ];

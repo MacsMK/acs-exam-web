@@ -23,8 +23,10 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Models\SubscriptionPackage;
+use Illuminate\Contracts\Validation\Validator as ValidationContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
 
 /**
@@ -70,6 +72,7 @@ class ProcessSubscriptionCheckoutRequest extends FormRequest
             'card_cvv' => ['required_if:payment_method,card', 'nullable', 'string', 'regex:/^[0-9]{3,4}$/'],
             'spei_sender_bank' => ['required_if:payment_method,spei', 'nullable', 'string', 'in:BBVA México,Santander,Banorte,Citibanamex,HSBC,Nu México,Mercado Pago,Otro'],
             'spei_account_holder' => ['required_if:payment_method,spei', 'nullable', 'string', 'min:3', 'max:120'],
+            'onboarding_overlay' => ['nullable', 'boolean'],
         ];
     }
 
@@ -104,12 +107,15 @@ class ProcessSubscriptionCheckoutRequest extends FormRequest
 
             'spei_sender_bank.required_if' => 'El campo banco emisor es obligatorio',
             'spei_sender_bank.string' => 'El banco emisor no tiene un formato válido',
+            'spei_sender_bank.in' => 'La opción seleccionada en banco emisor no es válida',
             'spei_sender_bank.max' => 'El banco emisor no debe exceder los 80 caracteres',
 
             'spei_account_holder.required_if' => 'El campo titular de la cuenta emisora es obligatorio',
             'spei_account_holder.string' => 'El titular de la cuenta emisora no tiene un formato válido',
             'spei_account_holder.min' => 'El titular de la cuenta emisora debe tener al menos 3 caracteres',
             'spei_account_holder.max' => 'El titular de la cuenta emisora no debe exceder los 120 caracteres',
+
+            'onboarding_overlay.boolean' => 'El indicador del asistente de suscripción debe ser verdadero o falso',
         ];
     }
 
@@ -224,6 +230,36 @@ class ProcessSubscriptionCheckoutRequest extends FormRequest
         if ($normalized !== []) {
             $this->merge($normalized);
         }
+    }
+
+    /**
+     * Si la solicitud proviene de la capa bloqueante del Dashboard (ADR-060),
+     * conserva en sesión el paquete seleccionado y redirige al Dashboard sin
+     * flashear datos sensibles de tarjeta (protegidos por dontFlash en bootstrap/app.php).
+     *
+     * @param ValidationContract $validator Validador con errores detectados.
+     * @return void
+     *
+     * @throws ValidationException
+     */
+    protected function failedValidation(ValidationContract $validator): void
+    {
+        if ($this->boolean('onboarding_overlay')) {
+            $package = $this->route('package');
+            $packageId = $package instanceof SubscriptionPackage
+                ? $package->id
+                : (is_numeric($package) ? (int) $package : null);
+
+            if ($packageId !== null && $this->hasSession()) {
+                $this->session()->flash('onboarding_selected_package_id', $packageId);
+            }
+
+            throw (new ValidationException($validator))
+                ->errorBag($this->errorBag)
+                ->redirectTo(route('dashboard'));
+        }
+
+        parent::failedValidation($validator);
     }
 
     /**

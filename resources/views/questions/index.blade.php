@@ -39,7 +39,7 @@
     @endphp
 
     <div
-        class="mx-auto max-w-7xl space-y-6"
+        class="space-y-6"
         x-data="acodeQuestionBank({
             previewUrl: @js(route('questions.import.preview')),
         })"
@@ -64,81 +64,104 @@
             </div>
         @endif
 
-        {{-- Nivel 1: Hero Institucional y Acciones Clave (MPW-V2 Tabla 11-13, §8.3) --}}
-        <section class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-5">
-                <div class="space-y-2 max-w-2xl">
-                    <x-badge variant="info">
-                        Catálogo Docente · Plan {{ $quotaSummary['package_name'] ?? 'Activo' }}
-                    </x-badge>
-                    <h1 class="text-2xl sm:text-[28px] sm:leading-9 font-bold tracking-tight text-acode-primary">
-                        Banco de preguntas
-                    </h1>
-                    <p class="text-sm text-slate-700 leading-5">
-                        Organiza tus reactivos por materia y tipo, refuerza el blindaje anti-copia con paráfrasis equitativas e incorpora cuestionarios masivos desde CSV o Excel.
-                    </p>
-                </div>
+        {{-- Nivel 1: Cabecera Institucional y Acciones Clave (MPW-V2 §7.3, §7.8.2, §8.3) --}}
+        <x-page-header
+            title="Banco de preguntas"
+            subtitle="Organiza tus reactivos por materia y tipo, refuerza el blindaje anti-copia con paráfrasis equitativas e incorpora cuestionarios masivos desde CSV o Excel."
+        >
+            <x-slot:badge>
+                <x-badge variant="info">
+                    Plan {{ $quotaSummary['package_name'] ?? 'Activo' }}
+                </x-badge>
+            </x-slot:badge>
 
-                <div class="flex flex-wrap items-center gap-2.5 shrink-0">
-                    <x-button :href="route('questions.create')" variant="primary" size="md">
-                        <x-icon name="add" class="w-4 h-4" />
-                        Crear reactivo
-                    </x-button>
+            <x-slot:actions>
+                <x-button
+                    type="button"
+                    variant="neutral"
+                    size="md"
+                    @click="$dispatch('open-modal', 'subjects-modal')"
+                >
+                    <x-icon name="tag" class="w-4 h-4 text-slate-600" />
+                    <span>Abrir materias</span>
+                    @if ($duplicateSubjectGroups > 0)
+                        <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-bold bg-acode-warning text-acode-primary">
+                            {{ $duplicateSubjectGroups }}
+                        </span>
+                    @endif
+                </x-button>
 
+                <div
+                    class="relative"
+                    x-data="{ batchMenuOpen: false }"
+                    @click.outside="batchMenuOpen = false"
+                    @keydown.escape.window="batchMenuOpen = false"
+                >
                     <x-button
                         type="button"
                         variant="secondary"
                         size="md"
-                        @click="$dispatch('open-modal', 'bulk-import-modal')"
+                        @click="batchMenuOpen = !batchMenuOpen"
+                        x-bind:aria-expanded="batchMenuOpen.toString()"
+                        aria-haspopup="menu"
                     >
                         <x-icon name="upload" class="w-4 h-4" />
-                        Agregar en lote
+                        <span>Agregar en lote</span>
+                        <x-icon name="chevronDown" class="w-4 h-4 transition-transform duration-200" ::class="batchMenuOpen ? 'rotate-180' : ''" />
                     </x-button>
 
-                    <x-button
-                        :href="route('questions.batch.create')"
-                        variant="neutral"
-                        size="md"
+                    <div
+                        x-show="batchMenuOpen"
+                        x-cloak
+                        x-transition
+                        role="menu"
+                        class="absolute left-0 sm:left-auto sm:right-0 z-20 mt-2 w-64 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg"
                     >
-                        <x-icon name="add" class="w-4 h-4 text-acode-tech" />
-                        Captura rápida en lote
-                    </x-button>
-
-                    <x-button
-                        type="button"
-                        variant="neutral"
-                        size="md"
-                        @click="$dispatch('open-modal', 'subjects-modal')"
-                    >
-                        <x-icon name="tag" class="w-4 h-4 text-slate-600" />
-                        <span>Abrir materias</span>
-                        @if ($duplicateSubjectGroups > 0)
-                            <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-bold bg-acode-warning text-acode-primary">
-                                {{ $duplicateSubjectGroups }}
+                        <button
+                            type="button"
+                            role="menuitem"
+                            @click="batchMenuOpen = false; $dispatch('open-modal', 'bulk-import-modal')"
+                            class="flex w-full items-start gap-3 px-4 py-2.5 text-left transition hover:bg-acode-surface/60"
+                        >
+                            <x-icon name="upload" class="w-4 h-4 text-acode-tech mt-0.5" />
+                            <span class="min-w-0">
+                                <span class="block text-sm font-semibold text-acode-primary">Agregar en lote (CSV / Excel)</span>
+                                <span class="block text-xs text-slate-500">Importa plantillas con validación previa.</span>
                             </span>
-                        @endif
-                    </x-button>
+                        </button>
+
+                        <a
+                            href="{{ route('questions.batch.create') }}"
+                            role="menuitem"
+                            @click="batchMenuOpen = false"
+                            class="flex w-full items-start gap-3 px-4 py-2.5 text-left transition hover:bg-acode-surface/60"
+                        >
+                            <x-icon name="add" class="w-4 h-4 text-acode-accent mt-0.5" />
+                            <span class="min-w-0">
+                                <span class="block text-sm font-semibold text-acode-primary">Crear en lote</span>
+                                <span class="block text-xs text-slate-500">Captura rápida de varios reactivos a la vez.</span>
+                            </span>
+                        </a>
+                    </div>
                 </div>
-            </div>
-        </section>
+
+                <x-button :href="route('questions.create')" variant="primary" size="md">
+                    <x-icon name="add" class="w-4 h-4" />
+                    Crear reactivo
+                </x-button>
+            </x-slot:actions>
+        </x-page-header>
 
         {{-- Nivel 2: 4 Tarjetas KPI --}}
         <section class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4" aria-label="Indicadores del banco de preguntas">
             {{-- KPI 1: Reactivos y Cuota SaaS --}}
-            <x-card class="h-full">
-                <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Reactivos activos</p>
-                        <p class="mt-1 text-[28px] leading-9 font-bold text-acode-primary tabular-nums">
-                            {{ $summaryMetrics['total_active'] ?? 0 }}
-                        </p>
-                    </div>
-                    <span class="w-10 h-10 rounded-xl bg-acode-surface text-acode-tech flex items-center justify-center shrink-0">
-                        <x-icon name="document" class="w-5 h-5" />
-                    </span>
-                </div>
-
-                <div class="mt-4 space-y-1.5">
+            <x-kpi-card
+                label="Reactivos activos"
+                :value="$summaryMetrics['total_active'] ?? 0"
+                icon="document"
+                tone="tech"
+            >
+                <div class="space-y-1.5">
                     <div class="flex items-center justify-between text-xs font-medium">
                         <span class="text-slate-500">Cuota de plan</span>
                         @if ($quotaUnlimited)
@@ -156,24 +179,17 @@
                         label="Cuota de preguntas del plan"
                     />
                 </div>
-            </x-card>
+            </x-kpi-card>
 
             {{-- KPI 2: Blindaje Anti-Copia --}}
-            <x-card class="h-full">
-                <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Blindaje anti-copia</p>
-                        <div class="mt-1 flex items-baseline gap-2">
-                            <span class="text-[28px] leading-9 font-bold text-acode-accent tabular-nums">{{ $withParaphrases }}</span>
-                            <span class="text-xs text-slate-500">protegidos</span>
-                        </div>
-                    </div>
-                    <span class="w-10 h-10 rounded-xl bg-acode-accent/15 text-acode-accent flex items-center justify-center shrink-0">
-                        <x-icon name="success" class="w-5 h-5" />
-                    </span>
-                </div>
-
-                <div class="mt-4 flex items-center justify-between gap-2 text-xs">
+            <x-kpi-card
+                label="Blindaje anti-copia"
+                :value="$withParaphrases"
+                meta="protegidos"
+                icon="success"
+                tone="accent"
+            >
+                <div class="flex items-center justify-between gap-2 text-xs">
                     <span class="text-slate-600">
                         <strong class="font-semibold {{ $withoutParaphrases > 0 ? 'text-acode-primary' : 'text-slate-700' }}">{{ $withoutParaphrases }}</strong> sin paráfrasis
                     </span>
@@ -188,47 +204,37 @@
                         <x-badge variant="success">100% cubierto</x-badge>
                     @endif
                 </div>
-            </x-card>
+            </x-kpi-card>
 
             {{-- KPI 3: Materias registradas --}}
-            <x-card class="h-full">
-                <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Materias registradas</p>
-                        <p class="mt-1 text-[28px] leading-9 font-bold text-acode-primary tabular-nums">
-                            {{ $summaryMetrics['subjects_count'] ?? 0 }}
-                        </p>
-                    </div>
-                    <span class="w-10 h-10 rounded-xl bg-acode-warning/20 text-acode-primary flex items-center justify-center shrink-0">
-                        <x-icon name="tag" class="w-5 h-5" />
-                    </span>
-                </div>
-
-                <div class="mt-4">
-                    @if ($duplicateSubjectGroups > 0)
-                        <button
-                            type="button"
-                            @click="$dispatch('open-modal', 'subjects-modal')"
-                            class="w-full text-left rounded-lg border border-acode-warning/60 bg-acode-warning/15 px-3 py-1.5 text-xs font-semibold text-acode-primary hover:bg-acode-warning/25 transition flex items-center justify-between gap-2"
-                        >
-                            <span>Posibles duplicados ({{ $duplicateSubjectGroups }})</span>
-                            <span class="text-acode-tech underline shrink-0">Abrir</span>
-                        </button>
-                    @else
-                        <p class="text-xs text-slate-500 leading-4">
-                            Nombres de materias consistentes y sin posibles duplicados.
-                        </p>
-                    @endif
-                </div>
-            </x-card>
+            <x-kpi-card
+                label="Materias registradas"
+                :value="$summaryMetrics['subjects_count'] ?? 0"
+                icon="tag"
+                tone="warning"
+            >
+                @if ($duplicateSubjectGroups > 0)
+                    <button
+                        type="button"
+                        @click="$dispatch('open-modal', 'subjects-modal')"
+                        class="w-full text-left rounded-lg border border-acode-warning/60 bg-acode-warning/15 px-3 py-1.5 text-xs font-semibold text-acode-primary hover:bg-acode-warning/25 transition flex items-center justify-between gap-2"
+                    >
+                        <span>Posibles duplicados ({{ $duplicateSubjectGroups }})</span>
+                        <span class="text-acode-tech underline shrink-0">Abrir</span>
+                    </button>
+                @else
+                    <p class="text-xs text-slate-500 leading-4">
+                        Nombres de materias consistentes y sin posibles duplicados.
+                    </p>
+                @endif
+            </x-kpi-card>
 
             {{-- KPI 4: Distribución por tipo --}}
-            <x-card class="h-full">
-                <div class="flex items-start justify-between gap-2 mb-3">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Distribución por tipo</p>
-                    <x-icon name="code" class="w-4 h-4 text-acode-tech" />
-                </div>
-
+            <x-kpi-card
+                label="Distribución por tipo"
+                icon="code"
+                tone="primary"
+            >
                 <div class="grid grid-cols-2 gap-2 text-xs">
                     <div class="rounded-lg bg-acode-surface/60 px-2.5 py-1.5 flex items-center justify-between border border-slate-200">
                         <span class="text-slate-700 truncate">Opción múltiple</span>
@@ -247,7 +253,7 @@
                         <span class="font-bold text-acode-tech tabular-nums">{{ $byType['code'] ?? 0 }}</span>
                     </div>
                 </div>
-            </x-card>
+            </x-kpi-card>
         </section>
 
         {{-- Nivel 3: Barra de Búsqueda, Filtros SQL y Alternador Tarjetas / Tabla --}}
@@ -375,28 +381,26 @@
 
         {{-- Nivel 4: Catálogo (Tarjetas + Tabla Compacta) y Paginación Universal --}}
         @if ($questions->isEmpty())
-            <x-card>
-                <x-empty-state
-                    icon="document"
-                    :title="$hasActiveFilters ? 'Sin reactivos con esos filtros' : 'Tu banco de preguntas está vacío'"
-                    :message="$hasActiveFilters
-                        ? 'No encontramos reactivos que coincidan con la búsqueda o filtros aplicados.'
-                        : 'Crea tu primer reactivo manualmente o agrega un listado desde CSV o Excel.'"
-                >
-                    <div class="flex flex-wrap items-center justify-center gap-2.5">
-                        @if ($hasActiveFilters)
-                            <x-button :href="route('questions.index')" variant="neutral" size="md">
-                                <x-icon name="filter" class="w-4 h-4" />
-                                Limpiar filtros
-                            </x-button>
-                        @endif
-                        <x-button :href="route('questions.create')" variant="primary" size="md">
-                            <x-icon name="add" class="w-4 h-4" />
-                            Crear reactivo
+            <x-empty-state
+                icon="document"
+                :title="$hasActiveFilters ? 'Sin reactivos con esos filtros' : 'Tu banco de preguntas está vacío'"
+                :message="$hasActiveFilters
+                    ? 'No encontramos reactivos que coincidan con la búsqueda o filtros aplicados.'
+                    : 'Crea tu primer reactivo manualmente o agrega un listado desde CSV o Excel.'"
+            >
+                <div class="flex flex-wrap items-center justify-center gap-2.5">
+                    @if ($hasActiveFilters)
+                        <x-button :href="route('questions.index')" variant="neutral" size="md">
+                            <x-icon name="filter" class="w-4 h-4" />
+                            Limpiar filtros
                         </x-button>
-                    </div>
-                </x-empty-state>
-            </x-card>
+                    @endif
+                    <x-button :href="route('questions.create')" variant="primary" size="md">
+                        <x-icon name="add" class="w-4 h-4" />
+                        Crear reactivo
+                    </x-button>
+                </div>
+            </x-empty-state>
         @else
             {{-- Vista 4A: Tarjetas --}}
             <div x-show="viewMode === 'cards'" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -653,7 +657,7 @@
             </div>
 
             {{-- Paginación universal alineada a la derecha (MPW-V2 §8.4) --}}
-            <div class="mt-6 flex justify-end">
+            <div class="flex justify-end">
                 {{ $questions->links() }}
             </div>
         @endif
@@ -682,7 +686,7 @@
                     @csrf
                     <div>
                         <div class="flex items-center justify-between mb-1.5">
-                            <label for="modal_paraphrase_stem" class="text-[13px] font-medium text-slate-800">
+                            <label for="modal_paraphrase_stem" class="text-sm font-medium text-slate-800">
                                 Nueva variante de redacción <span class="text-acode-danger font-bold">*</span>
                             </label>
                             <span
@@ -765,7 +769,7 @@
                     @csrf
 
                     <div>
-                        <label for="bulk_csv_file" class="block text-[13px] font-medium text-slate-800 mb-1.5">
+                        <label for="bulk_csv_file" class="block text-sm font-medium text-slate-800 mb-1.5">
                             2. Selecciona tu archivo (.csv, .txt o .xlsx)
                         </label>
                         <div class="flex flex-col sm:flex-row sm:items-center gap-2.5">
@@ -852,45 +856,40 @@
                         </div>
 
                         {{-- Tabla fila por fila (MPW-V2 §8.4) --}}
-                        <div class="max-h-60 overflow-y-auto rounded-xl border border-slate-200">
-                            <table class="min-w-full divide-y divide-slate-200 text-xs text-left">
-                                <thead class="bg-acode-primary sticky top-0 text-white font-semibold uppercase tracking-wider">
-                                    <tr>
-                                        <th class="px-3 py-2.5">Fila</th>
-                                        <th class="px-3 py-2.5">Estado</th>
-                                        <th class="px-3 py-2.5">Tipo</th>
-                                        <th class="px-3 py-2.5">Título</th>
-                                        <th class="px-3 py-2.5">Materia</th>
-                                        <th class="px-3 py-2.5">Detalle</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-200 bg-white [&_tr:nth-child(even)]:bg-acode-surface/60">
-                                    <template x-for="row in (importPreview.data?.rows || [])" :key="row.row">
-                                        <tr>
-                                            <td class="px-3 py-2 font-mono text-slate-600" x-text="row.row"></td>
-                                            <td class="px-3 py-2">
-                                                <span
-                                                    class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
-                                                    :class="row.status === 'valid' ? 'bg-acode-accent/15 text-acode-primary' : 'bg-acode-danger/10 text-acode-danger'"
-                                                    x-text="row.status === 'valid' ? 'Válido' : 'Error'"
-                                                ></span>
-                                            </td>
-                                            <td class="px-3 py-2 text-slate-700" x-text="row.question_type || '—'"></td>
-                                            <td class="px-3 py-2 font-medium text-acode-primary max-w-[10rem] truncate" x-text="row.title || '—'"></td>
-                                            <td class="px-3 py-2 text-slate-700" x-text="row.subject_tag || 'Sin materia'"></td>
-                                            <td class="px-3 py-2">
-                                                <template x-if="row.status === 'valid'">
-                                                    <span class="text-acode-accent font-medium">Lista para guardar</span>
-                                                </template>
-                                                <template x-if="row.status !== 'valid'">
-                                                    <span class="text-acode-danger" x-text="(row.errors || []).join(' · ')"></span>
-                                                </template>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </div>
+                        <x-table class="[&>div]:max-h-60 [&>div]:overflow-y-auto">
+                            <x-slot:header>
+                                <x-table.th class="px-3 py-2.5">Fila</x-table.th>
+                                <x-table.th class="px-3 py-2.5">Estado</x-table.th>
+                                <x-table.th class="px-3 py-2.5">Tipo</x-table.th>
+                                <x-table.th class="px-3 py-2.5">Título</x-table.th>
+                                <x-table.th class="px-3 py-2.5">Materia</x-table.th>
+                                <x-table.th class="px-3 py-2.5">Detalle</x-table.th>
+                            </x-slot:header>
+
+                            <template x-for="row in (importPreview.data?.rows || [])" :key="row.row">
+                                <tr>
+                                    <x-table.td class="px-3 py-2 font-mono text-xs text-slate-600" x-text="row.row"></x-table.td>
+                                    <x-table.td class="px-3 py-2 text-xs">
+                                        <span
+                                            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
+                                            :class="row.status === 'valid' ? 'bg-acode-accent/15 text-acode-primary' : 'bg-acode-danger/10 text-acode-danger'"
+                                            x-text="row.status === 'valid' ? 'Válido' : 'Error'"
+                                        ></span>
+                                    </x-table.td>
+                                    <x-table.td class="px-3 py-2 text-xs text-slate-700" x-text="row.question_type || '—'"></x-table.td>
+                                    <x-table.td class="px-3 py-2 text-xs font-medium text-acode-primary max-w-[10rem] truncate" x-text="row.title || '—'"></x-table.td>
+                                    <x-table.td class="px-3 py-2 text-xs text-slate-700" x-text="row.subject_tag || 'Sin materia'"></x-table.td>
+                                    <x-table.td class="px-3 py-2 text-xs">
+                                        <template x-if="row.status === 'valid'">
+                                            <span class="text-acode-accent font-medium">Lista para guardar</span>
+                                        </template>
+                                        <template x-if="row.status !== 'valid'">
+                                            <span class="text-acode-danger" x-text="(row.errors || []).join(' · ')"></span>
+                                        </template>
+                                    </x-table.td>
+                                </tr>
+                            </template>
+                        </x-table>
                     </div>
 
                     <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
@@ -950,7 +949,7 @@
                                         ? (((int) ($similar['questions_count'] ?? 0) >= (int) $subjectItem->questions_count) ? $similar['name'] : $subjectItem->name)
                                         : $subjectItem->name;
                                 @endphp
-                                <label class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2.5 hover:bg-blue-50/70 cursor-pointer">
+                                <label class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2.5 hover:bg-acode-surface/60 cursor-pointer">
                                     <div class="flex items-start gap-2.5">
                                         <input
                                             type="checkbox"

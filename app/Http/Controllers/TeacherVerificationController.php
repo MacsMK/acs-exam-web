@@ -123,10 +123,10 @@ class TeacherVerificationController extends Controller
         );
 
         return redirect()
-            ->route('teacher.subscription.index', ['onboarding' => 1])
+            ->route('dashboard')
             ->with(
                 'status',
-                '¡Bienvenido! Tu cuenta docente fue acreditada con éxito mediante código institucional. Elige un plan o inicia tu prueba gratuita para comenzar.',
+                '¡Bienvenido! Tu cuenta docente fue acreditada con éxito mediante código institucional. Elige y confirma tu paquete o inicia tu prueba gratuita para comenzar.',
             );
     }
 }

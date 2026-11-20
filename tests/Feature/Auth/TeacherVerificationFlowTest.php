@@ -455,20 +455,27 @@ class TeacherVerificationFlowTest extends TestCase
             ->get(route('admin.teachers.verification.document', $pendingTeacher))
             ->assertNotFound();
 
-        // El docente recién aprobado pasa primero por el onboarding de plan/prueba gratuita (ADR-058)
+        // El docente recién aprobado ve el overlay bloqueante en /dashboard y /groups redirige a dashboard (ADR-060)
         $this->app['auth']->forgetGuards();
         $this->actingAs($pendingTeacher)
             ->get('/dashboard')
-            ->assertRedirect(route('teacher.subscription.index', ['onboarding' => 1]));
+            ->assertOk()
+            ->assertSee('inert', false)
+            ->assertSee('onboarding_overlay', false)
+            ->assertSee('Confirmar prueba gratuita');
         $this->actingAs($pendingTeacher)
             ->get('/groups')
-            ->assertRedirect(route('teacher.subscription.index', ['onboarding' => 1]));
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHas('warning');
 
         $this->actingAs($pendingTeacher)
             ->post(route('teacher.subscription.free-trial'))
             ->assertRedirect(route('dashboard'));
 
-        $this->actingAs($pendingTeacher->fresh())->get('/dashboard')->assertOk();
+        $this->actingAs($pendingTeacher->fresh())
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('onboarding_overlay', false);
         $this->actingAs($pendingTeacher->fresh())->get('/groups')->assertOk();
     }
 
@@ -589,20 +596,27 @@ class TeacherVerificationFlowTest extends TestCase
         $this->assertSame(TeacherVerification::STATUS_APPROVED, $teacher->teacher_verification_status);
         Storage::disk('local')->assertMissing($secondPath);
 
-        // Tras aprobar el reenvío, pasa por onboarding y luego accede 200 OK
+        // Tras aprobar el reenvío, ve overlay en /dashboard, /groups redirige a dashboard y luego accede 200 OK (ADR-060)
         $this->app['auth']->forgetGuards();
         $this->actingAs($teacher)
             ->get('/dashboard')
-            ->assertRedirect(route('teacher.subscription.index', ['onboarding' => 1]));
+            ->assertOk()
+            ->assertSee('inert', false)
+            ->assertSee('onboarding_overlay', false)
+            ->assertSee('Confirmar prueba gratuita');
         $this->actingAs($teacher)
             ->get('/groups')
-            ->assertRedirect(route('teacher.subscription.index', ['onboarding' => 1]));
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHas('warning');
 
         $this->actingAs($teacher)
             ->post(route('teacher.subscription.free-trial'))
             ->assertRedirect(route('dashboard'));
 
-        $this->actingAs($teacher->fresh())->get('/dashboard')->assertOk();
+        $this->actingAs($teacher->fresh())
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('onboarding_overlay', false);
         $this->actingAs($teacher->fresh())->get('/groups')->assertOk();
     }
 

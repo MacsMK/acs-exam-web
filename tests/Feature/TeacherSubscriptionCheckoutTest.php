@@ -57,20 +57,30 @@ class TeacherSubscriptionCheckoutTest extends TestCase
         $this->seed(SubscriptionPackageSeeder::class);
     }
 
-    public function test_verified_teacher_pending_onboarding_is_redirected_and_can_activate_free_trial_while_legacy_teacher_is_not_blocked(): void
+    public function test_verified_teacher_pending_onboarding_sees_dashboard_overlay_is_redirected_from_modules_and_can_activate_free_trial(): void
     {
         $teacher = $this->createVerifiedTeacherAwaitingOnboarding();
 
-        // 1. Docente verificado con plan_onboarding_completed_at = null es redirigido en /dashboard y /groups
+        // 1. Docente verificado con plan_onboarding_completed_at = null ve 200 OK en /dashboard con overlay bloqueante (ADR-060)
         $this->actingAs($teacher)
             ->get(route('dashboard'))
-            ->assertRedirect(route('teacher.subscription.index', ['onboarding' => 1]));
+            ->assertOk()
+            ->assertSee('inert', false)
+            ->assertSee('onboarding_overlay', false)
+            ->assertSee('Confirmar prueba gratuita')
+            ->assertSee('Básico')
+            ->assertSee('Avanzado')
+            ->assertSee('Pro');
 
-        $this->actingAs($teacher)
-            ->get(route('groups.index'))
-            ->assertRedirect(route('teacher.subscription.index', ['onboarding' => 1]));
+        // Rutas operativas protegidas redirigen a /dashboard con alerta warning
+        foreach ([route('groups.index'), route('questions.index'), route('exams.index'), route('teacher.profile.index')] as $protectedUrl) {
+            $this->actingAs($teacher)
+                ->get($protectedUrl)
+                ->assertRedirect(route('dashboard'))
+                ->assertSessionHas('warning');
+        }
 
-        // 2. La vista de onboarding muestra el banner de bienvenida, Prueba Gratuita y catálogo de paquetes
+        // 2. La vista de suscripción mantiene el banner de bienvenida, Prueba Gratuita y catálogo de paquetes
         $onboardingResponse = $this->actingAs($teacher)
             ->get(route('teacher.subscription.index', ['onboarding' => 1]));
 
@@ -82,7 +92,7 @@ class TeacherSubscriptionCheckoutTest extends TestCase
             ->assertSee('Avanzado')
             ->assertSee('Pro');
 
-        // 3. Elección de Prueba Gratuita cierra onboarding, audita y habilita acceso Freemium
+        // 3. Elección de Prueba Gratuita cierra onboarding, audita y habilita acceso Freemium sin overlay
         $trialResponse = $this->actingAs($teacher)
             ->post(route('teacher.subscription.free-trial'));
 
@@ -101,14 +111,21 @@ class TeacherSubscriptionCheckoutTest extends TestCase
         $this->assertNotNull($auditLog);
         $this->assertSame('freemium', $auditLog->new_values['tier'] ?? null);
 
-        $this->actingAs($teacher->fresh())->get(route('dashboard'))->assertOk();
+        $this->actingAs($teacher->fresh())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSee('onboarding_overlay', false)
+            ->assertDontSee('Confirmar prueba gratuita');
         $this->actingAs($teacher->fresh())->get(route('groups.index'))->assertOk();
         $this->assertNull(app(SubscriptionLimitService::class)->resolveActivePackage($teacher->fresh()));
 
-        // 4. Cuentas User::factory()->teacher() sin teacherVerification siguen entrando sin redirect
+        // 4. Cuentas User::factory()->teacher() sin teacherVerification siguen entrando sin overlay ni redirect
         $legacyTeacher = User::factory()->teacher()->create();
         $this->assertNull($legacyTeacher->teacherVerification);
-        $this->actingAs($legacyTeacher)->get(route('dashboard'))->assertOk();
+        $this->actingAs($legacyTeacher)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSee('onboarding_overlay', false);
         $this->actingAs($legacyTeacher)->get(route('groups.index'))->assertOk();
     }
 
@@ -140,7 +157,7 @@ class TeacherSubscriptionCheckoutTest extends TestCase
                 'card_cvv' => $rawCvv,
             ]);
 
-        $payResponse->assertRedirect(route('teacher.subscription.index'))
+        $payResponse->assertRedirect(route('dashboard'))
             ->assertSessionHasNoErrors()
             ->assertSessionHas('status');
 
@@ -202,8 +219,25 @@ class TeacherSubscriptionCheckoutTest extends TestCase
         $this->assertSame($package->id, $resolved->id);
         $this->assertSame('advanced', $resolved->tier);
 
-        $this->actingAs($teacher->fresh())->get(route('dashboard'))->assertOk();
+        $this->actingAs($teacher->fresh())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSee('onboarding_overlay', false);
         $this->actingAs($teacher->fresh())->get(route('groups.index'))->assertOk();
+
+        // Un cambio o renovación posterior (ya con onboarding completado y sin overlay) redirige a teacher.subscription.index
+        $proPackage = SubscriptionPackage::where('tier', 'pro')->firstOrFail();
+        $this->actingAs($teacher->fresh())
+            ->post(route('teacher.subscription.pay', $proPackage), [
+                'payment_method' => 'card',
+                'card_holder_name' => 'Elena Morales Vega',
+                'card_number' => '4242 4242 4242 4242',
+                'card_expiry' => '12/30',
+                'card_cvv' => $rawCvv,
+            ])
+            ->assertRedirect(route('teacher.subscription.index'))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('status');
     }
 
     public function test_declined_card_0002_records_failed_transaction_without_activating_subscription_and_keeps_history_visible(): void
@@ -282,7 +316,7 @@ class TeacherSubscriptionCheckoutTest extends TestCase
                 'spei_account_holder' => 'Elena Morales Vega',
             ]);
 
-        $response->assertRedirect(route('teacher.subscription.index'))
+        $response->assertRedirect(route('dashboard'))
             ->assertSessionHasNoErrors()
             ->assertSessionHas('status');
 
@@ -372,6 +406,17 @@ class TeacherSubscriptionCheckoutTest extends TestCase
                 'card_cvv' => 'El código de seguridad (CVV) debe contener 3 o 4 dígitos',
             ]);
 
+        // 4b. Banco emisor SPEI inválido (ADR-060)
+        $this->actingAs($teacher)
+            ->post(route('teacher.subscription.pay', $package), [
+                'payment_method' => 'spei',
+                'spei_sender_bank' => 'Banco Inexistente S.A.',
+                'spei_account_holder' => 'Elena Morales Vega',
+            ])
+            ->assertSessionHasErrors([
+                'spei_sender_bank' => 'La opción seleccionada en banco emisor no es válida',
+            ]);
+
         $this->assertDatabaseCount('acs_payment_transactions', 0);
 
         // 5. Paquete inactivo retorna 404 en GET y POST
@@ -452,7 +497,7 @@ class TeacherSubscriptionCheckoutTest extends TestCase
                 'card_expiry' => '12/30',
                 'card_cvv' => '879',
             ])
-            ->assertRedirect(route('teacher.subscription.index'));
+            ->assertRedirect(route('dashboard'));
 
         $transaction = PaymentTransaction::where('teacher_id', $verifiedTeacher->id)->firstOrFail();
 
@@ -465,6 +510,167 @@ class TeacherSubscriptionCheckoutTest extends TestCase
             ->assertDontSee('4242424242424242')
             ->assertDontSee('4242 4242 4242 4242')
             ->assertDontSee('879');
+    }
+
+    public function test_dashboard_two_step_onboarding_overlay_handles_declined_card_approved_card_spei_and_free_trial(): void
+    {
+        config(['mail.default' => 'array']);
+        $this->flushArrayMailTransport();
+
+        $basic = SubscriptionPackage::where('tier', 'basic')->firstOrFail();
+        $advanced = SubscriptionPackage::where('tier', 'advanced')->firstOrFail();
+
+        // 1. Flujo overlay: rechazo tarjeta 0002 -> regresa a dashboard con onboarding_selected_package_id, error payment_gateway y sin flashear PAN/CVV/vigencia
+        $teacherCard = $this->createVerifiedTeacherAwaitingOnboarding();
+
+        $this->actingAs($teacherCard)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('inert', false)
+            ->assertSee('onboarding_overlay', false);
+
+        $declinedOverlay = $this->actingAs($teacherCard)
+            ->post(route('teacher.subscription.pay', $basic), [
+                'onboarding_overlay' => '1',
+                'payment_method' => 'card',
+                'card_holder_name' => 'Mariana Soto Pérez',
+                'card_number' => '4000 0000 0000 0002',
+                'card_expiry' => '12/30',
+                'card_cvv' => '789',
+            ]);
+
+        $declinedOverlay->assertRedirect(route('dashboard'))
+            ->assertSessionHas('onboarding_selected_package_id', $basic->id)
+            ->assertSessionHasErrors('payment_gateway');
+
+        $this->assertFalse(session()->hasOldInput('card_number'));
+        $this->assertFalse(session()->hasOldInput('card_cvv'));
+        $this->assertFalse(session()->hasOldInput('card_expiry'));
+        $this->assertNull($teacherCard->teacherVerification()->firstOrFail()->plan_onboarding_completed_at);
+        $this->assertSensitiveCardDataNeverPersisted('4000000000000002', '789');
+
+        // Error de validación desde overlay (Luhn inválido) también conserva onboarding_selected_package_id sin flashear tarjeta
+        $invalidLuhnOverlay = $this->actingAs($teacherCard)
+            ->post(route('teacher.subscription.pay', $basic), [
+                'onboarding_overlay' => '1',
+                'payment_method' => 'card',
+                'card_holder_name' => 'Mariana Soto Pérez',
+                'card_number' => '4242 4242 4242 4243',
+                'card_expiry' => '12/30',
+                'card_cvv' => '321',
+            ]);
+
+        $invalidLuhnOverlay->assertRedirect(route('dashboard'))
+            ->assertSessionHas('onboarding_selected_package_id', $basic->id)
+            ->assertSessionHasErrors('card_number');
+        $this->assertFalse(session()->hasOldInput('card_number'));
+        $this->assertFalse(session()->hasOldInput('card_cvv'));
+        $this->assertFalse(session()->hasOldInput('card_expiry'));
+
+        // Reintento exitoso con tarjeta aprobada desde el overlay -> cierra onboarding y desbloquea /dashboard y /groups
+        $approvedOverlay = $this->actingAs($teacherCard)
+            ->post(route('teacher.subscription.pay', $basic), [
+                'onboarding_overlay' => '1',
+                'payment_method' => 'card',
+                'card_holder_name' => 'Mariana Soto Pérez',
+                'card_number' => '4242 4242 4242 4242',
+                'card_expiry' => '12/30',
+                'card_cvv' => '123',
+            ]);
+
+        $approvedOverlay->assertRedirect(route('dashboard'))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('status');
+
+        $this->assertNotNull($teacherCard->teacherVerification()->firstOrFail()->plan_onboarding_completed_at);
+        $this->actingAs($teacherCard->fresh())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSee('onboarding_overlay', false)
+            ->assertDontSee('Confirmar prueba gratuita');
+        $this->actingAs($teacherCard->fresh())->get(route('groups.index'))->assertOk();
+
+        // 2. Flujo overlay: pago SPEI instantáneo aprobado -> cierra onboarding y desbloquea
+        $teacherSpei = $this->createVerifiedTeacherAwaitingOnboarding();
+        $speiOverlay = $this->actingAs($teacherSpei)
+            ->post(route('teacher.subscription.pay', $advanced), [
+                'onboarding_overlay' => '1',
+                'payment_method' => 'spei',
+                'spei_sender_bank' => 'BBVA México',
+                'spei_account_holder' => 'Jorge Méndez Ruiz',
+            ]);
+
+        $speiOverlay->assertRedirect(route('dashboard'))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('status');
+
+        $this->assertNotNull($teacherSpei->teacherVerification()->firstOrFail()->plan_onboarding_completed_at);
+        $this->actingAs($teacherSpei->fresh())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSee('onboarding_overlay', false);
+        $this->actingAs($teacherSpei->fresh())->get(route('groups.index'))->assertOk();
+
+        // 3. Flujo overlay: Prueba gratuita -> cierra onboarding y desbloquea
+        $teacherTrial = $this->createVerifiedTeacherAwaitingOnboarding();
+        $this->actingAs($teacherTrial)
+            ->post(route('teacher.subscription.free-trial'))
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHas('status');
+
+        $this->assertNotNull($teacherTrial->teacherVerification()->firstOrFail()->plan_onboarding_completed_at);
+        $this->actingAs($teacherTrial->fresh())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSee('onboarding_overlay', false);
+        $this->actingAs($teacherTrial->fresh())->get(route('groups.index'))->assertOk();
+    }
+
+    public function test_super_admin_manual_paid_package_assignment_completes_plan_onboarding(): void
+    {
+        $teacher = $this->createVerifiedTeacherAwaitingOnboarding();
+        $proPackage = SubscriptionPackage::where('tier', 'pro')->firstOrFail();
+        $superAdmin = User::factory()->create([
+            'role' => 'super_admin',
+            'first_name' => 'Super',
+            'last_name' => 'Admin',
+            'email' => 'superadmin.assign@acode-solutions.test',
+        ]);
+
+        $this->assertTrue($teacher->needsPlanOnboarding());
+        $this->assertNull($teacher->teacherVerification()->firstOrFail()->plan_onboarding_completed_at);
+
+        // Asignación en estado 'pending' NO cierra el onboarding
+        $this->actingAs($superAdmin)
+            ->post(route('admin.teachers.assign', $teacher), [
+                'subscription_package_id' => $proPackage->id,
+                'payment_status' => 'pending',
+                'notes' => 'En espera de comprobante',
+            ])
+            ->assertRedirect();
+
+        $this->assertNull($teacher->teacherVerification()->firstOrFail()->plan_onboarding_completed_at);
+        $this->assertTrue($teacher->fresh()->needsPlanOnboarding());
+
+        // Asignación en estado 'paid' sí cierra plan_onboarding_completed_at y desbloquea al docente (ADR-060)
+        $this->actingAs($superAdmin)
+            ->post(route('admin.teachers.assign', $teacher), [
+                'subscription_package_id' => $proPackage->id,
+                'payment_status' => 'paid',
+                'notes' => 'Convenio institucional liquidado',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        $this->assertNotNull($teacher->teacherVerification()->firstOrFail()->plan_onboarding_completed_at);
+        $this->assertFalse($teacher->fresh()->needsPlanOnboarding());
+
+        $this->app['auth']->forgetGuards();
+        $this->actingAs($teacher->fresh())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSee('onboarding_overlay', false);
+        $this->actingAs($teacher->fresh())->get(route('groups.index'))->assertOk();
     }
 
     /**

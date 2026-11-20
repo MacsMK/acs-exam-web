@@ -12,7 +12,7 @@ declare(strict_types=1);
  * Requerimiento:  RF-AUT (confirmar código específico en DE-01 con Eli;
  *                 ver Formato BD-01 folio BD01-2026-001)
  * Autor:          Equipo de Base de Datos (A-Code Solutions)
- * Versión:        2.2.0
+ * Versión:        2.3.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_users (MBD-V4 Tabla 20). Sirve
  *                 indistintamente a super_admin, teacher y student
@@ -29,6 +29,10 @@ declare(strict_types=1);
  *                 CAMBIOS v2.2.0: agrega la relación teacherVerification y
  *                 helpers de estado de acreditación docente manteniendo
  *                 teacher_verification_status fuera de $fillable por seguridad.
+ *
+ *                 CAMBIOS v2.3.0: agrega relación aiCreditUsages y cast booleano
+ *                 de skip_ai_reevaluation_warning (fuera de $fillable por
+ *                 seguridad OWASP A01 / mass assignment).
  * ============================================================================
  */
 
@@ -233,6 +237,17 @@ class User extends Authenticatable
     }
 
     /**
+     * Registros de consumo de créditos de evaluación con IA del docente
+     * (acs_ai_credit_usages).
+     *
+     * @return HasMany<AiCreditUsage>
+     */
+    public function aiCreditUsages(): HasMany
+    {
+        return $this->hasMany(AiCreditUsage::class, 'teacher_id');
+    }
+
+    /**
      * Indica si el usuario cuenta con acreditación docente aprobada o no
      * requiere verificación por no tener rol docente.
      *
@@ -308,6 +323,7 @@ class User extends Authenticatable
         return [
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'skip_ai_reevaluation_warning' => 'boolean',
             'email_verified_at' => 'datetime',
             'phone_verified_at' => 'datetime',
             'two_factor_expires_at' => 'datetime',

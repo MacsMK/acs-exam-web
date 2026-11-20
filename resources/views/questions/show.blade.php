@@ -4,124 +4,123 @@
 @section('title', 'Detalle del Reactivo · ' . $question->title)
 
 @section('content')
-    <div class="space-y-6 max-w-5xl mx-auto">
-        {{-- Barra de Navegación y Breadcrumb Institucional --}}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <nav class="flex items-center gap-2 text-xs text-slate-500 select-none" aria-label="Migas de pan">
-                <a href="{{ route('questions.index') }}" class="hover:text-acode-tech transition flex items-center gap-1 font-medium">
-                    <x-icon name="arrowLeft" class="w-3.5 h-3.5" />
-                    <span>Banco de reactivos</span>
-                </a>
-                <span class="text-slate-300">/</span>
-                <span class="font-semibold text-slate-700 truncate max-w-xs sm:max-w-md">Detalle del reactivo</span>
-            </nav>
+    @php
+        $typeLabels = [
+            'multiple_choice' => 'Opción múltiple',
+            'matching' => 'Relación de columnas',
+            'open' => 'Pregunta abierta',
+            'code' => 'Código fuente',
+        ];
+        $typeVariants = [
+            'multiple_choice' => 'info',
+            'matching' => 'accent',
+            'open' => 'warning',
+            'code' => 'primary',
+        ];
+        $formattedTime = $question->default_time_seconds >= 60
+            ? floor($question->default_time_seconds / 60) . 'm' . ($question->default_time_seconds % 60 > 0 ? ' ' . ($question->default_time_seconds % 60) . 's' : '')
+            : $question->default_time_seconds . 's';
+    @endphp
 
-            <div class="flex items-center gap-2">
-                <x-button :href="route('questions.index')" variant="neutral" size="sm">
+    <div class="space-y-6">
+        {{-- Cabecera Institucional del Reactivo --}}
+        <x-page-header
+            :title="$question->title"
+            :breadcrumbs="[
+                ['label' => 'Banco de preguntas', 'href' => route('questions.index')],
+                ['label' => $question->title],
+            ]"
+        >
+            <x-slot:badge>
+                <x-badge :variant="$typeVariants[$question->question_type] ?? 'neutral'">
+                    {{ $typeLabels[$question->question_type] ?? $question->question_type }}
+                </x-badge>
+
+                @if ($isLinkedToExams)
+                    <x-badge variant="warning" class="gap-1">
+                        <x-icon name="lock" class="w-3.5 h-3.5" />
+                        En exámenes activos/históricos
+                    </x-badge>
+                @else
+                    <x-badge variant="neutral">
+                        Sin vincular a exámenes
+                    </x-badge>
+                @endif
+
+                @if ($question->children->isNotEmpty())
+                    <x-badge variant="accent" class="gap-1">
+                        <x-icon name="copy" class="w-3.5 h-3.5" />
+                        {{ $question->children->count() }} {{ $question->children->count() === 1 ? 'versión derivada' : 'versiones derivadas' }}
+                    </x-badge>
+                @endif
+            </x-slot:badge>
+
+            <x-slot:meta>
+                <span class="inline-flex items-center gap-1.5 font-medium text-slate-600">
+                    <x-icon name="tag" class="w-3.5 h-3.5 text-slate-400" />
+                    {{ $question->subject_tag ?? 'Materia General' }}
+                </span>
+
+                <span class="inline-flex items-center gap-1 font-mono font-semibold text-acode-primary">
+                    {{ number_format((float) $question->default_points, 1) }} pts
+                </span>
+
+                <span class="inline-flex items-center gap-1 font-mono text-acode-tech font-semibold">
+                    <x-icon name="clock" class="w-3.5 h-3.5" />
+                    {{ $formattedTime }}
+                </span>
+
+                @if ($question->parent)
+                    <a
+                        href="{{ route('questions.show', $question->parent) }}"
+                        class="inline-flex items-center gap-1 font-semibold text-acode-tech hover:underline"
+                        title="Consultar la versión previa original"
+                    >
+                        <x-icon name="view" class="w-3.5 h-3.5" />
+                        Versión previa: #{{ $question->parent->id }}
+                    </a>
+                @endif
+            </x-slot:meta>
+
+            <x-slot:actions>
+                <x-button :href="route('questions.index')" variant="neutral" size="md">
                     <x-icon name="arrowLeft" class="w-4 h-4" />
-                    Volver al banco
+                    Volver
                 </x-button>
 
-                <x-button :href="route('questions.edit', $question)" variant="primary" size="sm">
+                <form
+                    id="duplicate-bottom-form"
+                    method="POST"
+                    action="{{ route('questions.duplicate', $question) }}"
+                    class="inline"
+                >
+                    @csrf
+                    <x-button
+                        type="button"
+                        variant="secondary"
+                        size="md"
+                        onclick="confirmDuplicateBottom()"
+                    >
+                        <x-icon name="copy" class="w-4 h-4" />
+                        Copiar
+                    </x-button>
+                </form>
+
+                <x-button :href="route('questions.edit', $question)" variant="primary" size="md">
                     <x-icon name="edit" class="w-4 h-4" />
                     Editar reactivo
                 </x-button>
-            </div>
-        </div>
+            </x-slot:actions>
+        </x-page-header>
 
-        {{-- Cabecera Principal del Reactivo --}}
+        {{-- Enunciado Principal (Stem) --}}
         <x-card>
-            <div class="space-y-4">
-                <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                    <div class="space-y-2 flex-1">
-                        <div class="flex flex-wrap items-center gap-2">
-                            {{-- Badge de Tipo de Reactivo --}}
-                            @switch($question->question_type)
-                                @case('multiple_choice')
-                                    <x-badge variant="info">Opción múltiple</x-badge>
-                                    @break
-                                @case('matching')
-                                    <x-badge variant="accent">Relación de columnas</x-badge>
-                                    @break
-                                @case('open')
-                                    <x-badge variant="warning">Pregunta abierta</x-badge>
-                                    @break
-                                @case('code')
-                                    <x-badge variant="primary">Código fuente</x-badge>
-                                    @break
-                                @default
-                                    <x-badge variant="neutral">{{ $question->question_type }}</x-badge>
-                            @endswitch
-
-                            {{-- Badge de Materia --}}
-                            <x-badge variant="neutral">
-                                {{ $question->subject_tag ?? 'Materia General' }}
-                            </x-badge>
-
-                            {{-- Estado de Vinculación a Exámenes (Integridad Histórica) --}}
-                            @if ($isLinkedToExams)
-                                <x-badge variant="warning" class="gap-1">
-                                    <x-icon name="lock" class="w-3.5 h-3.5" />
-                                    En exámenes activos/históricos
-                                </x-badge>
-                            @else
-                                <x-badge variant="neutral">
-                                    Sin vincular a exámenes
-                                </x-badge>
-                            @endif
-
-                            {{-- Enlace a Versión Previa / Derivadas --}}
-                            @if ($question->parent)
-                                <a
-                                    href="{{ route('questions.show', $question->parent) }}"
-                                    class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-acode-tech/10 text-acode-tech border border-acode-tech/30 hover:bg-acode-tech/20 transition"
-                                    title="Consultar la versión previa original"
-                                >
-                                    <x-icon name="view" class="w-3.5 h-3.5" />
-                                    Versión previa: #{{ $question->parent->id }}
-                                </a>
-                            @endif
-                            @if ($question->children->isNotEmpty())
-                                <x-badge variant="accent" class="gap-1">
-                                    <x-icon name="copy" class="w-3.5 h-3.5" />
-                                    {{ $question->children->count() }} {{ $question->children->count() === 1 ? 'versión derivada' : 'versiones derivadas' }}
-                                </x-badge>
-                            @endif
-                        </div>
-
-                        <h1 class="text-2xl font-bold text-acode-primary tracking-tight leading-8">
-                            {{ $question->title }}
-                        </h1>
-                    </div>
-
-                    {{-- Métricas de Evaluación: Puntos y Tiempo --}}
-                    <div class="flex items-center gap-3 shrink-0 bg-acode-surface p-3 rounded-xl border border-slate-200">
-                        <div class="text-center px-2">
-                            <span class="block text-xs font-semibold uppercase tracking-wider text-slate-500">Puntos</span>
-                            <span class="font-mono text-lg font-bold text-acode-primary">{{ number_format((float) $question->default_points, 1) }}</span>
-                        </div>
-                        <div class="h-8 w-px bg-slate-300"></div>
-                        <div class="text-center px-2">
-                            <span class="block text-xs font-semibold uppercase tracking-wider text-slate-500">Tiempo</span>
-                            <span class="font-mono text-lg font-bold text-acode-tech">
-                                @if ($question->default_time_seconds >= 60)
-                                    {{ floor($question->default_time_seconds / 60) }}m {{ $question->default_time_seconds % 60 > 0 ? ($question->default_time_seconds % 60).'s' : '' }}
-                                @else
-                                    {{ $question->default_time_seconds }}s
-                                @endif
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Enunciado Principal (Stem) --}}
-                <div class="pt-2">
-                    <span class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                        Enunciado o Planteamiento Principal
-                    </span>
-                    <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm leading-6 whitespace-pre-line">
-                        {{ $question->stem }}
-                    </div>
+            <div class="space-y-2">
+                <span class="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Enunciado o Planteamiento Principal
+                </span>
+                <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm leading-6 whitespace-pre-line">
+                    {{ $question->stem }}
                 </div>
             </div>
         </x-card>
@@ -357,7 +356,7 @@
                         @if (!empty($question->questionable->starter_code))
                             <div class="space-y-1.5">
                                 <div class="flex items-center justify-between">
-                                    <span class="block text-[13px] font-medium text-slate-800">
+                                    <span class="block text-sm font-medium text-slate-800">
                                         {{ $question->questionable->is_find_error ? 'Código Defectuoso para Auditoría (Starter Code)' : 'Código Base / Plantilla Inicial' }}
                                     </span>
                                     <span class="text-xs font-mono text-slate-500">Editor Alumno</span>
@@ -367,7 +366,7 @@
                                         <span>starter_code.{{ strtolower($question->questionable->programming_language ?? 'txt') }}</span>
                                         <span class="uppercase tracking-wider text-slate-500 font-sans font-semibold">Sólo lectura</span>
                                     </div>
-                                    <pre class="p-3.5 text-[13px] font-mono text-acode-ink overflow-x-auto leading-5"><code>{{ $question->questionable->starter_code }}</code></pre>
+                                    <pre class="p-3.5 text-xs font-mono text-acode-ink overflow-x-auto leading-5"><code>{{ $question->questionable->starter_code }}</code></pre>
                                 </div>
                             </div>
                         @endif
@@ -375,7 +374,7 @@
                         {{-- Solución de Referencia --}}
                         <div class="space-y-1.5">
                             <div class="flex items-center justify-between">
-                                <span class="block text-[13px] font-medium text-slate-800">
+                                <span class="block text-sm font-medium text-slate-800">
                                     Solución Canónica de Referencia
                                 </span>
                                 <span class="text-xs font-mono text-acode-accent font-semibold">Patrón Evaluación</span>
@@ -385,7 +384,7 @@
                                     <span>solution.{{ strtolower($question->questionable->programming_language ?? 'txt') }}</span>
                                     <span class="uppercase tracking-wider text-acode-accent font-sans font-semibold">Respuesta Correcta</span>
                                 </div>
-                                <pre class="p-3.5 text-[13px] font-mono text-acode-ink overflow-x-auto leading-5"><code>{{ $question->questionable->reference_solution }}</code></pre>
+                                <pre class="p-3.5 text-xs font-mono text-acode-ink overflow-x-auto leading-5"><code>{{ $question->questionable->reference_solution }}</code></pre>
                             </div>
                         </div>
                     </div>
@@ -482,7 +481,7 @@
                         @csrf
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
-                                <label for="paraphrase_stem" class="block text-[13px] font-medium text-slate-800">
+                                <label for="paraphrase_stem" class="block text-sm font-medium text-slate-800">
                                     Redacción alternativa de la pregunta
                                 </label>
                                 <span
@@ -559,71 +558,40 @@
                             </form>
                         </div>
                     @empty
-                        <div class="py-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                            <x-icon name="edit" class="w-8 h-8 text-slate-400 mx-auto mb-1.5" />
-                            <p class="text-sm font-semibold text-slate-600">Sin paráfrasis registradas</p>
-                            <p class="text-xs text-slate-500 mt-0.5">
-                                Todos los alumnos recibirán el enunciado principal idéntico a menos que agregues variantes.
-                            </p>
-                        </div>
+                        <x-empty-state
+                            icon="edit"
+                            title="Sin paráfrasis registradas"
+                            message="Todos los alumnos recibirán el enunciado principal idéntico a menos que agregues variantes."
+                        />
                     @endforelse
                 </div>
             </div>
         </x-card>
 
-        {{-- Barra Inferior de Acciones Normativas --}}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-            <x-button :href="route('questions.index')" variant="neutral" size="md">
-                <x-icon name="arrowLeft" class="w-4 h-4" />
-                Volver al banco
-            </x-button>
+        {{-- Barra Inferior de Gestión del Reactivo --}}
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+            <p class="text-xs text-slate-500">
+                Retirar este reactivo lo ocultará de tu catálogo activo manteniendo la integridad de exámenes históricos.
+            </p>
 
-            <div class="flex items-center gap-2">
-                {{-- Formulario de Duplicación --}}
-                <form
-                    id="duplicate-bottom-form"
-                    method="POST"
-                    action="{{ route('questions.duplicate', $question) }}"
-                    class="inline"
+            <form
+                id="delete-bottom-form"
+                method="POST"
+                action="{{ route('questions.destroy', $question) }}"
+                class="inline shrink-0"
+            >
+                @csrf
+                @method('DELETE')
+                <x-button
+                    type="button"
+                    variant="danger"
+                    size="md"
+                    onclick="confirmDeleteBottom()"
                 >
-                    @csrf
-                    <x-button
-                        type="button"
-                        variant="secondary"
-                        size="md"
-                        onclick="confirmDuplicateBottom()"
-                    >
-                        <x-icon name="copy" class="w-4 h-4" />
-                        Copiar
-                    </x-button>
-                </form>
-
-                {{-- Botón Editar --}}
-                <x-button :href="route('questions.edit', $question)" variant="primary" size="md">
-                    <x-icon name="edit" class="w-4 h-4" />
-                    Editar reactivo
+                    <x-icon name="delete" class="w-4 h-4" />
+                    Eliminar
                 </x-button>
-
-                {{-- Formulario de Eliminación --}}
-                <form
-                    id="delete-bottom-form"
-                    method="POST"
-                    action="{{ route('questions.destroy', $question) }}"
-                    class="inline"
-                >
-                    @csrf
-                    @method('DELETE')
-                    <x-button
-                        type="button"
-                        variant="danger"
-                        size="md"
-                        onclick="confirmDeleteBottom()"
-                    >
-                        <x-icon name="delete" class="w-4 h-4" />
-                        Eliminar
-                    </x-button>
-                </form>
-            </div>
+            </form>
         </div>
     </div>
 

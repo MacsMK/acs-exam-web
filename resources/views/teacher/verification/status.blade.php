@@ -1,19 +1,16 @@
 {{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: teacher/verification/status.blade.php (MPW-V2 §4.1.2, §7.3, §7.8.2, §8.5, §8.6, Tabla 20, Tabla 28) --}}
 @extends('layouts.app')
 
-@section('title', 'Verificación de Cuenta Docente')
+@section('title', 'Verificación de cuenta docente')
 
 @section('content')
-<div class="mx-auto max-w-4xl space-y-6">
+<div class="space-y-6">
     {{-- Encabezado principal --}}
-    <div class="border-b border-slate-200 pb-5">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-                <h1 class="text-2xl font-bold text-acode-primary tracking-tight">Verificación de Cuenta Docente</h1>
-                <p class="mt-1 text-sm text-slate-500">
-                    Acreditamos la identidad de cada docente para proteger la integridad de los grupos, reactivos y evaluaciones.
-                </p>
-            </div>
+    <x-page-header
+        title="Verificación de cuenta docente"
+        subtitle="Consulta el estado de validación de tu perfil académico o canjea un código institucional para activar tu acceso."
+    >
+        <x-slot:badge>
             @if ($user->isPendingTeacherVerification())
                 <x-badge variant="warning">En revisión</x-badge>
             @elseif ($user->isRejectedTeacherVerification())
@@ -21,8 +18,8 @@
             @else
                 <x-badge variant="success">Cuenta verificada</x-badge>
             @endif
-        </div>
-    </div>
+        </x-slot:badge>
+    </x-page-header>
 
     {{-- Indicador de progreso de 3 pasos --}}
     <x-card padding="p-5">
@@ -33,7 +30,7 @@
                     <x-icon name="check" class="h-5 w-5" />
                 </span>
                 <div class="min-w-0">
-                    <p class="text-[11px] font-semibold uppercase tracking-wider text-acode-accent">Paso 1 · Completado</p>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-acode-accent">Paso 1 · Completado</p>
                     <p class="text-sm font-semibold text-acode-primary">Registro y 2FA completados</p>
                 </div>
             </li>
@@ -45,7 +42,7 @@
                         <x-icon name="check" class="h-5 w-5" />
                     </span>
                     <div class="min-w-0">
-                        <p class="text-[11px] font-semibold uppercase tracking-wider text-acode-accent">Paso 2 · Completado</p>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-acode-accent">Paso 2 · Completado</p>
                         <p class="text-sm font-semibold text-acode-primary">Validación docente</p>
                     </div>
                 @elseif ($user->isRejectedTeacherVerification())
@@ -53,7 +50,7 @@
                         <x-icon name="warning" class="h-5 w-5" />
                     </span>
                     <div class="min-w-0">
-                        <p class="text-[11px] font-semibold uppercase tracking-wider text-acode-danger">Paso 2 · Requiere corrección</p>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-acode-danger">Paso 2 · Requiere corrección</p>
                         <p class="text-sm font-semibold text-acode-primary">Validación docente</p>
                     </div>
                 @else
@@ -61,7 +58,7 @@
                         2
                     </span>
                     <div class="min-w-0">
-                        <p class="text-[11px] font-semibold uppercase tracking-wider text-acode-tech">Paso 2 · En curso</p>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-acode-tech">Paso 2 · En curso</p>
                         <p class="text-sm font-semibold text-acode-primary">Validación docente</p>
                     </div>
                 @endif
@@ -74,7 +71,7 @@
                         <x-icon name="check" class="h-5 w-5" />
                     </span>
                     <div class="min-w-0">
-                        <p class="text-[11px] font-semibold uppercase tracking-wider text-acode-accent">Paso 3 · Habilitado</p>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-acode-accent">Paso 3 · Habilitado</p>
                         <p class="text-sm font-semibold text-acode-primary">Acceso al panel</p>
                     </div>
                 @else
@@ -82,7 +79,7 @@
                         3
                     </span>
                     <div class="min-w-0">
-                        <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Paso 3 · Pendiente</p>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Paso 3 · Pendiente</p>
                         <p class="text-sm font-medium text-slate-500">Acceso al panel</p>
                     </div>
                 @endif
@@ -95,9 +92,6 @@
         <x-card>
             <x-slot:title>Solicitud recibida y en revisión</x-slot:title>
             <x-slot:subtitle>Nuestro equipo administrativo revisará tu comprobante docente en breve</x-slot:subtitle>
-            <x-slot:actions>
-                <x-badge variant="warning">En revisión</x-badge>
-            </x-slot:actions>
 
             <div class="space-y-5">
                 <div class="rounded-xl border border-acode-warning/40 bg-acode-warning/15 p-4 flex items-start gap-3">
@@ -105,9 +99,9 @@
                     <div class="text-sm text-acode-primary space-y-1">
                         <p class="font-semibold">Tu cuenta está casi lista para operar.</p>
                         <p class="text-xs text-slate-700 leading-relaxed">
-                            Estamos validando la información y el comprobante enviado. En cuanto concluya la revisión recibirás una notificación en
+                            Estamos validando la información y el comprobante que enviaste. En cuanto concluya la revisión recibirás una notificación en
                             <span class="font-semibold text-acode-primary">{{ $user->email }}</span>
-                            y se habilitará el acceso completo al panel docente.
+                            y se habilitará tu acceso completo al panel docente.
                         </p>
                     </div>
                 </div>
@@ -192,7 +186,7 @@
                         {{ $verification?->rejection_reason ?: 'El comprobante proporcionado no pudo ser validado. Por favor corrige tus datos y adjunta un documento legible.' }}
                     </p>
                     <p class="text-xs text-slate-600 pt-1">
-                        El archivo anterior fue eliminado automáticamente por seguridad (LFPDPPP). Puedes corregir la información y enviar un nuevo comprobante a continuación.
+                        Tu archivo anterior fue eliminado automáticamente por seguridad (LFPDPPP). Puedes corregir la información y enviar un nuevo comprobante a continuación.
                     </p>
                 </div>
             </div>
@@ -289,7 +283,7 @@
                                     <span x-text="selectedFileName"></span>
                                     <span class="ml-1 font-normal text-slate-500" x-text="`(${selectedFileSize})`"></span>
                                 </p>
-                                <p class="text-[11px] text-slate-500">
+                                <p class="text-xs text-slate-500">
                                     Formatos PDF, JPG o PNG (máx. 5 MB). Se resguarda en almacenamiento privado y se elimina automáticamente al concluir la revisión.
                                 </p>
                             </div>
@@ -343,15 +337,12 @@
         <x-card>
             <x-slot:title>Identidad docente verificada</x-slot:title>
             <x-slot:subtitle>Tu cuenta se encuentra habilitada para operar en la plataforma</x-slot:subtitle>
-            <x-slot:actions>
-                <x-badge variant="success">Cuenta verificada</x-badge>
-            </x-slot:actions>
 
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <p class="text-sm text-slate-600">
-                    Ya puedes administrar grupos, banco de preguntas, exámenes y calificaciones desde tu panel docente.
+                    Ya puedes administrar tus grupos, banco de preguntas, exámenes y calificaciones desde tu panel docente.
                 </p>
-                <x-button href="{{ route('dashboard') }}" variant="primary" size="md" class="shrink-0">
+                <x-button :href="route('dashboard')" variant="primary" size="md" class="shrink-0">
                     Abrir panel docente
                 </x-button>
             </div>

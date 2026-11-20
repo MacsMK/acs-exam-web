@@ -9,13 +9,14 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        DashboardController.php
  * Ubicación:      app/Http/Controllers/DashboardController.php
- * Requerimiento:  RF-AUT-002, RF-REP-001, RW-02, ADR-057 (Panel Post-Login)
+ * Requerimiento:  RF-AUT-002, RF-REP-001, RF-SUS-008, RW-02, ADR-057, ADR-060
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.2.0
+ * Versión:        2.0.0
  * Fecha Creación: 08/11/2026
  * Descripción:    Controlador del panel de resumen operativo post-login para
- *                 superadministradores, docentes verificados y alumnos con
- *                 redirección automática a acreditación para docentes pendientes.
+ *                 superadministradores, docentes verificados (con capa modal
+ *                 bloqueante de selección de plan si requiere onboarding) y
+ *                 alumnos.
  * ============================================================================
  */
 
@@ -24,6 +25,7 @@ namespace App\Http\Controllers;
 use App\Models\Exam;
 use App\Models\StudentAttempt;
 use App\Models\User;
+use App\Services\TeacherSubscriptionService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -37,7 +39,17 @@ use Illuminate\Http\Response;
 class DashboardController extends Controller
 {
     /**
-     * Enruta al usuario autenticado a su panel según rol y estado de acreditación.
+     * Inicializa el controlador inyectando el servicio de suscripciones docentes.
+     *
+     * @param TeacherSubscriptionService $teacherSubscriptionService Servicio de onboarding y planes.
+     */
+    public function __construct(
+        private readonly TeacherSubscriptionService $teacherSubscriptionService,
+    ) {
+    }
+
+    /**
+     * Enruta al usuario autenticado a su panel según rol, acreditación y onboarding.
      *
      * @param Request $request Solicitud HTTP del usuario autenticado.
      * @return Response|RedirectResponse|View
@@ -57,7 +69,18 @@ class DashboardController extends Controller
             }
 
             if ($user->needsPlanOnboarding()) {
-                return redirect()->route('teacher.subscription.index', ['onboarding' => 1]);
+                return view('dashboard.teacher', [
+                    'groupsCount' => 0,
+                    'questionsCount' => 0,
+                    'examsCount' => 0,
+                    'passedCount' => 0,
+                    'failedCount' => 0,
+                    'averageScore' => 0.0,
+                    'recentExams' => collect(),
+                    'recentGroups' => collect(),
+                    'showPlanOnboardingOverlay' => true,
+                    'onboardingOverlay' => $this->teacherSubscriptionService->getOnboardingOverlayData($user),
+                ]);
             }
 
             return $this->teacherDashboard($user);
@@ -69,7 +92,7 @@ class DashboardController extends Controller
     /**
      * Métricas agregadas y colecciones operativas para el panel docente (§7.9).
      *
-     * @param User $teacher Cuenta docente verificada.
+     * @param User $teacher Cuenta docente verificada con onboarding completado.
      * @return View
      */
     private function teacherDashboard(User $teacher): View
@@ -115,6 +138,8 @@ class DashboardController extends Controller
             'averageScore' => $averageScore,
             'recentExams' => $recentExams,
             'recentGroups' => $recentGroups,
+            'showPlanOnboardingOverlay' => false,
+            'onboardingOverlay' => null,
         ]);
     }
 

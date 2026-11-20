@@ -1,7 +1,7 @@
 {{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/edit.blade.php (MPW-V2 §4.1.2, §7, §8, ADR-043, ADR-056) --}}
 @extends('layouts.app')
 
-@section('title', 'Modificar examen: ' . $exam->title)
+@section('title', 'Editar examen: ' . $exam->title)
 
 @section('content')
     @php
@@ -41,7 +41,7 @@
     @endphp
 
     <div
-        class="mx-auto max-w-7xl space-y-6"
+        class="space-y-6"
         x-data="{
             title: @js(old('title', $exam->title)),
             startsAt: @js($initialStartsAt),
@@ -77,20 +77,22 @@
             }
         }"
     >
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-                <a href="{{ route('exams.index') }}" class="inline-flex items-center gap-1.5 text-sm font-semibold text-acode-tech hover:underline">
+        <x-page-header
+            title="Editar examen"
+            subtitle="Actualiza metadatos, grupos asignados, ventana de aplicación y políticas del examen."
+            :breadcrumbs="[
+                ['label' => 'Exámenes', 'href' => route('exams.index')],
+                ['label' => $exam->title],
+                ['label' => 'Editar'],
+            ]"
+        >
+            <x-slot:actions>
+                <x-button :href="route('exams.index')" variant="neutral" size="md">
                     <x-icon name="arrowLeft" class="w-4 h-4" />
-                    Volver a mis exámenes
-                </a>
-                <h1 class="mt-2 text-2xl sm:text-3xl font-bold text-acode-primary tracking-tight">
-                    Modificar examen
-                </h1>
-                <p class="mt-1 text-sm text-slate-500">
-                    Actualiza metadatos, grupos asignados, ventana de aplicación y políticas del examen.
-                </p>
-            </div>
-        </div>
+                    Volver
+                </x-button>
+            </x-slot:actions>
+        </x-page-header>
 
         @include('exams.partials._stepper', ['currentStep' => 1, 'exam' => $exam])
 
@@ -273,7 +275,7 @@
                         <div class="space-y-6">
                             <div>
                                 <div class="flex items-center justify-between gap-2 mb-2">
-                                    <p class="text-[13px] font-medium text-slate-800">
+                                    <p class="text-sm font-medium text-slate-800">
                                         Escala de calificación <span class="text-acode-danger font-bold">*</span>
                                     </p>
                                     @if ($lockScale)
@@ -310,7 +312,7 @@
                             </div>
 
                             <div>
-                                <p class="text-[13px] font-medium text-slate-800 mb-2">
+                                <p class="text-sm font-medium text-slate-800 mb-2">
                                     Visibilidad de resultados <span class="text-acode-danger font-bold">*</span>
                                 </p>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -335,7 +337,7 @@
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
                                 <div>
                                     <div class="flex items-center justify-between mb-2">
-                                        <p class="text-[13px] font-medium text-slate-800">Orden de preguntas</p>
+                                        <p class="text-sm font-medium text-slate-800">Orden de preguntas</p>
                                         @if ($lockRandomize)
                                             <x-badge variant="neutral">Bloqueado</x-badge>
                                         @endif

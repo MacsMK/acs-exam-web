@@ -33,7 +33,7 @@
     @endphp
 
     <div
-        class="mx-auto max-w-7xl space-y-6"
+        class="space-y-6"
         x-data="{
             title: @js(old('title', '')),
             startsAt: @js($defaultStartsAt),
@@ -84,20 +84,21 @@
         }"
     >
         {{-- Navegación superior y encabezado --}}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-                <a href="{{ route('exams.index') }}" class="inline-flex items-center gap-1.5 text-sm font-semibold text-acode-tech hover:underline">
+        <x-page-header
+            title="Crear examen"
+            subtitle="Define los datos generales, grupos destinatarios, ventana de aplicación y reglas de evaluación."
+            :breadcrumbs="[
+                ['label' => 'Exámenes', 'href' => route('exams.index')],
+                ['label' => 'Crear examen'],
+            ]"
+        >
+            <x-slot:actions>
+                <x-button :href="route('exams.index')" variant="neutral" size="md">
                     <x-icon name="arrowLeft" class="w-4 h-4" />
-                    Volver a mis exámenes
-                </a>
-                <h1 class="mt-2 text-2xl sm:text-3xl font-bold text-acode-primary tracking-tight">
-                    Crear examen
-                </h1>
-                <p class="mt-1 text-sm text-slate-500">
-                    Define los datos generales, grupos destinatarios, ventana de aplicación y reglas de evaluación.
-                </p>
-            </div>
-        </div>
+                    Volver
+                </x-button>
+            </x-slot:actions>
+        </x-page-header>
 
         @include('exams.partials._stepper', ['currentStep' => 1, 'exam' => null, 'totalPoints' => 0])
 
@@ -257,7 +258,7 @@
                         <div class="space-y-6">
                             {{-- Escala de calificación --}}
                             <div>
-                                <p class="text-[13px] font-medium text-slate-800 mb-2">
+                                <p class="text-sm font-medium text-slate-800 mb-2">
                                     Escala de calificación <span class="text-acode-danger font-bold">*</span>
                                 </p>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -294,7 +295,7 @@
 
                             {{-- Visibilidad de resultados --}}
                             <div>
-                                <p class="text-[13px] font-medium text-slate-800 mb-2">
+                                <p class="text-sm font-medium text-slate-800 mb-2">
                                     Visibilidad de resultados para el estudiante <span class="text-acode-danger font-bold">*</span>
                                 </p>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -319,7 +320,7 @@
                             {{-- Orden e incidentes --}}
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
                                 <div>
-                                    <p class="text-[13px] font-medium text-slate-800 mb-2">Orden de preguntas</p>
+                                    <p class="text-sm font-medium text-slate-800 mb-2">Orden de preguntas</p>
                                     <div class="space-y-2">
                                         <label class="flex items-start gap-2.5 rounded-xl border border-slate-200 p-3 cursor-pointer hover:border-acode-tech">
                                             <input type="radio" name="randomize_question_order" value="1" x-model="randomizeOrder" class="mt-0.5 text-acode-tech focus:ring-acode-tech">

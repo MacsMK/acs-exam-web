@@ -335,15 +335,13 @@ class AttemptService
             $qualitativeAnswers = $answers->filter(
                 static fn (StudentAnswer $a): bool => in_array($a->examQuestion?->question?->question_type, ['open', 'code'], true)
             );
-            $requiresTeacherRecoteje = $exam !== null && in_array(
-                (string) $exam->result_visibility_mode,
-                ['objective_only_pending', 'estimated_score'],
-                true
-            );
 
-            $pendingAiCount = $requiresTeacherRecoteje
-                ? $qualitativeAnswers->whereNull('teacher_recoteje_score')->count()
-                : $qualitativeAnswers->whereNull('ai_evaluated_at')->count();
+            // Bajo RF-IAR-001 (evaluación IA bajo demanda), las respuestas cualitativas con texto
+            // quedan pendientes de evaluación/recoteje docente; las respuestas en blanco (ai_model_used = 'none')
+            // ya fueron resueltas con puntaje 0 sin consumo de IA (RF-EVA-008).
+            $pendingAiCount = $qualitativeAnswers
+                ->filter(static fn (StudentAnswer $a): bool => $a->teacher_recoteje_score === null && $a->ai_model_used !== 'none')
+                ->count();
 
             $totalExamWeight = $exam !== null
                 ? (float) $exam->examQuestions()->sum('points_weight')
@@ -446,8 +444,7 @@ class AttemptService
         return match ($questionType) {
             'multiple_choice' => $this->gradeMultipleChoice($questionable, $answerPayload, $pointsWeight),
             'matching' => $this->gradeMatching($questionable, $answerPayload, $pointsWeight),
-            'open' => $this->gradeWithAi((string) $questionable->reference_answer, (string) ($answerPayload ?? ''), $pointsWeight),
-            'code' => $this->gradeWithAi((string) $questionable->reference_solution, (string) ($answerPayload ?? ''), $pointsWeight),
+            'open', 'code' => $this->registerQualitativeAnswer($answerPayload),
             default => throw ValidationException::withMessages(['question_type' => ['Tipo de pregunta desconocido.']]),
         };
     }
@@ -542,14 +539,30 @@ class AttemptService
     }
 
     /**
-     * Evalúa respuestas abiertas y de código omitiendo la llamada al evaluador
-     * de IA cuando la respuesta está en blanco (RF-EVA-008 / P-126).
+     * Registra respuestas abiertas y de código sin invocar a la IA durante la
+     * aplicación del examen (RF-IAR-001 Opción A / ADR-059): las respuestas en
+     * blanco se resuelven de inmediato con puntaje 0 sin consumo de IA
+     * (RF-EVA-008) y las respuestas con contenido quedan pendientes de
+     * evaluación bajo demanda o recoteje docente.
      *
      * @return array<string, mixed>
      */
-    private function gradeWithAi(string $referenceAnswer, string $studentAnswer, float $pointsWeight): array
+    private function registerQualitativeAnswer(mixed $answerPayload): array
     {
-        if (trim($studentAnswer) === '') {
+        $studentText = '';
+
+        if (is_string($answerPayload)) {
+            $studentText = trim($answerPayload);
+        } elseif (is_array($answerPayload)) {
+            foreach (['text', 'code', 'answer', 'given_answer'] as $key) {
+                if (isset($answerPayload[$key]) && is_string($answerPayload[$key])) {
+                    $studentText = trim($answerPayload[$key]);
+                    break;
+                }
+            }
+        }
+
+        if ($studentText === '') {
             return [
                 'is_correct' => false,
                 'points_awarded' => 0.0,
@@ -557,17 +570,20 @@ class AttemptService
                 'ai_meets_goal' => false,
                 'ai_feedback' => 'Respuesta en blanco; se asigna puntaje 0 sin consumo de IA.',
                 'ai_evaluated_at' => now(),
+                'ai_is_fallback' => false,
+                'ai_model_used' => 'none',
             ];
         }
 
-        $result = $this->aiEvaluator->evaluate($studentAnswer, $referenceAnswer);
-
         return [
-            'ai_similarity_score' => $result['similarity_score'],
-            'ai_meets_goal' => $result['meets_goal'],
-            'ai_feedback' => $result['feedback'],
-            'ai_evaluated_at' => now(),
-            'points_awarded' => $result['meets_goal'] ? $pointsWeight : 0.0,
+            'is_correct' => null,
+            'points_awarded' => 0.0,
+            'ai_similarity_score' => null,
+            'ai_meets_goal' => null,
+            'ai_feedback' => null,
+            'ai_evaluated_at' => null,
+            'ai_is_fallback' => false,
+            'ai_model_used' => null,
         ];
     }
 

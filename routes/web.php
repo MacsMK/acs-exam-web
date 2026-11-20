@@ -175,6 +175,14 @@ Route::middleware('auth')->group(function (): void {
         Route::post('exams/{exam}/revision/{attempt}', [TeacherReviewController::class, 'update'])
             ->whereNumber(['exam', 'attempt'])
             ->name('exams.revision.update');
+        Route::post('exams/{exam}/revision/{attempt}/respuestas/{answer}/evaluar-ia', [TeacherReviewController::class, 'evaluateWithAi'])
+            ->whereNumber(['exam', 'attempt', 'answer'])
+            ->middleware('throttle:30,1')
+            ->name('exams.revision.evaluate-ai');
+        Route::post('exams/{exam}/revision/{attempt}/evaluar-ia-lote', [TeacherReviewController::class, 'evaluateAttemptWithAi'])
+            ->whereNumber(['exam', 'attempt'])
+            ->middleware('throttle:10,1')
+            ->name('exams.revision.evaluate-ai-batch');
 
         // Módulos funcionales docentes (sustituyen coming-soon)
         Route::get('docente/revision', [TeacherReviewController::class, 'globalIndex'])->name('teacher.reviews.index');

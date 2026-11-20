@@ -7,30 +7,68 @@
     @php
         $hasActiveFilters = filled($filters['search'] ?? null)
             || (filled($filters['status'] ?? null) && ($filters['status'] ?? 'all') !== 'all');
+
+        $attemptsCollection = $attempts->getCollection();
+        $registeredAttemptsCount = (int) $attempts->total();
+        $pendingRecotejeCount = $attemptsCollection->filter(
+            static fn ($att): bool => $att->status === 'submitted'
+                && $att->answers->contains(
+                    static fn ($ans): bool => in_array($ans->examQuestion?->question?->question_type, ['open', 'code'], true)
+                        && $ans->teacher_recoteje_score === null
+                )
+        )->count();
+        $validatedGradesCount = $attemptsCollection->filter(
+            static fn ($att): bool => $att->final_score !== null
+        )->count();
+
+        $attemptStatusLabels = [
+            'in_progress' => 'En progreso',
+            'submitted' => 'Entregado',
+            'expired' => 'Expirado',
+            'cancelled_by_incident' => 'Cancelado por incidencias',
+            'graded' => 'Calificado',
+        ];
     @endphp
 
-    <div class="mx-auto max-w-7xl space-y-6">
+    <div class="space-y-6">
         {{-- Encabezado y Breadcrumbs --}}
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-                <nav class="flex items-center space-x-2 text-xs font-semibold text-slate-500 mb-2">
-                    <a href="{{ route('exams.index') }}" class="hover:text-acode-primary transition">Exámenes</a>
-                    <span>/</span>
-                    <span class="text-acode-primary font-bold">{{ $exam->title }}</span>
-                    <span>/</span>
-                    <span class="text-slate-400">Intentos y Recoteje</span>
-                </nav>
-                <h1 class="text-2xl sm:text-3xl font-bold text-acode-primary tracking-tight">Revisiones de Examen</h1>
-                <p class="text-sm text-slate-600 mt-1">
-                    Supervisa y ajusta las calificaciones asistidas por IA de los estudiantes que presentaron el examen.
-                </p>
-            </div>
+        <x-page-header
+            :title="$exam->title"
+            subtitle="Revisa las entregas de tus estudiantes y valida las calificaciones asistidas por IA."
+            :breadcrumbs="[
+                ['label' => 'Revisión', 'href' => route('teacher.reviews.index')],
+                ['label' => $exam->title],
+            ]"
+        >
+            <x-slot:actions>
+                <x-button :href="route('teacher.reviews.index')" variant="neutral" size="md">
+                    <x-icon name="arrowLeft" class="w-4 h-4" />
+                    Volver
+                </x-button>
+            </x-slot:actions>
+        </x-page-header>
 
-            <x-button :href="route('exams.index')" variant="neutral" size="md">
-                <x-icon name="arrowLeft" class="w-4 h-4" />
-                Volver a Exámenes
-            </x-button>
-        </div>
+        {{-- KPIs Resumen de Entregas --}}
+        <section class="grid grid-cols-1 sm:grid-cols-3 gap-5" aria-label="Resumen de entregas del examen">
+            <x-kpi-card
+                label="Entregas registradas"
+                :value="$registeredAttemptsCount"
+                icon="document"
+                tone="tech"
+            />
+            <x-kpi-card
+                label="Pendientes de recoteje"
+                :value="$pendingRecotejeCount"
+                :icon="$pendingRecotejeCount > 0 ? 'warning' : 'success'"
+                :tone="$pendingRecotejeCount > 0 ? 'warning' : 'neutral'"
+            />
+            <x-kpi-card
+                label="Calificaciones validadas"
+                :value="$validatedGradesCount"
+                icon="success"
+                tone="accent"
+            />
+        </section>
 
         {{-- Búsqueda y filtro por estado de recoteje --}}
         <x-search-filter
@@ -83,7 +121,7 @@
                                     && $ans->teacher_recoteje_score === null
                             );
                     @endphp
-                    <tr class="hover:bg-slate-50 transition">
+                    <tr>
                         <x-table.td class="font-medium text-slate-900">
                             <div class="font-bold text-acode-primary">{{ $attempt->student?->full_name ?? 'Estudiante' }}</div>
                             <div class="text-xs text-slate-500">{{ $attempt->student?->email ?? '—' }}</div>
@@ -98,7 +136,7 @@
                                 @elseif ($attempt->status === 'expired')
                                     <x-badge variant="warning">Expirado</x-badge>
                                 @else
-                                    <x-badge variant="neutral">{{ $attempt->status }}</x-badge>
+                                    <x-badge variant="neutral">{{ $attemptStatusLabels[$attempt->status] ?? 'En curso' }}</x-badge>
                                 @endif
 
                                 @if ($hasPendingAi)
@@ -125,7 +163,7 @@
 
                         <x-table.td align="center" class="whitespace-nowrap">
                             <x-button :href="route('exams.revision.show', [$exam, $attempt])" variant="neutral" size="sm">
-                                Recotejar
+                                Abrir recoteje
                             </x-button>
                         </x-table.td>
                     </tr>

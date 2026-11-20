@@ -6,22 +6,60 @@
     Ubicación:   resources/views/groups/show.blade.php
     Descripción: Vista operativa detallada de grupo escolar y sus 4 apartados
                  (Estudiantes, Exámenes, Calificaciones y Periodos de Evaluación)
-                 con arquitectura jerárquica en 5 niveles, UI Kit A-Code,
-                 avatares vectoriales (ADR-049), transiciones a 60 FPS (ADR-047)
-                 y modal de código QR institucional (MPW-V2 §5.2.1, §7, §8).
+                 homologada con componentes canónicos A-Code Solutions, cero N+1
+                 y tokens oficiales acode-* (MPW-V2 §7.3, §7.4.2, §7.8.2, §8.1–§8.12).
     ============================================================================
 --}}
 @extends('layouts.app')
 
-@section('title', $group->name . ' · Detalle del Grupo')
+@section('title', $group->name . ' · Detalle del grupo')
 
 @section('content')
+@php
+    $submittedCount = $attempts->where('status', 'submitted')->count();
+    $inProgressCount = $attempts->where('status', 'in_progress')->count();
+    $studentsCount = $group->students->count();
+    $sortedPeriods = $group->evaluationPeriods->sortBy('starts_at');
+@endphp
+
 <div
     x-data="{
         activeTab: window.location.hash ? window.location.hash.substring(1) : 'students',
         studentSearch: '',
         gradeSearch: '',
         gradeStatus: 'all',
+
+        studentsIndex: @js(
+            $group->students->map(fn ($student) => [
+                'id' => $student->id,
+                'haystack' => mb_strtolower($student->full_name . ' ' . $student->email),
+            ])->values()
+        ),
+
+        attemptsIndex: @js(
+            $attempts->map(fn ($attempt) => [
+                'id' => $attempt->id,
+                'status' => $attempt->status,
+                'haystack' => mb_strtolower(
+                    ($attempt->student?->full_name ?? '') . ' ' .
+                    ($attempt->student?->email ?? '') . ' ' .
+                    ($attempt->exam?->title ?? '')
+                ),
+            ])->values()
+        ),
+
+        get filteredStudents() {
+            const term = this.studentSearch.toLowerCase().trim();
+            return this.studentsIndex.filter(s => !term || s.haystack.includes(term));
+        },
+
+        get filteredAttempts() {
+            const term = this.gradeSearch.toLowerCase().trim();
+            return this.attemptsIndex.filter(a =>
+                (!term || a.haystack.includes(term)) &&
+                (this.gradeStatus === 'all' || this.gradeStatus === a.status)
+            );
+        },
 
         setActiveTab(tab) {
             this.activeTab = tab;
@@ -35,17 +73,6 @@
                 navigator.clipboard.writeText(folio).then(() => {
                     if (typeof AcodeAlert !== 'undefined') {
                         AcodeAlert.toast('Folio copiado al portapapeles con éxito', 'success');
-                    } else if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            toast: true,
-                            position: 'top-end',
-                            icon: 'success',
-                            iconColor: '#16A6A1',
-                            title: 'Folio copiado al portapapeles con éxito',
-                            showConfirmButton: false,
-                            timer: 2500,
-                            timerProgressBar: true
-                        });
                     }
                 }).catch(() => {});
             }
@@ -92,99 +119,94 @@
     class="space-y-6"
 >
 
-    {{-- Nivel 1: Hero Institucional con Folio Visible y Barra de Acciones --}}
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 shadow-sm">
-        <div class="flex flex-col gap-4">
-            {{-- Navegación de retorno --}}
-            <div class="flex items-center justify-between">
-                <x-button :href="route('groups.index')" variant="neutral" size="sm">
-                    <x-icon name="arrowLeft" class="w-4 h-4 mr-1.5" />
-                    Volver a Mis grupos
+    {{-- Nivel 1: Encabezado Institucional con Breadcrumbs, Folio Copiable y Acciones --}}
+    <x-page-header
+        :title="$group->name"
+        :subtitle="$group->subject
+            ? 'Gestiona matrícula, exámenes asignados, calificaciones y periodos de evaluación de ' . $group->subject . '.'
+            : 'Gestiona matrícula, exámenes asignados, calificaciones y periodos de evaluación de este grupo escolar.'"
+        :breadcrumbs="[
+            ['label' => 'Grupos', 'href' => route('groups.index')],
+            ['label' => $group->name],
+        ]"
+    >
+        <x-slot:badge>
+            <x-badge :variant="$group->is_closed ? 'neutral' : 'accent'">
+                {{ $group->is_closed ? 'Cerrado' : 'Activo' }}
+            </x-badge>
+        </x-slot:badge>
+
+        <x-slot:meta>
+            <span class="inline-flex items-center gap-1.5 font-medium text-acode-tech">
+                <x-icon name="tag" class="w-3.5 h-3.5" />
+                {{ $group->subject ?? 'Sin asignatura especificada' }}
+            </span>
+
+            <span class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-acode-surface/70 px-2.5 py-1">
+                <span class="font-semibold text-slate-500">Folio:</span>
+                <span class="font-mono font-bold text-acode-primary select-all">{{ $group->access_folio }}</span>
+                <button
+                    type="button"
+                    title="Copiar folio"
+                    aria-label="Copiar folio"
+                    x-on:click="copyFolio()"
+                    class="inline-flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-white hover:text-acode-tech focus:outline-none focus:ring-2 focus:ring-acode-tech"
+                >
+                    <x-icon name="copy" class="w-3.5 h-3.5" />
+                </button>
+            </span>
+
+            <span class="inline-flex items-center gap-1.5 text-slate-600">
+                <x-icon name="userGroup" class="w-3.5 h-3.5 text-acode-tech" />
+                <strong class="text-acode-primary">{{ $studentsCount }}</strong>
+                {{ $studentsCount === 1 ? 'estudiante inscrito' : 'estudiantes inscritos' }}
+            </span>
+        </x-slot:meta>
+
+        <x-slot:actions>
+            <x-button :href="route('groups.index')" variant="neutral" size="md">
+                <x-icon name="arrowLeft" class="w-4 h-4" />
+                Volver
+            </x-button>
+
+            <x-button
+                type="button"
+                @click="$dispatch('open-modal', 'group-qr-modal')"
+                variant="secondary"
+                size="md"
+            >
+                <x-icon name="qrCode" class="w-4 h-4" />
+                Abrir QR
+            </x-button>
+
+            <x-button :href="route('groups.periods.index', $group)" variant="neutral" size="md">
+                <x-icon name="clock" class="w-4 h-4" />
+                Abrir periodos
+            </x-button>
+
+            @if ($group->is_closed)
+                <x-button
+                    type="button"
+                    @click="confirmReopen()"
+                    variant="accent"
+                    size="md"
+                >
+                    <x-icon name="check" class="w-4 h-4" />
+                    Reabrir grupo
                 </x-button>
-            </div>
-
-            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-5 pt-2">
-                <div class="space-y-2 max-w-2xl">
-                    <div class="flex flex-wrap items-center gap-3">
-                        <h1 class="text-2xl sm:text-3xl font-bold text-acode-primary tracking-tight">
-                            {{ $group->name }}
-                        </h1>
-                        <x-badge :variant="$group->is_closed ? 'neutral' : 'accent'">
-                            {{ $group->is_closed ? 'Cerrado' : 'Activo' }}
-                        </x-badge>
-                    </div>
-
-                    <p class="text-sm font-semibold uppercase tracking-wider text-acode-tech">
-                        {{ $group->subject ?? 'SIN ASIGNATURA ESPECIFICADA' }}
-                    </p>
-
-                    {{-- Chip de Folio Alfanumérico visible --}}
-                    <div class="inline-flex items-center gap-2 rounded-xl bg-acode-surface px-3 py-1.5 border border-slate-200/80">
-                        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Folio de acceso:</span>
-                        <span class="font-mono text-sm font-bold text-acode-primary select-all">{{ $group->access_folio }}</span>
-                        <x-button
-                            type="button"
-                            variant="neutral"
-                            size="sm"
-                            :icon-only="true"
-                            title="Copiar folio"
-                            aria-label="Copiar folio"
-                            x-on:click="copyFolio()"
-                        >
-                            <x-icon name="copy" class="w-3.5 h-3.5" />
-                        </x-button>
-                    </div>
-                </div>
-
-                {{-- Barra de Acciones de Cabecera --}}
-                <div class="flex flex-wrap items-center gap-2.5 shrink-0">
-                    {{-- 1. Ver código QR --}}
-                    <x-button
-                        type="button"
-                        @click="$dispatch('open-modal', 'group-qr-modal')"
-                        variant="secondary"
-                        size="md"
-                    >
-                        <x-icon name="qrCode" class="w-4 h-4 mr-1.5" />
-                        Ver código QR
-                    </x-button>
-
-                    {{-- 2. Periodos de evaluación --}}
-                    <x-button
-                        :href="route('groups.periods.index', $group)"
-                        variant="neutral"
-                        size="md"
-                    >
-                        <x-icon name="clock" class="w-4 h-4 mr-1.5" />
-                        Periodos
-                    </x-button>
-
-                    {{-- 3. Cerrar o Reabrir grupo con SweetAlert2 --}}
-                    @if ($group->is_closed)
-                        <x-button
-                            type="button"
-                            @click="confirmReopen()"
-                            variant="neutral"
-                            size="md"
-                        >
-                            <x-icon name="check" class="w-4 h-4 mr-1.5 text-acode-accent" />
-                            Reabrir grupo
-                        </x-button>
-                    @else
-                        <x-button
-                            type="button"
-                            @click="confirmClose()"
-                            variant="danger"
-                            size="md"
-                        >
-                            <x-icon name="lock" class="w-4 h-4 mr-1.5" />
-                            Cerrar grupo
-                        </x-button>
-                    @endif
-                </div>
-            </div>
-        </div>
-    </div>
+            @else
+                <x-button
+                    type="button"
+                    @click="confirmClose()"
+                    variant="danger"
+                    size="md"
+                >
+                    <x-icon name="lock" class="w-4 h-4" />
+                    Cerrar grupo
+                </x-button>
+            @endif
+        </x-slot:actions>
+    </x-page-header>
 
     {{-- Formularios POST ocultos para cierre y reapertura semestral --}}
     <form id="group-close-form" method="POST" action="{{ route('groups.close', $group) }}" class="hidden">
@@ -194,105 +216,52 @@
         @csrf
     </form>
 
-    {{-- Nivel 2: Barra de 4 Tarjetas KPI Contextuales del Grupo --}}
-    <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {{-- KPI 1: Estudiantes matriculados --}}
-        <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="flex items-center gap-3">
-                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
-                    <x-icon name="userGroup" class="w-5 h-5 text-acode-tech" />
-                </div>
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Estudiantes
-                </span>
-            </div>
-            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <p class="text-2xl lg:text-3xl font-extrabold text-acode-primary tracking-tight">
-                    {{ $group->students->count() }}
-                </p>
-                <p class="text-xs text-slate-500">
-                    Alumnos matriculados
-                </p>
-            </div>
-        </div>
+    {{-- Nivel 2: Barra de 4 Tarjetas KPI Canónicas --}}
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <x-kpi-card
+            label="Estudiantes inscritos"
+            :value="$studentsCount"
+            meta="Alumnos matriculados"
+            nav-icon="groups"
+            tone="tech"
+        />
 
-        {{-- KPI 2: Exámenes asignados --}}
-        <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="flex items-center gap-3">
-                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
-                    <x-icon name="document" class="w-5 h-5 text-acode-tech" />
-                </div>
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Exámenes
-                </span>
-            </div>
-            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <p class="text-2xl lg:text-3xl font-extrabold text-acode-primary tracking-tight">
-                    {{ $group->exams->count() }}
-                </p>
-                <p class="text-xs text-slate-500">
-                    Asignados a este salón
-                </p>
-            </div>
-        </div>
+        <x-kpi-card
+            label="Exámenes asignados"
+            :value="$group->exams->count()"
+            meta="Pruebas vinculadas al grupo"
+            nav-icon="exams"
+            tone="accent"
+        />
 
-        {{-- KPI 3: Evaluaciones entregadas --}}
-        @php
-            $submittedCount = $attempts->where('status', 'submitted')->count();
-        @endphp
-        <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="flex items-center gap-3">
-                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-acode-accent/15 text-acode-accent">
-                    <x-icon name="reportBar" class="w-5 h-5 text-acode-accent" />
-                </div>
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Entregas
-                </span>
-            </div>
-            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <p class="text-2xl lg:text-3xl font-extrabold text-acode-primary tracking-tight">
-                    {{ $submittedCount }}
-                </p>
-                <p class="text-xs text-slate-500">
-                    De {{ $attempts->count() }} intentos totales
-                </p>
-            </div>
-        </div>
+        <x-kpi-card
+            label="Entregas registradas"
+            :value="$submittedCount"
+            :meta="'De ' . $attempts->count() . ' intentos totales'"
+            icon="reportBar"
+            tone="warning"
+        />
 
-        {{-- KPI 4: Periodos escolares --}}
-        <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="flex items-center gap-3">
-                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
-                    <x-icon name="clock" class="w-5 h-5 text-acode-tech" />
-                </div>
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Periodos
-                </span>
-            </div>
-            <div class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <p class="text-2xl lg:text-3xl font-extrabold text-acode-primary tracking-tight">
-                    {{ $group->evaluationPeriods->count() }}
-                </p>
-                <p class="text-xs text-slate-500">
-                    Parciales configurados
-                </p>
-            </div>
-        </div>
+        <x-kpi-card
+            label="Periodos de evaluación"
+            :value="$group->evaluationPeriods->count()"
+            meta="Parciales configurados"
+            icon="clock"
+            tone="primary"
+        />
     </div>
 
-    {{-- Nivel 3: Sistema de Pestañas con Contadores y Transiciones Suaves (ADR-047) --}}
+    {{-- Nivel 3: Sistema de Pestañas --}}
     <div>
         <div class="flex gap-2 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="Secciones del grupo">
-            {{-- Pestaña 1: Estudiantes --}}
             <x-tab
                 name="students"
                 label="Estudiantes"
                 icon="userGroup"
-                :count="$group->students->count()"
+                :count="$studentsCount"
                 select="setActiveTab('students')"
             />
 
-            {{-- Pestaña 2: Exámenes --}}
             <x-tab
                 name="exams"
                 label="Exámenes"
@@ -301,7 +270,6 @@
                 select="setActiveTab('exams')"
             />
 
-            {{-- Pestaña 3: Calificaciones --}}
             <x-tab
                 name="grades"
                 label="Calificaciones"
@@ -310,7 +278,6 @@
                 select="setActiveTab('grades')"
             />
 
-            {{-- Pestaña 4: Configuración de evaluación --}}
             <x-tab
                 name="evaluation"
                 label="Configuración de evaluación"
@@ -331,53 +298,45 @@
         x-transition:leave="transition ease-in duration-150"
         x-transition:leave-start="opacity-100 translate-y-0"
         x-transition:leave-end="opacity-0 translate-y-1.5"
+        class="space-y-4"
     >
-        <x-card>
-            <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div class="flex items-center gap-3">
-                    <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-acode-surface text-acode-tech">
-                        <x-icon name="userGroup" class="h-6 w-6 text-acode-tech" />
-                    </div>
-                    <div>
-                        <h2 class="text-xl font-bold text-acode-primary">
-                            Censo de Estudiantes
-                        </h2>
-                        <p class="text-xs text-slate-500">
-                            {{ $group->students->count() }} integrantes matriculados en este grupo
-                        </p>
-                    </div>
-                </div>
-
-                @if (!$group->students->isEmpty())
-                    <div class="w-full sm:max-w-xs relative">
+        <x-section-header
+            title="Censo de estudiantes"
+            :subtitle="$studentsCount . ' ' . ($studentsCount === 1 ? 'integrante matriculado' : 'integrantes matriculados') . ' en este grupo.'"
+        >
+            @if ($group->students->isNotEmpty())
+                <x-slot:actions>
+                    <div class="w-full sm:w-72">
                         <x-form.input
                             type="search"
                             prefixIcon="search"
                             x-model="studentSearch"
-                            placeholder="Buscar estudiante por nombre o correo..."
+                            placeholder="Buscar por nombre o correo..."
                             aria-label="Buscar estudiante"
                         />
                     </div>
-                @endif
-            </div>
+                </x-slot:actions>
+            @endif
+        </x-section-header>
 
-            @if ($group->students->isEmpty())
-                <x-empty-state
-                    icon="userGroup"
-                    title="Aún no hay estudiantes en este grupo"
-                    message="Comparte el código QR o el folio de acceso con tus alumnos para que comiencen a matricularse."
+        @if ($group->students->isEmpty())
+            <x-empty-state
+                icon="userGroup"
+                title="Aún no hay estudiantes en este grupo"
+                message="Comparte el código QR o el folio de acceso con tus alumnos para que comiencen a matricularse."
+            >
+                <x-button
+                    type="button"
+                    @click="$dispatch('open-modal', 'group-qr-modal')"
+                    variant="primary"
+                    size="md"
                 >
-                    <x-button
-                        type="button"
-                        @click="$dispatch('open-modal', 'group-qr-modal')"
-                        variant="primary"
-                        size="md"
-                    >
-                        <x-icon name="qrCode" class="w-4 h-4 mr-1.5" />
-                        Ver código de incorporación
-                    </x-button>
-                </x-empty-state>
-            @else
+                    <x-icon name="qrCode" class="w-4 h-4" />
+                    Abrir QR
+                </x-button>
+            </x-empty-state>
+        @else
+            <div x-show="filteredStudents.length > 0">
                 <x-table>
                     <x-slot:header>
                         <x-table.th>Estudiante</x-table.th>
@@ -386,11 +345,10 @@
                         <x-table.th align="center">Estado</x-table.th>
                     </x-slot:header>
 
-                    @foreach ($group->students as $student)
+                    @forelse ($group->students as $student)
                         <tr
-                            x-show="!studentSearch || @js(mb_strtolower($student->full_name . ' ' . $student->email)).includes(studentSearch.toLowerCase().trim())"
+                            x-show="!studentSearch.trim() || @js(mb_strtolower($student->full_name . ' ' . $student->email)).includes(studentSearch.toLowerCase().trim())"
                         >
-                            {{-- Columna Estudiante con Avatar Vectorial (ADR-049) --}}
                             <x-table.td>
                                 <div class="flex items-center gap-3">
                                     <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-acode-primary text-sm font-bold text-white shadow-sm">
@@ -425,10 +383,33 @@
                                 </x-badge>
                             </x-table.td>
                         </tr>
-                    @endforeach
+                    @empty
+                        <tr>
+                            <td colspan="4" class="p-0">
+                                <x-empty-state
+                                    class="border-0 shadow-none rounded-none"
+                                    icon="userGroup"
+                                    title="Sin estudiantes registrados"
+                                    message="Aún no hay alumnos inscritos en este grupo."
+                                />
+                            </td>
+                        </tr>
+                    @endforelse
                 </x-table>
-            @endif
-        </x-card>
+            </div>
+
+            <div x-show="filteredStudents.length === 0" x-cloak>
+                <x-empty-state
+                    icon="search"
+                    title="No se encontraron estudiantes"
+                    message="Ningún estudiante coincide con el criterio de búsqueda ingresado."
+                >
+                    <x-button type="button" variant="neutral" size="sm" @click="studentSearch = ''">
+                        Limpiar búsqueda
+                    </x-button>
+                </x-empty-state>
+            </div>
+        @endif
     </section>
 
     {{-- Nivel 4B: Apartado 2 - Exámenes --}}
@@ -441,94 +422,89 @@
         x-transition:leave="transition ease-in duration-150"
         x-transition:leave-start="opacity-100 translate-y-0"
         x-transition:leave-end="opacity-0 translate-y-1.5"
+        class="space-y-4"
     >
-        <x-card>
-            <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-                <div>
-                    <h2 class="text-xl font-bold text-acode-primary">
-                        Exámenes asignados ({{ $group->exams->count() }})
-                    </h2>
-                    <p class="text-xs text-slate-500 mt-0.5">
-                        Administra y monitorea las pruebas asignadas a los alumnos de este grupo.
-                    </p>
-                </div>
-
+        <x-section-header
+            :title="'Exámenes asignados (' . $group->exams->count() . ')'"
+            subtitle="Administra y monitorea las pruebas asignadas a los alumnos de este grupo."
+        >
+            <x-slot:actions>
                 <x-button :href="route('exams.create')" variant="primary" size="md">
-                    <x-icon name="add" class="w-4 h-4 mr-1.5" />
+                    <x-icon name="add" class="w-4 h-4" />
                     Crear examen
                 </x-button>
-            </div>
+            </x-slot:actions>
+        </x-section-header>
 
+        <div class="space-y-4">
             @forelse ($group->exams as $exam)
-                <div class="space-y-4 mb-4">
-                    <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-acode-tech hover:shadow-md">
-                        <div class="flex flex-wrap items-start justify-between gap-3">
-                            <div class="min-w-0 flex-1">
-                                <h3 class="font-bold text-lg text-acode-primary">
-                                    {{ $exam->title }}
-                                </h3>
-                                @if ($exam->description)
-                                    <p class="mt-1 text-sm text-slate-500">
-                                        {{ $exam->description }}
-                                    </p>
-                                @endif
-                            </div>
-
-                            <x-badge :variant="$exam->is_published ? 'accent' : 'warning'">
-                                {{ $exam->is_published ? 'Publicado' : 'Borrador' }}
-                            </x-badge>
+                <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-acode-tech/50 hover:shadow-md">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div class="min-w-0 flex-1">
+                            <h3 class="font-bold text-lg text-acode-primary">
+                                {{ $exam->title }}
+                            </h3>
+                            @if ($exam->description)
+                                <p class="mt-1 text-sm text-slate-500">
+                                    {{ $exam->description }}
+                                </p>
+                            @endif
                         </div>
 
-                        <div class="mt-4 grid gap-4 border-t border-slate-100 pt-4 text-xs sm:grid-cols-3">
-                            <div>
-                                <p class="text-slate-400 font-semibold uppercase">Inicio programado</p>
-                                <p class="mt-1 font-semibold text-slate-700">
-                                    {{ $exam->starts_at?->format('d/m/Y H:i') ?? 'Sin fecha' }}
-                                </p>
-                            </div>
-                            <div>
-                                <p class="text-slate-400 font-semibold uppercase">Cierre de ventana</p>
-                                <p class="mt-1 font-semibold text-slate-700">
-                                    {{ $exam->ends_at?->format('d/m/Y H:i') ?? 'Sin fecha' }}
-                                </p>
-                            </div>
-                            <div>
-                                <p class="text-slate-400 font-semibold uppercase">Escala evaluativa</p>
-                                <p class="mt-1 font-semibold text-slate-700 font-mono">
-                                    Escala {{ $exam->grading_scale }}
-                                </p>
-                            </div>
+                        <x-badge :variant="$exam->is_published ? 'accent' : 'warning'">
+                            {{ $exam->is_published ? 'Publicado' : 'Borrador' }}
+                        </x-badge>
+                    </div>
+
+                    <div class="mt-4 grid gap-4 border-t border-slate-100 pt-4 text-xs sm:grid-cols-3">
+                        <div>
+                            <p class="text-slate-500 font-semibold">Inicio programado</p>
+                            <p class="mt-1 font-semibold text-slate-700">
+                                {{ $exam->starts_at?->format('d/m/Y H:i') ?? 'Sin fecha' }}
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 font-semibold">Cierre de ventana</p>
+                            <p class="mt-1 font-semibold text-slate-700">
+                                {{ $exam->ends_at?->format('d/m/Y H:i') ?? 'Sin fecha' }}
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 font-semibold">Escala evaluativa</p>
+                            <p class="mt-1 font-semibold text-slate-700 font-mono">
+                                Escala {{ $exam->grading_scale }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                        <div class="text-xs text-slate-500">
+                            @if ($exam->is_published)
+                                <span class="text-acode-accent font-semibold">Examen publicado en línea.</span> Los estudiantes pueden presentar según la ventana programada.
+                            @else
+                                <span class="text-acode-warning-dark font-semibold">Examen en borrador.</span> Puedes continuar preparando los reactivos y apartados.
+                            @endif
                         </div>
 
-                        <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-                            <div class="text-xs text-slate-500">
-                                @if ($exam->is_published)
-                                    <span class="text-acode-accent font-semibold">Examen publicado en línea.</span> Los estudiantes pueden presentar según la ventana programada.
-                                @else
-                                    <span class="text-amber-600 font-semibold">Examen en borrador.</span> Puedes continuar preparando los reactivos y apartados.
-                                @endif
-                            </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <x-button :href="route('exams.assemble', $exam)" variant="neutral" size="sm">
+                                Editar examen
+                            </x-button>
 
-                            <div class="flex flex-wrap items-center gap-2">
-                                <x-button :href="route('exams.assemble', $exam)" variant="neutral" size="sm">
-                                    Editar examen
+                            @if ($exam->is_published)
+                                <x-button :href="route('exams.monitor', $exam)" variant="neutral" size="sm">
+                                    Abrir monitoreo
                                 </x-button>
+                            @endif
 
-                                @if ($exam->is_published)
-                                    <x-button :href="route('exams.monitor', $exam)" variant="neutral" size="sm">
-                                        Monitoreo
-                                    </x-button>
-                                @endif
-
-                                @if (($exam->studentAttempts()->where('group_id', $group->id)->count()) > 0)
-                                    <x-button :href="route('exams.revision.index', $exam)" variant="primary" size="sm">
-                                        Revisar entregas
-                                    </x-button>
-                                @endif
-                            </div>
+                            @if (($exam->group_attempts_count ?? 0) > 0)
+                                <x-button :href="route('exams.revision.index', $exam)" variant="primary" size="sm">
+                                    Abrir recoteje
+                                </x-button>
+                            @endif
                         </div>
-                    </article>
-                </div>
+                    </div>
+                </article>
             @empty
                 <x-empty-state
                     icon="document"
@@ -536,12 +512,12 @@
                     message="Crea un examen y asígnalo a este salón escolar para comenzar a evaluar a tus estudiantes."
                 >
                     <x-button :href="route('exams.create')" variant="primary" size="md">
-                        <x-icon name="add" class="w-4 h-4 mr-1.5" />
+                        <x-icon name="add" class="w-4 h-4" />
                         Crear examen
                     </x-button>
                 </x-empty-state>
             @endforelse
-        </x-card>
+        </div>
     </section>
 
     {{-- Nivel 4C: Apartado 3 - Calificaciones --}}
@@ -554,67 +530,55 @@
         x-transition:leave="transition ease-in duration-150"
         x-transition:leave-start="opacity-100 translate-y-0"
         x-transition:leave-end="opacity-0 translate-y-1.5"
+        class="space-y-4"
     >
-        <x-card>
-            <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h2 class="text-xl font-bold text-acode-primary">
-                        Calificaciones e Intentos de Examen
-                    </h2>
-                    <p class="text-xs text-slate-500 mt-0.5">
-                        Supervisa los resultados de las evaluaciones presentadas en este grupo.
-                    </p>
-                </div>
-
-                <x-button :href="route('groups.periods.index', $group)" variant="neutral" size="sm">
-                    <x-icon name="reportBar" class="w-4 h-4 mr-1.5" />
-                    Ir a Sábana de Notas
+        <x-section-header
+            title="Calificaciones e intentos de examen"
+            subtitle="Supervisa los resultados de las evaluaciones presentadas en este grupo."
+        >
+            <x-slot:actions>
+                <x-button :href="route('groups.periods.index', $group)" variant="neutral" size="md">
+                    <x-icon name="reportBar" class="w-4 h-4" />
+                    Abrir periodos
                 </x-button>
-            </div>
+            </x-slot:actions>
+        </x-section-header>
 
-            {{-- Resumen de Métricas de Calificaciones --}}
-            <div class="mb-6 grid gap-4 sm:grid-cols-3">
-                <div class="rounded-xl bg-acode-surface p-4">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        Intentos registrados
-                    </p>
-                    <p class="mt-2 text-2xl font-extrabold text-acode-primary">
-                        {{ $attempts->count() }}
-                    </p>
-                </div>
+        {{-- Resumen de métricas de entregas --}}
+        <div class="grid gap-4 sm:grid-cols-3">
+            <x-kpi-card
+                label="Intentos registrados"
+                :value="$attempts->count()"
+                icon="document"
+                tone="tech"
+            />
 
-                <div class="rounded-xl bg-acode-surface p-4">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        Exámenes entregados
-                    </p>
-                    <p class="mt-2 text-2xl font-extrabold text-acode-primary">
-                        {{ $attempts->where('status', 'submitted')->count() }}
-                    </p>
-                </div>
+            <x-kpi-card
+                label="Exámenes entregados"
+                :value="$submittedCount"
+                icon="success"
+                tone="accent"
+            />
 
-                <div class="rounded-xl bg-acode-surface p-4">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        En progreso
-                    </p>
-                    <p class="mt-2 text-2xl font-extrabold text-acode-primary">
-                        {{ $attempts->where('status', 'in_progress')->count() }}
-                    </p>
-                </div>
-            </div>
+            <x-kpi-card
+                label="En progreso"
+                :value="$inProgressCount"
+                icon="clock"
+                tone="warning"
+            />
+        </div>
 
-            @if ($attempts->isEmpty())
-                <x-empty-state
-                    icon="reportBar"
-                    title="Aún no hay intentos de examen registrados"
-                    message="Los resultados aparecerán cuando los estudiantes comiencen a resolver las pruebas del grupo."
-                />
-            @else
-                {{-- Filtros de Calificaciones --}}
-                <div class="mb-5 grid gap-4 md:grid-cols-2">
-                    <div>
-                        <label for="grade-search" class="mb-1.5 block text-xs font-semibold text-acode-primary">
-                            Buscar estudiante o examen
-                        </label>
+        @if ($attempts->isEmpty())
+            <x-empty-state
+                icon="reportBar"
+                title="Aún no hay intentos de examen registrados"
+                message="Los resultados aparecerán cuando los estudiantes comiencen a resolver las pruebas del grupo."
+            />
+        @else
+            {{-- Filtros de Calificaciones --}}
+            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-form.group name="grade-search" label="Buscar estudiante o examen">
                         <x-form.input
                             id="grade-search"
                             type="search"
@@ -622,12 +586,9 @@
                             x-model="gradeSearch"
                             placeholder="Nombre, correo o título de examen..."
                         />
-                    </div>
+                    </x-form.group>
 
-                    <div>
-                        <label for="grade-status" class="mb-1.5 block text-xs font-semibold text-acode-primary">
-                            Estado del intento
-                        </label>
+                    <x-form.group name="grade-status" label="Estado del intento">
                         <x-form.select
                             id="grade-status"
                             x-model="gradeStatus"
@@ -638,10 +599,12 @@
                             <option value="expired">Expirado</option>
                             <option value="cancelled_by_incident">Cancelado por incidente</option>
                         </x-form.select>
-                    </div>
+                    </x-form.group>
                 </div>
+            </div>
 
-                {{-- Tabla de Intentos --}}
+            {{-- Tabla de Intentos --}}
+            <div x-show="filteredAttempts.length > 0">
                 <x-table>
                     <x-slot:header>
                         <x-table.th>Estudiante</x-table.th>
@@ -652,10 +615,10 @@
                         <x-table.th align="right">Acciones</x-table.th>
                     </x-slot:header>
 
-                    @foreach ($attempts as $attempt)
+                    @forelse ($attempts as $attempt)
                         <tr
                             x-show="
-                                (!gradeSearch || @js(mb_strtolower(($attempt->student?->full_name ?? '') . ' ' . ($attempt->student?->email ?? '') . ' ' . ($attempt->exam?->title ?? ''))).includes(gradeSearch.toLowerCase().trim()))
+                                (!gradeSearch.trim() || @js(mb_strtolower(($attempt->student?->full_name ?? '') . ' ' . ($attempt->student?->email ?? '') . ' ' . ($attempt->exam?->title ?? ''))).includes(gradeSearch.toLowerCase().trim()))
                                 &&
                                 (gradeStatus === 'all' || gradeStatus === @js($attempt->status))
                             "
@@ -728,17 +691,40 @@
                                         variant="neutral"
                                         size="sm"
                                     >
-                                        Auditar intento
+                                        Abrir detalles
                                     </x-button>
                                 @else
                                     <span class="text-xs text-slate-400">—</span>
                                 @endif
                             </x-table.td>
                         </tr>
-                    @endforeach
+                    @empty
+                        <tr>
+                            <td colspan="6" class="p-0">
+                                <x-empty-state
+                                    class="border-0 shadow-none rounded-none"
+                                    icon="reportBar"
+                                    title="Sin intentos registrados"
+                                    message="Aún no existen entregas en este grupo."
+                                />
+                            </td>
+                        </tr>
+                    @endforelse
                 </x-table>
-            @endif
-        </x-card>
+            </div>
+
+            <div x-show="filteredAttempts.length === 0" x-cloak>
+                <x-empty-state
+                    icon="search"
+                    title="No se encontraron intentos"
+                    message="Ningún intento coincide con la búsqueda o el estado seleccionado."
+                >
+                    <x-button type="button" variant="neutral" size="sm" @click="gradeSearch = ''; gradeStatus = 'all'">
+                        Limpiar filtros
+                    </x-button>
+                </x-empty-state>
+            </div>
+        @endif
     </section>
 
     {{-- Nivel 4D: Apartado 4 - Configuración de Evaluación (Periodos y Fórmulas) --}}
@@ -751,115 +737,110 @@
         x-transition:leave="transition ease-in duration-150"
         x-transition:leave-start="opacity-100 translate-y-0"
         x-transition:leave-end="opacity-0 translate-y-1.5"
+        class="space-y-4"
     >
-        <x-card>
-            <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h2 class="text-xl font-bold text-acode-primary">
-                        Configuración de Periodos y Ponderaciones
-                    </h2>
-                    <p class="text-xs text-slate-500 mt-0.5">
-                        Consulta y gestiona los parciales escolares, ponderaciones porcentuales y sábanas de notas.
-                    </p>
-                </div>
-
+        <x-section-header
+            title="Periodos y ponderaciones"
+            subtitle="Consulta y gestiona los parciales escolares, ponderaciones porcentuales y sábanas de notas."
+        >
+            <x-slot:actions>
                 <x-button :href="route('groups.periods.index', $group)" variant="primary" size="md">
-                    <x-icon name="clock" class="w-4 h-4 mr-1.5" />
-                    Gestionar periodos y ponderaciones
+                    <x-icon name="clock" class="w-4 h-4" />
+                    Abrir periodos
                 </x-button>
-            </div>
+            </x-slot:actions>
+        </x-section-header>
 
-            @forelse ($group->evaluationPeriods->sortBy('starts_at') as $period)
+        <div class="space-y-4">
+            @forelse ($sortedPeriods as $period)
                 @php
                     $weights = $period->parsed_weights;
                     $totalIs100 = $period->is_valid_formula;
                 @endphp
-                <div class="space-y-4 mb-4">
-                    <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-acode-tech">
-                        <div class="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                                <div class="flex items-center gap-2">
-                                    <h3 class="text-base font-bold text-acode-primary">
-                                        {{ $period->name }}
-                                    </h3>
-                                    @if ($period->is_active_today)
-                                        <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-acode-accent">
-                                            <span class="h-1.5 w-1.5 rounded-full bg-acode-accent"></span>
-                                            Activo hoy
-                                        </span>
-                                    @endif
-                                </div>
-                                <p class="mt-1 text-xs text-slate-500">
-                                    Vigencia: {{ $period->starts_at?->format('d/m/Y') ?? 'Sin inicio' }} al {{ $period->ends_at?->format('d/m/Y') ?? 'Sin cierre' }}
-                                </p>
+                <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-acode-tech/50">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h3 class="text-base font-bold text-acode-primary">
+                                    {{ $period->name }}
+                                </h3>
+                                @if ($period->is_active_today)
+                                    <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-acode-accent">
+                                        <span class="h-1.5 w-1.5 rounded-full bg-acode-accent"></span>
+                                        Activo hoy
+                                    </span>
+                                @endif
                             </div>
-
-                            @if ($totalIs100)
-                                <x-badge variant="accent">
-                                    Ponderación: 100 %
-                                </x-badge>
-                            @else
-                                <x-badge variant="warning">
-                                    Ponderación por revisar
-                                </x-badge>
-                            @endif
+                            <p class="mt-1 text-xs text-slate-500">
+                                Vigencia: {{ $period->starts_at?->format('d/m/Y') ?? 'Sin inicio' }} al {{ $period->ends_at?->format('d/m/Y') ?? 'Sin cierre' }}
+                            </p>
                         </div>
 
-                        {{-- Distribución de ponderaciones --}}
-                        <div class="mt-4 border-t border-slate-100 pt-4">
-                            <h4 class="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">
-                                Distribución de rubros evaluativos
-                            </h4>
+                        @if ($totalIs100)
+                            <x-badge variant="accent">
+                                Ponderación: 100 %
+                            </x-badge>
+                        @else
+                            <x-badge variant="warning">
+                                Ponderación por revisar
+                            </x-badge>
+                        @endif
+                    </div>
 
-                            @if (!empty($weights))
-                                <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                    <div class="rounded-lg bg-blue-50/70 border border-blue-200/50 p-3">
-                                        <p class="text-xs font-semibold text-acode-tech">Exámenes</p>
-                                        <p class="mt-1 text-lg font-extrabold text-acode-primary">
-                                            {{ number_format($weights['exams'] ?? 0, 1) }} %
-                                        </p>
-                                    </div>
+                    {{-- Distribución de ponderaciones con tokens acode-* --}}
+                    <div class="mt-4 border-t border-slate-100 pt-4">
+                        <h4 class="mb-3 text-xs font-semibold text-slate-500">
+                            Distribución de rubros evaluativos
+                        </h4>
 
-                                    <div class="rounded-lg bg-teal-50/70 border border-teal-200/50 p-3">
-                                        <p class="text-xs font-semibold text-teal-700">Tareas</p>
-                                        <p class="mt-1 text-lg font-extrabold text-acode-primary">
-                                            {{ number_format($weights['homework'] ?? 0, 1) }} %
-                                        </p>
-                                    </div>
-
-                                    <div class="rounded-lg bg-amber-50/70 border border-amber-200/50 p-3">
-                                        <p class="text-xs font-semibold text-amber-800">Proyectos</p>
-                                        <p class="mt-1 text-lg font-extrabold text-acode-primary">
-                                            {{ number_format($weights['project'] ?? 0, 1) }} %
-                                        </p>
-                                    </div>
-
-                                    <div class="rounded-lg bg-slate-100 border border-slate-200 p-3">
-                                        <p class="text-xs font-semibold text-slate-700">Otros</p>
-                                        <p class="mt-1 text-lg font-extrabold text-acode-primary">
-                                            {{ number_format($weights['other'] ?? 0, 1) }} %
-                                        </p>
-                                    </div>
+                        @if (!empty($weights))
+                            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                <div class="rounded-lg border border-acode-tech/25 bg-acode-tech/10 p-3">
+                                    <p class="text-xs font-semibold text-acode-tech">Exámenes</p>
+                                    <p class="mt-1 text-lg font-extrabold text-acode-primary font-mono">
+                                        {{ number_format($weights['exams'] ?? 0, 1) }} %
+                                    </p>
                                 </div>
-                            @else
-                                <div class="rounded-lg bg-acode-surface p-3 font-mono text-xs text-slate-600">
-                                    Fórmula: {{ $period->formula }}
+
+                                <div class="rounded-lg border border-acode-accent/30 bg-acode-accent/10 p-3">
+                                    <p class="text-xs font-semibold text-acode-accent-dark">Tareas</p>
+                                    <p class="mt-1 text-lg font-extrabold text-acode-primary font-mono">
+                                        {{ number_format($weights['homework'] ?? 0, 1) }} %
+                                    </p>
                                 </div>
-                            @endif
-                        </div>
 
-                        <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                            <span class="text-xs text-slate-500">
-                                Ponderación validada y respaldada en base de datos.
-                            </span>
+                                <div class="rounded-lg border border-acode-warning/40 bg-acode-warning/15 p-3">
+                                    <p class="text-xs font-semibold text-acode-warning-dark">Proyectos</p>
+                                    <p class="mt-1 text-lg font-extrabold text-acode-primary font-mono">
+                                        {{ number_format($weights['project'] ?? 0, 1) }} %
+                                    </p>
+                                </div>
 
-                            <x-button :href="route('groups.periods.gradebook', [$group, $period])" variant="neutral" size="sm">
-                                <x-icon name="document" class="w-4 h-4 mr-1.5" />
-                                Abrir sábana de notas
-                            </x-button>
-                        </div>
-                    </article>
-                </div>
+                                <div class="rounded-lg border border-slate-200 bg-slate-100 p-3">
+                                    <p class="text-xs font-semibold text-slate-700">Otros</p>
+                                    <p class="mt-1 text-lg font-extrabold text-acode-primary font-mono">
+                                        {{ number_format($weights['other'] ?? 0, 1) }} %
+                                    </p>
+                                </div>
+                            </div>
+                        @else
+                            <div class="rounded-lg bg-acode-surface p-3 font-mono text-xs text-slate-600">
+                                Fórmula: {{ $period->formula }}
+                            </div>
+                        @endif
+                    </div>
+
+                    <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                        <span class="text-xs text-slate-500">
+                            Ponderación validada y respaldada en base de datos.
+                        </span>
+
+                        <x-button :href="route('groups.periods.gradebook', [$group, $period])" variant="neutral" size="sm">
+                            <x-icon name="document" class="w-4 h-4" />
+                            Abrir calificaciones
+                        </x-button>
+                    </div>
+                </article>
             @empty
                 <x-empty-state
                     icon="clock"
@@ -867,12 +848,12 @@
                     message="Configura el primer parcial del grupo escolar para definir las ponderaciones de exámenes, tareas, proyectos y otros rubros."
                 >
                     <x-button :href="route('groups.periods.index', $group)" variant="primary" size="md">
-                        <x-icon name="add" class="w-4 h-4 mr-1.5" />
-                        Crear primer periodo
+                        <x-icon name="add" class="w-4 h-4" />
+                        Crear periodo
                     </x-button>
                 </x-empty-state>
             @endforelse
-        </x-card>
+        </div>
     </section>
 
     {{-- Nivel 5: Modal de Código QR Institucional Oficial --}}

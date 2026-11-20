@@ -4,8 +4,24 @@
 @section('title', 'Editar Reactivo · ' . $question->title)
 
 @section('content')
+    @php
+        $typeLabels = [
+            'multiple_choice' => 'Opción múltiple',
+            'matching' => 'Relación de columnas',
+            'open' => 'Pregunta abierta',
+            'code' => 'Código fuente',
+        ];
+        $typeVariants = [
+            'multiple_choice' => 'info',
+            'matching' => 'accent',
+            'open' => 'warning',
+            'code' => 'primary',
+        ];
+        $isLinked = (bool) ($isLinkedToExams ?? $isLinkedToExam ?? false);
+    @endphp
+
     <div
-        class="mx-auto max-w-6xl space-y-6"
+        class="space-y-6"
         x-data="acodeQuestionForm({
             formId: 'edit-question-form',
             type: @js($question->question_type),
@@ -29,37 +45,42 @@
             serverErrors: @js($errors->toArray()),
         })"
     >
-        {{-- Navegación superior --}}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <nav class="flex items-center gap-2 text-xs text-slate-500 select-none" aria-label="Migas de pan">
-                <a href="{{ route('questions.index') }}" class="hover:text-acode-tech transition flex items-center gap-1 font-medium">
-                    <x-icon name="arrowLeft" class="w-3.5 h-3.5" />
-                    <span>Banco de preguntas</span>
-                </a>
-                <span class="text-slate-300">/</span>
-                <a href="{{ route('questions.show', $question) }}" class="hover:text-acode-tech transition truncate max-w-[160px] sm:max-w-xs">
-                    {{ $question->title }}
-                </a>
-                <span class="text-slate-300">/</span>
-                <span class="font-semibold text-slate-700">Editar</span>
-            </nav>
+        {{-- Cabecera institucional --}}
+        <x-page-header
+            title="Editar reactivo"
+            :subtitle="$question->title"
+            :breadcrumbs="[
+                ['label' => 'Banco de preguntas', 'href' => route('questions.index')],
+                ['label' => $question->title, 'href' => route('questions.show', $question)],
+                ['label' => 'Editar'],
+            ]"
+        >
+            <x-slot:badge>
+                <x-badge :variant="$typeVariants[$question->question_type] ?? 'neutral'">
+                    {{ $typeLabels[$question->question_type] ?? $question->question_type }}
+                </x-badge>
+                @if ($isLinked)
+                    <x-badge variant="warning">
+                        Próxima versión v{{ $nextVersionNumber }}
+                    </x-badge>
+                @endif
+            </x-slot:badge>
 
-            <x-button :href="route('questions.show', $question)" variant="neutral" size="sm">
-                <x-icon name="view" class="w-4 h-4" />
-                Ver detalles
-            </x-button>
-        </div>
+            <x-slot:actions>
+                <x-button :href="route('questions.index')" variant="neutral" size="md">
+                    <x-icon name="arrowLeft" class="w-4 h-4" />
+                    Volver
+                </x-button>
 
-        {{-- Encabezado --}}
-        <header>
-            <h1 class="text-2xl font-bold text-acode-primary tracking-tight leading-8">Editar Reactivo</h1>
-            <p class="mt-1 text-sm text-slate-500 leading-5">
-                Actualiza el enunciado, alternativas, parámetros de tiempo o puntaje manteniendo trazabilidad académica.
-            </p>
-        </header>
+                <x-button :href="route('questions.show', $question)" variant="neutral" size="md">
+                    <x-icon name="view" class="w-4 h-4" />
+                    Ver detalles
+                </x-button>
+            </x-slot:actions>
+        </x-page-header>
 
         {{-- Banner dinámico de Versionado Copy-on-Write --}}
-        @if ($isLinkedToExam || $isLinkedToExams)
+        @if ($isLinked)
             <div class="rounded-xl border border-acode-warning/60 bg-acode-warning/15 p-4 text-slate-800 flex items-start gap-3">
                 <span class="w-9 h-9 rounded-lg bg-acode-warning/30 text-acode-primary flex items-center justify-center shrink-0">
                     <x-icon name="warning" class="w-5 h-5" />
@@ -108,7 +129,7 @@
                         'mode' => 'edit',
                         'subjects' => $subjects,
                         'question' => $question,
-                        'isLinkedToExams' => $isLinkedToExams,
+                        'isLinkedToExams' => $isLinked,
                     ])
                 </div>
 
@@ -122,7 +143,7 @@
                 <div class="flex items-center justify-end gap-2.5">
                     <x-button type="submit" variant="primary" size="md">
                         <x-icon name="save" class="w-4 h-4" />
-                        {{ ($isLinkedToExam || $isLinkedToExams) ? 'Guardar como v' . $nextVersionNumber : 'Actualizar reactivo' }}
+                        {{ $isLinked ? 'Guardar como v' . $nextVersionNumber : 'Actualizar reactivo' }}
                     </x-button>
                 </div>
             </div>

@@ -154,6 +154,53 @@ class TeacherSubscriptionService
             ->get();
 
         $isOnboarding = $teacher->needsPlanOnboarding();
+        $aiCreditSummary = $this->subscriptionLimitService->getAiCreditQuotaSummary($teacher);
+
+        $isFreemium = $activePackage === null && ! $isSuspendedSubscription;
+
+        $groupsMetric = $this->buildQuotaMetric(
+            used: $isFreemium ? $cumulativeGroupsCount : $activeGroupsCount,
+            limit: $isFreemium ? SubscriptionLimitService::FREEMIUM_MAX_CUMULATIVE_GROUPS : $activePackage?->max_groups,
+            isSuspended: $isSuspendedSubscription,
+            unitLabel: 'grupos',
+            description: $isFreemium
+                ? 'Histórico acumulado (Freemium)'
+                : ($activePackage?->max_groups === null ? 'Grupos activos ilimitados' : 'Grupos activos simultáneos'),
+        );
+
+        $questionsMetric = $this->buildQuotaMetric(
+            used: $questionsCount,
+            limit: $isFreemium ? SubscriptionLimitService::FREEMIUM_MAX_QUESTIONS : $activePackage?->max_questions,
+            isSuspended: $isSuspendedSubscription,
+            unitLabel: 'reactivos',
+            description: $isFreemium
+                ? 'Banco histórico acumulado (Freemium)'
+                : ($activePackage?->max_questions === null ? 'Banco de reactivos ilimitado' : 'Reactivos activos en banco'),
+        );
+
+        $examsMetric = $this->buildQuotaMetric(
+            used: $isFreemium ? $cumulativeExamsCount : $examsCount,
+            limit: $isFreemium ? SubscriptionLimitService::FREEMIUM_MAX_CUMULATIVE_EXAMS : $activePackage?->max_active_exams,
+            isSuspended: $isSuspendedSubscription,
+            unitLabel: 'exámenes',
+            description: $isFreemium
+                ? 'Histórico acumulado (Freemium)'
+                : ($activePackage?->max_active_exams === null ? 'Exámenes activos ilimitados' : 'Exámenes activos simultáneos'),
+        );
+
+        $aiCreditsMetric = [
+            'used' => $aiCreditSummary['used'],
+            'limit' => $aiCreditSummary['limit'],
+            'remaining' => $aiCreditSummary['remaining'],
+            'is_unlimited' => $aiCreditSummary['is_unlimited'],
+            'percent' => $aiCreditSummary['percent'],
+            'variant' => $aiCreditSummary['variant'],
+            'limit_label' => $aiCreditSummary['is_unlimited'] ? 'Ilimitado' : (string) ($aiCreditSummary['limit'] ?? 0),
+            'usage_label' => $aiCreditSummary['is_unlimited']
+                ? "{$aiCreditSummary['used']} / Ilimitado"
+                : "{$aiCreditSummary['used']} / ".($aiCreditSummary['limit'] ?? 0).' evaluaciones IA',
+            'description' => $aiCreditSummary['cycle_label'],
+        ];
 
         return [
             'teacher' => $teacher,
@@ -166,9 +213,58 @@ class TeacherSubscriptionService
             'questionsCount' => $questionsCount,
             'examsCount' => $examsCount,
             'cumulativeExamsCount' => $cumulativeExamsCount,
+            'quotaMetrics' => [
+                'groups' => $groupsMetric,
+                'questions' => $questionsMetric,
+                'exams' => $examsMetric,
+                'aiCredits' => $aiCreditsMetric,
+            ],
+            'aiCreditSummary' => $aiCreditSummary,
             'packages' => $packages,
             'transactions' => $transactions,
             'whatsappNumber' => (string) config('services.acode.whatsapp_sales', '5215500000000'),
+        ];
+    }
+
+    /**
+     * Prepara los datos necesarios para la capa bloqueante de selección de plan
+     * o prueba gratuita montada sobre el Dashboard docente (ADR-060).
+     *
+     * @param User $teacher Cuenta docente verificada con onboarding pendiente.
+     * @return array{
+     *     packages: Collection<int, SubscriptionPackage>,
+     *     freemiumLimits: array{
+     *         max_groups: int,
+     *         max_exams: int,
+     *         max_questions: int,
+     *         max_students: int,
+     *         max_ai_evaluations: int
+     *     },
+     *     speiClabe: string,
+     *     speiBeneficiary: string,
+     *     whatsappNumber: string,
+     *     teacher: User
+     * }
+     */
+    public function getOnboardingOverlayData(User $teacher): array
+    {
+        $packages = SubscriptionPackage::where('is_active', true)
+            ->orderBy('monthly_price')
+            ->get();
+
+        return [
+            'packages' => $packages,
+            'freemiumLimits' => [
+                'max_groups' => SubscriptionLimitService::FREEMIUM_MAX_CUMULATIVE_GROUPS,
+                'max_exams' => SubscriptionLimitService::FREEMIUM_MAX_CUMULATIVE_EXAMS,
+                'max_questions' => SubscriptionLimitService::FREEMIUM_MAX_QUESTIONS,
+                'max_students' => SubscriptionLimitService::FREEMIUM_MAX_STUDENTS_PER_GROUP,
+                'max_ai_evaluations' => SubscriptionLimitService::FREEMIUM_MAX_AI_EVALUATIONS,
+            ],
+            'speiClabe' => self::SIMULATED_CLABE,
+            'speiBeneficiary' => self::SIMULATED_BENEFICIARY,
+            'whatsappNumber' => (string) config('services.acode.whatsapp_sales', '5215500000000'),
+            'teacher' => $teacher,
         ];
     }
 
@@ -493,6 +589,79 @@ class TeacherSubscriptionService
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Construye una métrica de cuota normalizada evitando cálculos en Blade y
+     * manejando explícitamente límites ilimitados (null) del paquete Pro (ADR-060).
+     *
+     * @param int $used Consumo actual de la cuota.
+     * @param int|null $limit Límite del paquete (null equivale a ilimitado).
+     * @param bool $isSuspended Indica si la suscripción está suspendida.
+     * @param string $unitLabel Etiqueta plural de la unidad medida.
+     * @param string $description Subtítulo descriptivo de la regla aplicada.
+     * @return array{
+     *     used: int,
+     *     limit: ?int,
+     *     remaining: ?int,
+     *     is_unlimited: bool,
+     *     percent: int,
+     *     variant: string,
+     *     limit_label: string,
+     *     usage_label: string,
+     *     description: string
+     * }
+     */
+    private function buildQuotaMetric(
+        int $used,
+        ?int $limit,
+        bool $isSuspended,
+        string $unitLabel,
+        string $description,
+    ): array {
+        if ($isSuspended) {
+            return [
+                'used' => $used,
+                'limit' => 0,
+                'remaining' => 0,
+                'is_unlimited' => false,
+                'percent' => 100,
+                'variant' => 'danger',
+                'limit_label' => '0',
+                'usage_label' => "{$used} / 0 {$unitLabel}",
+                'description' => 'Suscripción suspendida',
+            ];
+        }
+
+        if ($limit === null) {
+            return [
+                'used' => $used,
+                'limit' => null,
+                'remaining' => null,
+                'is_unlimited' => true,
+                'percent' => 0,
+                'variant' => 'accent',
+                'limit_label' => 'Ilimitado',
+                'usage_label' => "{$used} / Ilimitado",
+                'description' => $description,
+            ];
+        }
+
+        $remaining = max(0, $limit - $used);
+        $percent = $limit > 0 ? min(100, (int) round(($used / $limit) * 100)) : 100;
+        $variant = $percent >= 90 ? 'danger' : ($percent >= 75 ? 'warning' : 'tech');
+
+        return [
+            'used' => $used,
+            'limit' => $limit,
+            'remaining' => $remaining,
+            'is_unlimited' => false,
+            'percent' => $percent,
+            'variant' => $variant,
+            'limit_label' => (string) $limit,
+            'usage_label' => "{$used} / {$limit} {$unitLabel}",
+            'description' => $description,
+        ];
     }
 
     /**

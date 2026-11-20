@@ -9,55 +9,53 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        TeacherAiCreditsController.php
  * Ubicación:      app/Http/Controllers/TeacherAiCreditsController.php
- * Requerimiento:  RF-SUS-013, RF-IAR-001..014 (Monitoreo de Créditos y Evaluaciones IA)
+ * Requerimiento:  RF-SUS-013, RF-IAR-001..014, ADR-059 (Monitor de Créditos IA)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        2.0.0
  * Fecha Creación: 09/11/2026
- * Descripción:    Monitor de consumo de evaluaciones asistidas por IA (Gemini 1.5 Flash)
- *                 y saldo de solicitudes por paquete.
+ * Descripción:    Controlador Skinny para el monitor de créditos y evaluaciones
+ *                 asistidas por IA, delegando la agregación a AiEvaluationService.
  * ============================================================================
  */
 
 namespace App\Http\Controllers;
 
-use App\Models\StudentAnswer;
-use App\Services\SubscriptionLimitService;
+use App\Models\User;
+use App\Services\AiEvaluationService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
+/**
+ * Controlador delgado del tablero docente de créditos de inteligencia artificial.
+ *
+ * @package App\Http\Controllers
+ */
 class TeacherAiCreditsController extends Controller
 {
+    /**
+     * Inicializa el controlador inyectando el servicio de evaluación con IA.
+     *
+     * @param AiEvaluationService $aiEvaluationService Servicio de métricas y evaluación IA.
+     */
     public function __construct(
-        private readonly SubscriptionLimitService $subscriptionLimitService
+        private readonly AiEvaluationService $aiEvaluationService,
     ) {
     }
 
     /**
-     * Muestra el resumen de consumo de evaluaciones de inteligencia artificial.
+     * Muestra el resumen de consumo de créditos, saldo disponible y driver activo de IA.
+     *
+     * @param Request $request Solicitud HTTP del docente autenticado.
+     * @return View
      */
     public function index(Request $request): View
     {
+        /** @var User $teacher */
         $teacher = $request->user();
-        $activePackage = $this->subscriptionLimitService->resolveActivePackage($teacher);
 
-        // Respuestas evaluadas con IA correspondientes a exámenes creados por este docente
-        $aiAnswersQuery = StudentAnswer::whereHas('examQuestion.exam', function ($q) use ($teacher): void {
-            $q->where('teacher_id', $teacher->id);
-        })->whereNotNull('ai_evaluated_at');
-
-        $totalAiEvaluations = (clone $aiAnswersQuery)->count();
-        $recotejadasCount = (clone $aiAnswersQuery)->whereNotNull('teacher_recoteje_score')->count();
-        $promedioSimilitud = (clone $aiAnswersQuery)->avg('ai_similarity_score') ?? 85.0;
-
-        $aiRequestsLimit = $activePackage?->ai_requests_limit ?? 100; // Freemium: 100 eval/mes
-
-        return view('teacher.ai-credits.index', [
-            'teacher' => $teacher,
-            'activePackage' => $activePackage,
-            'totalAiEvaluations' => $totalAiEvaluations,
-            'recotejadasCount' => $recotejadasCount,
-            'promedioSimilitud' => round((float) $promedioSimilitud, 1),
-            'aiRequestsLimit' => $aiRequestsLimit,
-        ]);
+        return view(
+            'teacher.ai-credits.index',
+            $this->aiEvaluationService->getTeacherAiCreditsOverview($teacher),
+        );
     }
 }

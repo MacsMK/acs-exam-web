@@ -1,6 +1,7 @@
 {{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Partial: exams/partials/_stepper.blade.php (MPW-V2 §4.1.2, §7, §8) --}}
 @php
     $stepNumber = (int) ($currentStep ?? 1);
+    $showTitle = (bool) ($showTitle ?? false);
     $hasExam = isset($exam) && $exam instanceof \App\Models\Exam && $exam->exists;
 
     $resolvedWeight = isset($totalPoints)
@@ -45,11 +46,15 @@
 <x-card padding="p-4 sm:p-5" class="border-slate-200">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100">
         <div class="min-w-0 flex items-center gap-2.5 flex-wrap">
-            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Flujo de examen</span>
-            <span class="text-slate-300 hidden sm:inline">·</span>
-            <p class="text-sm font-bold text-acode-primary truncate">
-                {{ $hasExam ? $exam->title : 'Nuevo examen en preparación' }}
-            </p>
+            <span class="text-xs font-semibold text-slate-600">
+                Progreso de configuración · Etapa {{ $stepNumber }} de 4
+            </span>
+            @if ($showTitle)
+                <span class="text-slate-300 hidden sm:inline">·</span>
+                <p class="text-sm font-bold text-acode-primary truncate">
+                    {{ $hasExam ? $exam->title : 'Nuevo examen en preparación' }}
+                </p>
+            @endif
         </div>
 
         <div class="flex flex-wrap items-center gap-2 shrink-0">

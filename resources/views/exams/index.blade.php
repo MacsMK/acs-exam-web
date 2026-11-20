@@ -15,10 +15,11 @@
             'active' => ['label' => 'Activo', 'variant' => 'accent'],
             'closed' => ['label' => 'Cerrado', 'variant' => 'neutral'],
         ];
+        $pendingRecotejeExams = (int) ($stats['pending_recoteje_exams'] ?? 0);
     @endphp
 
     <div
-        class="mx-auto max-w-7xl space-y-6"
+        class="space-y-6"
         x-data="{
             confirmExamAction(formId, title, text, confirmText, isDanger = true) {
                 if (typeof AcodeAlert !== 'undefined') {
@@ -53,110 +54,76 @@
             </div>
         @endif
 
-        {{-- Nivel 1: Hero Institucional y CTA Nuevo examen (MPW-V2 Tabla 11-13, §8.3) --}}
-        <section class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-                <div class="space-y-2 max-w-2xl">
-                    <x-badge variant="info">
-                        Gestión de Evaluaciones · Flujo Guiado
-                    </x-badge>
-                    <h1 class="text-2xl sm:text-[28px] sm:leading-9 font-bold tracking-tight text-acode-primary">
-                        Mis exámenes
-                    </h1>
-                    <p class="text-sm text-slate-700 leading-5">
-                        Diseña evaluaciones con sorteo inteligente o selección manual, calibra ponderaciones sobre 100.00 puntos, supervisa entregas en vivo y recoteja respuestas abiertas asistidas por IA.
-                    </p>
-                </div>
+        {{-- Nivel 1: Cabecera institucional y acciones principales (MPW-V2 §7.3, §8.1, Tabla 20) --}}
+        <x-page-header
+            title="Mis exámenes"
+            subtitle="Diseña evaluaciones con sorteo inteligente o selección manual, calibra ponderaciones sobre 100.00 puntos, supervisa entregas en vivo y recoteja respuestas abiertas asistidas por IA."
+        >
+            <x-slot:actions>
+                <x-button :href="route('exams.create')" variant="primary" size="md" title="Nuevo examen">
+                    <x-icon name="add" class="w-4 h-4" />
+                    Crear examen
+                </x-button>
 
-                <div class="flex flex-wrap items-center gap-2.5 shrink-0">
-                    <x-button :href="route('exams.create')" variant="primary" size="md">
-                        <x-icon name="add" class="w-4 h-4" />
-                        Nuevo examen
-                    </x-button>
+                <x-button :href="route('teacher.reviews.index')" variant="neutral" size="md">
+                    <x-icon name="view" class="w-4 h-4 text-acode-tech" />
+                    Abrir revisión
+                </x-button>
+            </x-slot:actions>
+        </x-page-header>
 
-                    <x-button :href="route('teacher.reviews.index')" variant="neutral" size="md">
-                        <x-icon name="view" class="w-4 h-4 text-acode-tech" />
-                        Centro de recoteje
-                    </x-button>
-                </div>
-            </div>
-        </section>
-
-        {{-- Nivel 2: 4 Tarjetas KPI --}}
+        {{-- Nivel 2: 4 Tarjetas KPI canónicas --}}
         <section class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4" aria-label="Indicadores de exámenes del docente">
-            <x-card class="h-full">
-                <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total exámenes</p>
-                        <p class="mt-1 text-[28px] leading-9 font-bold text-acode-primary tabular-nums">
-                            {{ (int) ($stats['total'] ?? 0) }}
-                        </p>
-                    </div>
-                    <span class="w-10 h-10 rounded-xl bg-acode-surface text-acode-tech flex items-center justify-center shrink-0">
-                        <x-icon name="document" class="w-5 h-5" />
-                    </span>
-                </div>
-                <p class="mt-4 text-xs text-slate-500">
+            <x-kpi-card
+                label="Total exámenes"
+                :value="(int) ($stats['total'] ?? 0)"
+                icon="document"
+                tone="tech"
+            >
+                <p class="text-xs text-slate-500">
                     <strong class="font-semibold text-acode-primary">{{ (int) ($stats['closed'] ?? 0) }}</strong> concluidos en historial
                 </p>
-            </x-card>
+            </x-kpi-card>
 
-            <x-card class="h-full">
-                <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Borradores</p>
-                        <p class="mt-1 text-[28px] leading-9 font-bold text-acode-warning-dark tabular-nums">
-                            {{ (int) ($stats['drafts'] ?? 0) }}
-                        </p>
-                    </div>
-                    <span class="w-10 h-10 rounded-xl bg-acode-warning/20 text-acode-primary flex items-center justify-center shrink-0">
-                        <x-icon name="edit" class="w-5 h-5" />
-                    </span>
-                </div>
-                <p class="mt-4 text-xs text-slate-500">
+            <x-kpi-card
+                label="Borradores"
+                :value="(int) ($stats['drafts'] ?? 0)"
+                icon="edit"
+                tone="warning"
+            >
+                <p class="text-xs text-slate-500">
                     En armado, ponderación o listos para publicar
                 </p>
-            </x-card>
+            </x-kpi-card>
 
-            <x-card class="h-full">
-                <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Activos ahora</p>
-                        <p class="mt-1 text-[28px] leading-9 font-bold text-acode-accent tabular-nums">
-                            {{ (int) ($stats['published_active'] ?? 0) }}
-                        </p>
-                    </div>
-                    <span class="w-10 h-10 rounded-xl bg-acode-accent/15 text-acode-accent flex items-center justify-center shrink-0">
-                        <x-icon name="clock" class="w-5 h-5" />
-                    </span>
-                </div>
-                <p class="mt-4 text-xs text-slate-500">
+            <x-kpi-card
+                label="Activos ahora"
+                :value="(int) ($stats['published_active'] ?? 0)"
+                icon="clock"
+                tone="accent"
+            >
+                <p class="text-xs text-slate-500">
                     <strong class="font-semibold text-acode-tech">{{ (int) ($stats['scheduled'] ?? 0) }}</strong> programados próximamente
                 </p>
-            </x-card>
+            </x-kpi-card>
 
-            <x-card class="h-full">
-                <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Pendientes de recoteje</p>
-                        <p class="mt-1 text-[28px] leading-9 font-bold {{ (int) ($stats['pending_recoteje_exams'] ?? 0) > 0 ? 'text-acode-warning-dark' : 'text-acode-primary' }} tabular-nums">
-                            {{ (int) ($stats['pending_recoteje_exams'] ?? 0) }}
-                        </p>
-                    </div>
-                    <span class="w-10 h-10 rounded-xl {{ (int) ($stats['pending_recoteje_exams'] ?? 0) > 0 ? 'bg-acode-warning/20 text-acode-primary' : 'bg-slate-100 text-slate-500' }} flex items-center justify-center shrink-0">
-                        <x-icon name="{{ (int) ($stats['pending_recoteje_exams'] ?? 0) > 0 ? 'warning' : 'success' }}" class="w-5 h-5" />
+            <x-kpi-card
+                label="Pendientes de recoteje"
+                :value="$pendingRecotejeExams"
+                :icon="$pendingRecotejeExams > 0 ? 'warning' : 'success'"
+                :tone="$pendingRecotejeExams > 0 ? 'warning' : 'neutral'"
+                :href="$pendingRecotejeExams > 0 ? route('exams.index', ['status' => 'pending_review']) : null"
+            >
+                @if ($pendingRecotejeExams > 0)
+                    <span class="text-xs font-semibold text-acode-tech group-hover:underline">
+                        Ver pendientes →
                     </span>
-                </div>
-                <div class="mt-4 flex items-center justify-between text-xs">
-                    @if ((int) ($stats['pending_recoteje_exams'] ?? 0) > 0)
-                        <a href="{{ route('exams.index', ['status' => 'pending_review']) }}" class="font-semibold text-acode-tech hover:underline">
-                            Filtrar pendientes →
-                        </a>
-                    @else
-                        <span class="text-slate-500">Sin entregas pendientes por validar</span>
-                    @endif
-                </div>
-            </x-card>
+                @else
+                    <p class="text-xs text-slate-500">
+                        Sin entregas pendientes por validar
+                    </p>
+                @endif
+            </x-kpi-card>
         </section>
 
         {{-- Nivel 3: Barra de Búsqueda y Filtros SQL --}}
@@ -210,13 +177,13 @@
                         Limpiar filtros
                     </x-button>
                 @endif
-                <x-button :href="route('exams.create')" variant="primary" size="md">
+                <x-button :href="route('exams.create')" variant="primary" size="md" title="Nuevo examen">
                     <x-icon name="add" class="w-4 h-4" />
-                    Nuevo examen
+                    Crear examen
                 </x-button>
             </x-empty-state>
         @else
-            <x-table>
+            <x-table class="!overflow-visible">
                 <x-slot:header>
                     <x-table.th>Examen</x-table.th>
                     <x-table.th>Grupos asignados</x-table.th>
@@ -304,56 +271,79 @@
                         </x-table.td>
 
                         <x-table.td align="right" class="whitespace-nowrap">
-                            <div class="inline-flex items-center justify-end gap-1.5">
+                            <div
+                                class="inline-flex items-center justify-end gap-1.5"
+                                x-data="{ menuOpen: false }"
+                                @click.outside="menuOpen = false"
+                                @keydown.escape.window="menuOpen = false"
+                            >
                                 @if ($opStatus === 'draft')
                                     <x-button :href="route('exams.assemble', $exam)" variant="primary" size="sm">
                                         Armar
                                     </x-button>
-                                    <x-button :href="route('exams.configuration', $exam)" variant="secondary" size="sm">
-                                        Configurar
-                                    </x-button>
-                                    <x-button
-                                        :href="route('exams.edit', $exam)"
-                                        variant="neutral"
-                                        size="sm"
-                                        :icon-only="true"
-                                        title="Editar datos y grupos"
-                                        aria-label="Editar datos y grupos"
-                                    >
-                                        <x-icon name="edit" class="w-4 h-4" />
-                                    </x-button>
-                                    <x-button
-                                        :href="route('exams.review', $exam)"
-                                        variant="neutral"
-                                        size="sm"
-                                        :icon-only="true"
-                                        title="Abrir revisión y publicación"
-                                        aria-label="Abrir revisión y publicación"
-                                    >
-                                        <x-icon name="view" class="w-4 h-4" />
+                                    <x-button :href="route('exams.edit', $exam)" variant="neutral" size="sm">
+                                        Editar
                                     </x-button>
 
+                                    <div class="relative">
+                                        <x-button
+                                            type="button"
+                                            variant="neutral"
+                                            size="sm"
+                                            @click="menuOpen = !menuOpen"
+                                            x-bind:aria-expanded="menuOpen.toString()"
+                                            aria-label="Más acciones del examen"
+                                            title="Más acciones"
+                                        >
+                                            <span>Más</span>
+                                            <x-icon name="chevronDown" class="w-3.5 h-3.5" />
+                                        </x-button>
+
+                                        <div
+                                            x-show="menuOpen"
+                                            x-cloak
+                                            x-transition.opacity.duration.150ms
+                                            class="absolute right-0 {{ $loop->remaining < 2 && $loop->count > 2 ? 'bottom-full mb-1.5' : 'top-full mt-1.5' }} z-20 w-52 rounded-xl border border-slate-200 bg-white py-1.5 text-left shadow-lg"
+                                        >
+                                            <a
+                                                href="{{ route('exams.configuration', $exam) }}"
+                                                class="flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-acode-surface hover:text-acode-primary transition"
+                                            >
+                                                <x-icon name="reportBar" class="w-4 h-4 text-acode-tech" />
+                                                Configurar pesos
+                                            </a>
+                                            <a
+                                                href="{{ route('exams.review', $exam) }}"
+                                                class="flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-acode-surface hover:text-acode-primary transition"
+                                            >
+                                                <x-icon name="view" class="w-4 h-4 text-acode-tech" />
+                                                Revisar y publicar
+                                            </a>
+
+                                            @if ($attemptsCount === 0)
+                                                <div class="my-1 border-t border-slate-100"></div>
+                                                <button
+                                                    type="button"
+                                                    class="flex w-full items-center gap-2 px-3.5 py-2 text-xs font-semibold text-acode-danger hover:bg-acode-danger/10 transition"
+                                                    @click="menuOpen = false; confirmExamAction(
+                                                        'delete-exam-{{ $exam->id }}',
+                                                        '¿Eliminar borrador?',
+                                                        'El examen ' + {{ \Illuminate\Support\Js::from($exam->title) }} + ' y sus apartados se eliminarán de forma permanente.',
+                                                        'Eliminar',
+                                                        true
+                                                    )"
+                                                >
+                                                    <x-icon name="delete" class="w-4 h-4" />
+                                                    Eliminar
+                                                </button>
+                                            @endif
+                                        </div>
+                                    </div>
+
                                     @if ($attemptsCount === 0)
-                                        <form id="delete-exam-{{ $exam->id }}" method="POST" action="{{ route('exams.destroy', $exam) }}" class="inline">
+                                        <form id="delete-exam-{{ $exam->id }}" method="POST" action="{{ route('exams.destroy', $exam) }}" class="hidden">
                                             @csrf
                                             @method('DELETE')
-                                            <x-button
-                                                type="button"
-                                                variant="danger"
-                                                size="sm"
-                                                :icon-only="true"
-                                                title="Eliminar borrador"
-                                                aria-label="Eliminar borrador"
-                                                @click="confirmExamAction(
-                                                    'delete-exam-{{ $exam->id }}',
-                                                    '¿Eliminar borrador?',
-                                                    'El examen ' + {{ \Illuminate\Support\Js::from($exam->title) }} + ' y sus apartados se eliminarán de forma permanente.',
-                                                    'Eliminar',
-                                                    true
-                                                )"
-                                            >
-                                                <x-icon name="delete" class="w-4 h-4" />
-                                            </x-button>
                                         </form>
                                     @endif
                                 @else
@@ -361,86 +351,107 @@
                                         Monitoreo
                                     </x-button>
                                     <x-button :href="route('exams.revision.index', $exam)" variant="primary" size="sm">
-                                        Recoteje
-                                    </x-button>
-                                    <x-button
-                                        :href="route('exams.review', $exam)"
-                                        variant="neutral"
-                                        size="sm"
-                                        :icon-only="true"
-                                        title="Abrir resumen del examen"
-                                        aria-label="Abrir resumen del examen"
-                                    >
-                                        <x-icon name="view" class="w-4 h-4" />
+                                        Abrir recoteje
                                     </x-button>
 
-                                    @if ($attemptsCount === 0)
-                                        <form id="unpublish-exam-{{ $exam->id }}" method="POST" action="{{ route('exams.unpublish', $exam) }}" class="inline">
-                                            @csrf
-                                            <x-button
-                                                type="button"
-                                                variant="neutral"
-                                                size="sm"
-                                                :icon-only="true"
-                                                title="Despublicar examen"
-                                                aria-label="Despublicar examen"
-                                                @click="confirmExamAction(
-                                                    'unpublish-exam-{{ $exam->id }}',
-                                                    '¿Despublicar examen?',
-                                                    'El examen regresará a borrador porque aún no registra intentos de estudiantes.',
-                                                    'Despublicar',
-                                                    false
-                                                )"
+                                    <div class="relative">
+                                        <x-button
+                                            type="button"
+                                            variant="neutral"
+                                            size="sm"
+                                            @click="menuOpen = !menuOpen"
+                                            x-bind:aria-expanded="menuOpen.toString()"
+                                            aria-label="Más acciones del examen"
+                                            title="Más acciones"
+                                        >
+                                            <span>Más</span>
+                                            <x-icon name="chevronDown" class="w-3.5 h-3.5" />
+                                        </x-button>
+
+                                        <div
+                                            x-show="menuOpen"
+                                            x-cloak
+                                            x-transition.opacity.duration.150ms
+                                            class="absolute right-0 {{ $loop->remaining < 2 && $loop->count > 2 ? 'bottom-full mb-1.5' : 'top-full mt-1.5' }} z-20 w-52 rounded-xl border border-slate-200 bg-white py-1.5 text-left shadow-lg"
+                                        >
+                                            <a
+                                                href="{{ route('exams.review', $exam) }}"
+                                                class="flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-acode-surface hover:text-acode-primary transition"
                                             >
-                                                <x-icon name="arrowLeft" class="w-4 h-4" />
-                                            </x-button>
+                                                <x-icon name="view" class="w-4 h-4 text-acode-tech" />
+                                                Abrir resumen
+                                            </a>
+
+                                            @if ($attemptsCount === 0)
+                                                <button
+                                                    type="button"
+                                                    class="flex w-full items-center gap-2 px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-acode-surface hover:text-acode-primary transition"
+                                                    @click="menuOpen = false; confirmExamAction(
+                                                        'unpublish-exam-{{ $exam->id }}',
+                                                        '¿Despublicar examen?',
+                                                        'El examen regresará a borrador porque aún no registra intentos de estudiantes.',
+                                                        'Despublicar',
+                                                        false
+                                                    )"
+                                                >
+                                                    <x-icon name="arrowLeft" class="w-4 h-4 text-slate-500" />
+                                                    Despublicar
+                                                </button>
+                                            @endif
+
+                                            @if ($exam->result_visibility_mode === 'hidden')
+                                                <button
+                                                    type="button"
+                                                    class="flex w-full items-center gap-2 px-3.5 py-2 text-xs font-semibold text-acode-accent-dark hover:bg-acode-accent/10 transition"
+                                                    @click="menuOpen = false; confirmExamAction(
+                                                        'release-exam-{{ $exam->id }}',
+                                                        '¿Liberar resultados?',
+                                                        'Los estudiantes podrán consultar sus calificaciones obtenidas en este examen.',
+                                                        'Liberar resultados',
+                                                        false
+                                                    )"
+                                                >
+                                                    <x-icon name="check" class="w-4 h-4" />
+                                                    Liberar resultados
+                                                </button>
+                                            @endif
+
+                                            @if (in_array($opStatus, ['active', 'scheduled'], true))
+                                                <div class="my-1 border-t border-slate-100"></div>
+                                                <button
+                                                    type="button"
+                                                    class="flex w-full items-center gap-2 px-3.5 py-2 text-xs font-semibold text-acode-warning-dark hover:bg-acode-warning/15 transition"
+                                                    @click="menuOpen = false; confirmExamAction(
+                                                        'close-exam-{{ $exam->id }}',
+                                                        '¿Cerrar examen anticipadamente?',
+                                                        'Los estudiantes ya no podrán iniciar ni enviar nuevos intentos en ' + {{ \Illuminate\Support\Js::from($exam->title) }} + '.',
+                                                        'Cerrar examen',
+                                                        true
+                                                    )"
+                                                >
+                                                    <x-icon name="lock" class="w-4 h-4" />
+                                                    Cerrar examen
+                                                </button>
+                                            @endif
+                                        </div>
+                                    </div>
+
+                                    @if ($attemptsCount === 0)
+                                        <form id="unpublish-exam-{{ $exam->id }}" method="POST" action="{{ route('exams.unpublish', $exam) }}" class="hidden">
+                                            @csrf
                                         </form>
                                     @endif
 
                                     @if (in_array($opStatus, ['active', 'scheduled'], true))
-                                        <form id="close-exam-{{ $exam->id }}" method="POST" action="{{ route('exams.close', $exam) }}" class="inline">
+                                        <form id="close-exam-{{ $exam->id }}" method="POST" action="{{ route('exams.close', $exam) }}" class="hidden">
                                             @csrf
-                                            <x-button
-                                                type="button"
-                                                variant="warning"
-                                                size="sm"
-                                                :icon-only="true"
-                                                title="Cerrar examen anticipadamente"
-                                                aria-label="Cerrar examen anticipadamente"
-                                                @click="confirmExamAction(
-                                                    'close-exam-{{ $exam->id }}',
-                                                    '¿Cerrar examen anticipadamente?',
-                                                    'Los estudiantes ya no podrán iniciar ni enviar nuevos intentos en ' + {{ \Illuminate\Support\Js::from($exam->title) }} + '.',
-                                                    'Cerrar examen',
-                                                    true
-                                                )"
-                                            >
-                                                <x-icon name="lock" class="w-4 h-4" />
-                                            </x-button>
                                         </form>
                                     @endif
 
                                     @if ($exam->result_visibility_mode === 'hidden')
-                                        <form id="release-exam-{{ $exam->id }}" method="POST" action="{{ route('exams.results.release', $exam) }}" class="inline">
+                                        <form id="release-exam-{{ $exam->id }}" method="POST" action="{{ route('exams.results.release', $exam) }}" class="hidden">
                                             @csrf
                                             @method('PATCH')
-                                            <x-button
-                                                type="button"
-                                                variant="accent"
-                                                size="sm"
-                                                :icon-only="true"
-                                                title="Liberar resultados a estudiantes"
-                                                aria-label="Liberar resultados a estudiantes"
-                                                @click="confirmExamAction(
-                                                    'release-exam-{{ $exam->id }}',
-                                                    '¿Liberar resultados?',
-                                                    'Los estudiantes podrán consultar sus calificaciones obtenidas en este examen.',
-                                                    'Liberar resultados',
-                                                    false
-                                                )"
-                                            >
-                                                <x-icon name="check" class="w-4 h-4" />
-                                            </x-button>
                                         </form>
                                     @endif
                                 @endif

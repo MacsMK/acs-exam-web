@@ -1,26 +1,29 @@
 {{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: teacher/subscription/checkout.blade.php (MPW-V2 §4.1.2, §7.3, §7.8.2, §8.5, §8.6, Tabla 20) --}}
 @extends('layouts.app')
 
-@section('title', 'Pago en línea simulado')
+@section('title', 'Pago en línea')
 
 @section('content')
-<div class="max-w-6xl mx-auto space-y-6">
+<div class="space-y-6">
     {{-- Encabezado --}}
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-5">
-        <div class="space-y-1.5">
-            <div class="flex flex-wrap items-center gap-3">
-                <x-button href="{{ route('teacher.subscription.index') }}" variant="neutral" size="sm">
-                    <x-icon name="arrowLeft" class="w-4 h-4" />
-                    Volver
-                </x-button>
-                <x-badge variant="info">Simulación segura</x-badge>
-            </div>
-            <h1 class="text-2xl font-bold text-acode-primary tracking-tight">Pago en línea</h1>
-            <p class="text-sm text-slate-500">
-                Activa o actualiza tu paquete docente al instante mediante tarjeta o transferencia SPEI simulada.
-            </p>
-        </div>
-    </div>
+    <x-page-header
+        title="Pago en línea"
+        subtitle="Completa tu suscripción de forma segura para activar las cuotas de tu paquete al instante."
+        :breadcrumbs="[
+            ['label' => 'Suscripción', 'href' => route('teacher.subscription.index')],
+            ['label' => 'Pago en línea'],
+        ]"
+    >
+        <x-slot:badge>
+            <x-badge variant="info">Simulación segura</x-badge>
+        </x-slot:badge>
+        <x-slot:actions>
+            <x-button :href="route('teacher.subscription.index')" variant="neutral" size="md">
+                <x-icon name="arrowLeft" class="w-4 h-4" />
+                Volver
+            </x-button>
+        </x-slot:actions>
+    </x-page-header>
 
     {{-- Alerta por rechazo bancario simulado --}}
     @if ($errors->has('payment_gateway'))
@@ -46,6 +49,7 @@
         <div class="lg:col-span-7">
             <x-card>
                 <form
+                    id="checkout-payment-form"
                     method="POST"
                     action="{{ route('teacher.subscription.pay', $package) }}"
                     x-data="acodeSimulatedCheckout()"
@@ -78,7 +82,7 @@
                             >
                                 <div>
                                     <p class="text-sm font-bold">Tarjeta (Crédito / Débito)</p>
-                                    <p class="text-[11px]" :class="paymentMethod === 'card' ? 'text-white/75' : 'text-slate-500'">
+                                    <p class="text-xs" :class="paymentMethod === 'card' ? 'text-white/75' : 'text-slate-500'">
                                         Visa, Mastercard o Amex
                                     </p>
                                 </div>
@@ -97,7 +101,7 @@
                             >
                                 <div>
                                     <p class="text-sm font-bold">Transferencia SPEI al instante</p>
-                                    <p class="text-[11px]" :class="paymentMethod === 'spei' ? 'text-white/75' : 'text-slate-500'">
+                                    <p class="text-xs" :class="paymentMethod === 'spei' ? 'text-white/75' : 'text-slate-500'">
                                         Clave de rastreo inmediata
                                     </p>
                                 </div>
@@ -111,7 +115,7 @@
                         {{-- Tarjeta visual previa en tokens oficiales --}}
                         <div class="rounded-2xl bg-gradient-to-br from-acode-primary via-acode-navy to-acode-tech-dark p-6 text-white shadow-lg">
                             <div class="flex items-center justify-between gap-4">
-                                <span class="text-[11px] font-semibold uppercase tracking-widest text-white/75">
+                                <span class="text-xs font-semibold uppercase tracking-widest text-white/75">
                                     A-Code Pay · Simulador
                                 </span>
                                 <span
@@ -121,20 +125,20 @@
                             </div>
 
                             <div class="my-6">
-                                <p class="text-[11px] uppercase tracking-wider text-white/60 mb-1">Número de tarjeta</p>
+                                <p class="text-xs uppercase tracking-wider text-white/60 mb-1">Número de tarjeta</p>
                                 <p class="font-mono text-lg sm:text-xl font-bold tracking-widest" x-text="maskedCardPreview"></p>
                             </div>
 
                             <div class="flex items-end justify-between gap-4 pt-2 border-t border-white/15">
                                 <div class="min-w-0">
-                                    <p class="text-[10px] uppercase tracking-wider text-white/60">Titular</p>
+                                    <p class="text-xs uppercase tracking-wider text-white/60">Titular</p>
                                     <p
                                         class="truncate text-xs sm:text-sm font-semibold uppercase tracking-wide"
                                         x-text="cardHolderName.trim() !== '' ? cardHolderName.toUpperCase() : 'NOMBRE DEL TITULAR'"
                                     ></p>
                                 </div>
                                 <div class="shrink-0 text-right">
-                                    <p class="text-[10px] uppercase tracking-wider text-white/60">Vigencia</p>
+                                    <p class="text-xs uppercase tracking-wider text-white/60">Vigencia</p>
                                     <p
                                         class="font-mono text-xs sm:text-sm font-semibold"
                                         x-text="cardExpiry.trim() !== '' ? cardExpiry : 'MM/AA'"
@@ -210,7 +214,7 @@
                                     />
                                 </x-form.group>
 
-                                <div class="mt-1.5 flex items-center justify-between text-[11px]" x-show="cardDigits.length > 0" x-cloak>
+                                <div class="mt-1.5 flex items-center justify-between text-xs" x-show="cardDigits.length > 0" x-cloak>
                                     <span class="font-semibold text-acode-tech" x-text="`Marca detectada: ${cardBrand}`"></span>
                                     <span
                                         class="font-semibold"
@@ -282,7 +286,7 @@
 
                                 <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5">
                                     <div>
-                                        <p class="text-[11px] text-slate-500">CLABE Interbancaria (18 dígitos)</p>
+                                        <p class="text-xs text-slate-500">CLABE interbancaria (18 dígitos)</p>
                                         <p class="font-mono text-sm font-bold text-acode-primary tracking-wider mt-0.5">
                                             {{ $speiClabe }}
                                         </p>
@@ -338,13 +342,15 @@
 
                     {{-- Pie con botones oficiales --}}
                     <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 pt-4 border-t border-slate-100">
-                        <x-button href="{{ route('teacher.subscription.index') }}" variant="neutral" class="w-full sm:w-auto">
-                            Cancelar
-                        </x-button>
+                        <x-unsaved-changes
+                            form-id="checkout-payment-form"
+                            :cancel-url="route('teacher.subscription.index')"
+                        />
 
                         <x-button
                             type="submit"
                             variant="primary"
+                            size="md"
                             class="w-full sm:w-auto"
                             x-bind:disabled="isSubmitting"
                         >
@@ -362,7 +368,7 @@
         </div>
 
         {{-- Columna resumen (5 cols) --}}
-        <div class="lg:col-span-5 space-y-5">
+        <div class="lg:col-span-5 space-y-6">
             <x-card title="Resumen del paquete" subtitle="Desglose de contratación y capacidades incluidas">
                 <div class="space-y-4">
                     <div class="flex items-start justify-between gap-3 rounded-xl border border-acode-tech/20 bg-acode-surface/50 p-4">
@@ -370,13 +376,13 @@
                             <p class="text-xs font-semibold uppercase tracking-wider text-acode-tech">Plan seleccionado</p>
                             <h3 class="text-xl font-extrabold text-acode-primary mt-0.5">{{ $package->name }}</h3>
                             @if ($activePackage)
-                                <p class="text-[11px] text-slate-500 mt-1">
+                                <p class="text-xs text-slate-500 mt-1">
                                     Plan actual: <strong>{{ $activePackage->name }}</strong>
                                 </p>
                             @endif
                         </div>
                         <div class="text-right">
-                            <p class="text-2xl font-black text-acode-primary">
+                            <p class="text-2xl font-black text-acode-primary tabular-nums">
                                 ${{ number_format((float) $package->monthly_price, 2) }}
                             </p>
                             <p class="text-xs text-slate-500">MXN</p>
@@ -401,7 +407,11 @@
                         <ul class="space-y-2 text-xs text-slate-700">
                             <li class="flex items-center gap-2">
                                 <x-icon name="check" class="w-4 h-4 text-acode-accent shrink-0" />
-                                <span>Hasta <strong>{{ $package->max_groups ?? 'Ilimitados' }}</strong> grupos escolares</span>
+                                @if ($package->max_groups === null)
+                                    <span><strong>Ilimitados</strong> grupos escolares</span>
+                                @else
+                                    <span>Hasta <strong>{{ number_format((int) $package->max_groups) }}</strong> grupos escolares</span>
+                                @endif
                             </li>
                             <li class="flex items-center gap-2">
                                 <x-icon name="check" class="w-4 h-4 text-acode-accent shrink-0" />
@@ -417,11 +427,15 @@
                             </li>
                             <li class="flex items-center gap-2">
                                 <x-icon name="check" class="w-4 h-4 text-acode-accent shrink-0" />
-                                <span>Hasta <strong>{{ $package->max_active_exams }}</strong> exámenes guardados</span>
+                                @if ($package->max_active_exams === null)
+                                    <span><strong>Ilimitados</strong> exámenes guardados</span>
+                                @else
+                                    <span>Hasta <strong>{{ number_format((int) $package->max_active_exams) }}</strong> exámenes guardados</span>
+                                @endif
                             </li>
                             <li class="flex items-center gap-2">
                                 <x-icon name="check" class="w-4 h-4 text-acode-accent shrink-0" />
-                                <span>Evaluación con IA Gemini incluida</span>
+                                <span>{{ $package->ai_requests_limit !== null ? 'Hasta ' . number_format((int) $package->ai_requests_limit) . ' evaluaciones IA / mes' : 'Evaluaciones con IA ilimitadas' }}</span>
                             </li>
                         </ul>
                     </div>
@@ -431,21 +445,21 @@
             {{-- Alternativa comercial por WhatsApp --}}
             <x-card class="border-acode-accent/30 bg-acode-accent/5">
                 <div class="space-y-3">
-                    <h3 class="text-sm font-bold text-acode-primary">Atención Comercial por WhatsApp</h3>
+                    <h3 class="text-sm font-bold text-acode-primary">Atención comercial por WhatsApp</h3>
                     <p class="text-xs text-slate-600 leading-relaxed">
                         ¿Requieres facturación institucional, orden de compra escolar o asistencia personalizada para activar tu plan {{ $package->name }}?
                     </p>
-                    <a
-                        href="https://wa.me/{{ $whatsappNumber }}?text={{ urlencode("Hola A-Code Solutions, solicito apoyo comercial para contratar el paquete {$package->name} (\${$package->monthly_price} MXN/mes).\nDocente: {$teacher->full_name}\nCorreo: {$teacher->email}") }}"
+                    <x-button
+                        :href="'https://wa.me/' . $whatsappNumber . '?text=' . urlencode('Hola A-Code Solutions, solicito apoyo comercial para contratar el paquete ' . $package->name . ' ($' . $package->monthly_price . ' MXN/mes).' . PHP_EOL . 'Docente: ' . $teacher->full_name . PHP_EOL . 'Correo: ' . $teacher->email)"
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-acode-accent hover:bg-acode-accent-dark px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition-all duration-200"
+                        variant="neutral"
+                        size="md"
+                        class="w-full"
                     >
-                        <svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
-                        </svg>
-                        Contactar por WhatsApp
-                    </a>
+                        <x-icon name="chat" class="w-4 h-4" />
+                        Abrir WhatsApp comercial
+                    </x-button>
                 </div>
             </x-card>
         </div>
