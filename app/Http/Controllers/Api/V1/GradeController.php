@@ -12,12 +12,15 @@ declare(strict_types=1);
  *              Tabla 12, MPW-V2 §6.1). Delega las consultas agregadas sin
  *              N+1 a TeacherGradingService y las consultas del estudiante
  *              sobre su propio resultado a StudentResultService (ADR-037).
+ *              El listado del alumno incluye el grupo de cada intento y se
+ *              puede limitar a un grupo con ?group= (ADR-061).
  * ============================================================================
  */
 
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StudentGroupFilterRequest;
 use App\Models\User;
 use App\Services\StudentResultService;
 use App\Services\TeacherGradingService;
@@ -35,7 +38,7 @@ class GradeController extends Controller
     ) {
     }
 
-    public function index(Request $request): JsonResponse
+    public function index(StudentGroupFilterRequest $request): JsonResponse
     {
         $page = max(1, (int) $request->query('page', 1));
         $paginator = $this->gradingService->paginateGradesForUser(
@@ -44,6 +47,7 @@ class GradeController extends Controller
             $page,
             $request->url(),
             $request->query(),
+            $request->groupId(),
         );
 
         return ApiResponse::success($paginator);
