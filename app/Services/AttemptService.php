@@ -19,7 +19,6 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Contracts\AiEvaluatorContract;
 use App\Events\ExamAttemptIncidentReported;
 use App\Events\ExamAttemptStarted;
 use App\Events\ExamAttemptSubmitted;
@@ -45,7 +44,6 @@ class AttemptService
 
     public function __construct(
         private readonly ExamAssemblyService $assemblyService,
-        private readonly AiEvaluatorContract $aiEvaluator,
         private readonly ExamNotificationService $examNotifications,
         private readonly GradeCalculatorService $gradeCalculator,
     ) {

@@ -240,6 +240,10 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('intentos/{attempt}', [AttemptController::class, 'show'])->name('attempts.show');
     Route::post('intentos/{attempt}/responder', [AttemptController::class, 'answer'])->name('attempts.answer');
+    Route::post('intentos/{attempt}/incidente', [AttemptController::class, 'incident'])
+        ->whereNumber('attempt')
+        ->middleware('throttle:30,1')
+        ->name('attempts.incident');
     Route::post('intentos/{attempt}/terminar', [AttemptController::class, 'finish'])->name('attempts.finish');
     Route::get('intentos/{attempt}/resultado', [AttemptController::class, 'result'])->name('attempts.result');
 });
