@@ -223,4 +223,13 @@
     };
 
     global.AcodeAlert = AcodeAlert;
+
+    // Reemplaza window.alert nativo del navegador por el modal institucional de la aplicación web
+    if (typeof global.addEventListener === 'function') {
+        global.alert = function (message) {
+            if (hasSwal()) {
+                return AcodeAlert.warning('Aviso del sistema', String(message ?? ''));
+            }
+        };
+    }
 })(typeof window !== 'undefined' ? window : this);

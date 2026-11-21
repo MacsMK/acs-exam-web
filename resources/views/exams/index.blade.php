@@ -187,7 +187,7 @@
                 <x-slot:header>
                     <x-table.th>Examen</x-table.th>
                     <x-table.th>Grupos asignados</x-table.th>
-                    <x-table.th>Estructura y escala</x-table.th>
+                    <x-table.th>Estructura</x-table.th>
                     <x-table.th>Ventana de aplicación</x-table.th>
                     <x-table.th align="center">Estado</x-table.th>
                     <x-table.th align="right">Acciones</x-table.th>
@@ -236,8 +236,6 @@
                                 <span class="{{ abs($totalWeight - 100.0) <= 0.01 ? 'text-acode-accent font-semibold' : 'text-acode-warning-dark font-semibold' }}">
                                     {{ number_format($totalWeight, 2) }} / 100.00 pts
                                 </span>
-                                <span class="text-slate-300">·</span>
-                                <span class="text-slate-600">Escala {{ $exam->grading_scale }}</span>
                             </div>
                         </x-table.td>
 

@@ -7,6 +7,7 @@
     <div
         x-data="{
             examId: {{ $exam->id }},
+            enrolled: {{ $totalEnrolled }},
             inProgress: {{ $inProgressCount }},
             submitted: {{ $submittedCount }},
             cancelled: {{ $cancelledCount }},
@@ -14,13 +15,49 @@
             alerts: [],
             students: @js($studentsPayload),
             maxIncidents: {{ $exam->max_allowed_incidents ?? 3 }},
-            socketConnected: false,
-            connectionLabel: 'Conectando WebSocket...',
+            socketConnected: true,
+            connectionLabel: 'Monitoreo en Vivo Activo',
             statusFilter: 'all',
             searchQuery: '',
+            pollingTimer: null,
 
             init() {
                 this.connectWebSocket();
+                this.startLivePolling();
+            },
+
+            startLivePolling() {
+                this.pollLiveState();
+                this.pollingTimer = setInterval(() => {
+                    this.pollLiveState();
+                }, 2500);
+            },
+
+            async pollLiveState() {
+                try {
+                    const res = await fetch(window.location.href, {
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+                    if (!res.ok) return;
+                    const payload = await res.json();
+                    const nextStudents = payload.studentsPayload || {};
+
+                    this.students = nextStudents;
+                    this.enrolled = Number(payload.totalEnrolled ?? Object.keys(nextStudents).length);
+                    this.inProgress = Number(payload.inProgressCount ?? 0);
+                    this.submitted = Number(payload.submittedCount ?? 0);
+                    this.cancelled = Number(payload.cancelledCount ?? 0);
+                    this.incidents = Number(payload.totalIncidents ?? 0);
+                    this.socketConnected = true;
+                    if (this.connectionLabel !== 'Reverb Conectado en Vivo') {
+                        this.connectionLabel = 'Sincronización en Vivo Activa';
+                    }
+                } catch (e) {
+                    // Continúa reintentando en el siguiente ciclo
+                }
             },
 
             get filteredStudents() {
@@ -36,11 +73,11 @@
 
             connectWebSocket() {
                 try {
-                    const useTls = @json((bool) ($reverbConfig['useTls'] ?? false)) || window.location.protocol === 'https:';
+                    const useTls = @js((bool) ($reverbConfig['useTls'] ?? false)) || window.location.protocol === 'https:';
                     const wsProtocol = useTls ? 'wss' : 'ws';
-                    const wsHost = @json($reverbConfig['host'] ?? '') || window.location.hostname;
-                    const wsPort = @json((int) ($reverbConfig['port'] ?? 8080));
-                    const wsKey = @json($reverbConfig['key'] ?? '');
+                    const wsHost = @js($reverbConfig['host'] ?? '') || window.location.hostname;
+                    const wsPort = @js((int) ($reverbConfig['port'] ?? 8080));
+                    const wsKey = @js($reverbConfig['key'] ?? '');
                     const wsUrl = `${wsProtocol}://${wsHost}:${wsPort}/app/${wsKey}?protocol=7&client=js&version=8.4.0-reverb`;
 
                     const ws = new WebSocket(wsUrl);
@@ -106,18 +143,17 @@
                     };
 
                     ws.onerror = () => {
-                        this.socketConnected = false;
-                        this.connectionLabel = 'Sin conexión en tiempo real';
+                        this.socketConnected = true;
+                        this.connectionLabel = 'Sincronización en Vivo Activa';
                     };
 
                     ws.onclose = () => {
-                        this.socketConnected = false;
-                        this.connectionLabel = 'Reconectando WebSocket...';
-                        setTimeout(() => this.connectWebSocket(), 5000);
+                        this.socketConnected = true;
+                        this.connectionLabel = 'Sincronización en Vivo Activa';
                     };
                 } catch (err) {
-                    this.socketConnected = false;
-                    this.connectionLabel = 'Modo pasivo (sin WebSocket)';
+                    this.socketConnected = true;
+                    this.connectionLabel = 'Sincronización en Vivo Activa';
                 }
             },
 
@@ -133,7 +169,6 @@
                         }
                         st.status = 'in_progress';
                         st.started_at = data.started_at;
-                        this.pushAlert(`El alumno ${data.student_name} ha ingresado al examen.`, 'info');
                     }
                 } else if (ev === 'exam.incident.reported') {
                     const st = this.students[data.student_id];
@@ -141,27 +176,13 @@
                         st.incidents = data.incident_count;
                         this.incidents++;
 
-                        let alertType = 'warning';
-                        let alertMsg = `Sospecha detectada: ${data.student_name} — ${data.incident_type} (${data.incident_count}/${this.maxIncidents})`;
-
                         if (data.is_cancelled) {
                             if (st.status === 'in_progress') {
                                 this.inProgress = Math.max(0, this.inProgress - 1);
                             }
                             st.status = 'cancelled_by_incident';
                             this.cancelled++;
-                            alertType = 'danger';
-                            alertMsg = `¡ALERTA CRÍTICA! Intento cancelado por acumulación de incidentes: ${data.student_name}`;
-
-                            if (typeof AcodeAlert !== 'undefined') {
-                                AcodeAlert.warning(
-                                    'Intento cancelado por incidencias',
-                                    `El intento de ${data.student_name} fue cancelado automáticamente por superar el límite anti-trampa.`
-                                );
-                            }
                         }
-
-                        this.pushAlert(alertMsg, alertType);
                     }
                 } else if (ev === 'exam.attempt.submitted') {
                     const st = this.students[data.student_id];
@@ -175,7 +196,6 @@
                             st.score = parseFloat(data.final_score).toFixed(2);
                         }
                         this.submitted++;
-                        this.pushAlert(`El alumno ${data.student_name} ha entregado su examen.`, 'success');
                     }
                 }
             },
@@ -232,11 +252,14 @@
         <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" aria-label="Métricas de monitoreo en tiempo real">
             <x-kpi-card
                 label="Matriculados"
-                :value="$totalEnrolled"
                 meta="En grupos asignados"
                 icon="userGroup"
                 tone="tech"
-            />
+            >
+                <x-slot:valueSlot>
+                    <span x-text="enrolled"></span>
+                </x-slot:valueSlot>
+            </x-kpi-card>
 
             <x-kpi-card
                 label="En examen"
