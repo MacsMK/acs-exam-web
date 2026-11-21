@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        QuestionStoreRequest.php
  * Ubicación:      app/Http/Requests/QuestionStoreRequest.php
- * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V2 §6.3, Tabla 7 y Tabla 17)
+ * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §6.3, Tabla 7 y Tabla 18)
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        2.0.0
  * Fecha Creación: 26/10/2026

@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-table.td (MPW-V2 §7.3, §8.4) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-table.td (MPW-V3 §7.3, §8.4) --}}
 @props([
     'align' => 'left', // left, center, right
 ])

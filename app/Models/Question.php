@@ -15,7 +15,7 @@ declare(strict_types=1);
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_questions (tabla raíz polimórfica
  *                 del banco de preguntas, Módulo 5) con aislamiento por
- *                 docente (MPW-V2 §2.3.4, §6.6), catálogo normalizado de
+ *                 docente (MPW-V3 §2.3.4, §6.6), catálogo normalizado de
  *                 materias, SoftDeletes y scopes de búsqueda tolerante.
  * ============================================================================
  */
@@ -55,14 +55,14 @@ class Question extends Model
     ];
 
     /**
-     * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4).
+     * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3).
      *
      * @var string
      */
     protected $table = 'acs_questions';
 
     /**
-     * Columnas asignables en masa (MPW-V2 §2.3.1).
+     * Columnas asignables en masa (MPW-V3 §2.3.1).
      *
      * @var list<string>
      */
@@ -83,7 +83,7 @@ class Question extends Model
     /**
      * Resuelve el enlace de ruta omitiendo únicamente TenantTeacherScope para
      * permitir que la política/controlador emita 403 Forbidden ante intentos de
-     * IDOR (MPW-V2 §6.6), preservando SoftDeletingScope (404 en eliminados).
+     * IDOR (MPW-V3 §6.6), preservando SoftDeletingScope (404 en eliminados).
      *
      * @param mixed       $value Valor recibido en la ruta.
      * @param string|null $field Columna de búsqueda alternativa.
@@ -189,7 +189,7 @@ class Question extends Model
     }
 
     /**
-     * Scope local de aislamiento multi-docente (MPW-V2 §2.3.4, §6.6).
+     * Scope local de aislamiento multi-docente (MPW-V3 §2.3.4, §6.6).
      *
      * @param Builder<Question> $query     Constructor de la consulta Eloquent.
      * @param int               $teacherId Identificador del docente propietario.
@@ -513,7 +513,7 @@ class Question extends Model
     }
 
     /**
-     * Conversión de atributos (MPW-V2 Tabla 6 Bloque 16).
+     * Conversión de atributos (MPW-V3 Tabla 6 Bloque 16).
      *
      * @return array<string, string>
      */

@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: auth/verify-2fa.blade.php (MPW-V2 §7.3, §7.8.2, §8.5, Tabla 20, Tabla 28) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: auth/verify-2fa.blade.php (MPW-V3 §7.3, §7.8.2, §8.5, Tabla 10, Tabla 18) --}}
 @extends('layouts.guest')
 
 @section('title', 'Verificación en Dos Pasos (2FA)')

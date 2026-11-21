@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: questions/index.blade.php (MPW-V2 §7, §8, Tabla 20, Tabla 28, RF-BAN-001..012) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: questions/index.blade.php (MPW-V3 §7, §8, Tabla 10, Tabla 18, RF-BAN-001..012) --}}
 @extends('layouts.app')
 
 @section('title', 'Banco de preguntas')
@@ -64,7 +64,7 @@
             </div>
         @endif
 
-        {{-- Nivel 1: Cabecera Institucional y Acciones Clave (MPW-V2 §7.3, §7.8.2, §8.3) --}}
+        {{-- Nivel 1: Cabecera Institucional y Acciones Clave (MPW-V3 §7.3, §7.8.2, §8.3) --}}
         <x-page-header
             title="Banco de preguntas"
             subtitle="Organiza tus reactivos por materia y tipo, refuerza el blindaje anti-copia con paráfrasis equitativas e incorpora cuestionarios masivos desde CSV o Excel."
@@ -656,7 +656,7 @@
                 </x-table>
             </div>
 
-            {{-- Paginación universal alineada a la derecha (MPW-V2 §8.4) --}}
+            {{-- Paginación universal alineada a la derecha (MPW-V3 §8.4) --}}
             <div class="flex justify-end">
                 {{ $questions->links() }}
             </div>
@@ -855,7 +855,7 @@
                             </ul>
                         </div>
 
-                        {{-- Tabla fila por fila (MPW-V2 §8.4) --}}
+                        {{-- Tabla fila por fila (MPW-V3 §8.4) --}}
                         <x-table class="[&>div]:max-h-60 [&>div]:overflow-y-auto">
                             <x-slot:header>
                                 <x-table.th class="px-3 py-2.5">Fila</x-table.th>

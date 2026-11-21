@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        LandingPageTest.php
  * Ubicación:      tests/Feature/LandingPageTest.php
- * Requerimiento:  RF-SUS-001, RF-SUS-008, RW-01, MC-V2
+ * Requerimiento:  RF-SUS-001, RF-SUS-008, RW-01, MC-V3
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0
  * Descripción:    Pruebas de renderizado y visualización de planes en la Landing Page.

@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        RequestAiEvaluationRequest.php
  * Ubicación:      app/Http/Requests/RequestAiEvaluationRequest.php
- * Requerimiento:  RF-IAR-001..014, RF-EVA-004, ADR-059, MPW-V2 Tabla 17
+ * Requerimiento:  RF-IAR-001..014, RF-EVA-004, ADR-059, MPW-V3 Tabla 18
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 19/11/2026
@@ -63,7 +63,7 @@ class RequestAiEvaluationRequest extends FormRequest
     }
 
     /**
-     * Mensajes normalizados en español conforme a MPW-V2 Tabla 17 (sin punto final).
+     * Mensajes normalizados en español conforme a MPW-V3 Tabla 18 (sin punto final).
      *
      * @return array<string, string>
      */

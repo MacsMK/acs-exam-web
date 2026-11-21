@@ -14,7 +14,7 @@ declare(strict_types=1);
  *              entre paso 1 y 2) y lo usa `Auth\LoginController`, pero la
  *              API v1 móvil (`Api\V1\AuthController::twoFactor`) no lo
  *              recibe nunca — `AuthRepository.verifyTwoFactor` del
- *              cliente Flutter solo manda `{"code": "..."}` (MPM-V4 Tabla
+ *              cliente Flutter solo manda `{"code": "..."}` (MPM-V3 Tabla
  *              12) — así que localiza al usuario por el código vigente.
  * ============================================================================
  */

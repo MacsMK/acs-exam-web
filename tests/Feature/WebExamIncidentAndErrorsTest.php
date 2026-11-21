@@ -8,7 +8,7 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     WebExamIncidentAndErrorsTest.php
  * Ubicación:   tests/Feature/WebExamIncidentAndErrorsTest.php
- * Descripción: Certificación Feature de los ajustes normativos MPW-V2:
+ * Descripción: Certificación Feature de los ajustes normativos MPW-V3:
  *              reporte de incidentes anti-trampa desde navegador web
  *              (attempts.incident), protección IDOR multi-estudiante, vistas
  *              institucionales de error HTTP 404 con folio ACS- y limpieza de

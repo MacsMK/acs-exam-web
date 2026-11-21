@@ -6,7 +6,7 @@
     Ubicación:   resources/views/student/exams/instructions.blade.php
     Descripción: Pantalla de instrucciones previas y confirmación expresa antes
                  de iniciar examen contrarreloj (RF-EXA-028, RF-EXA-029, RW-25;
-                 MPW-V2 §7.3, §7.4.2, §7.7, §8.1–§8.3; MC-V2 §2.4).
+                 MPW-V3 §7.3, §7.4.2, §7.7, §8.1–§8.3; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')

@@ -32,7 +32,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 /**
- * Controlador del panel de resumen operativo post-login (Módulo 2, MPW-V2 §7.9).
+ * Controlador del panel de resumen operativo post-login (Módulo 2, MPW-V3 §7.9).
  *
  * @package App\Http\Controllers
  */

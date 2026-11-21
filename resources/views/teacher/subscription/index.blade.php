@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: teacher/subscription/index.blade.php (MPW-V2 §4.1.2, §7.3, §7.8.2, §8.5, §8.6, Tabla 20) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: teacher/subscription/index.blade.php (MPW-V3 §4.1.2, §7.3, §7.8.2, §8.5, §8.6, Tabla 10) --}}
 @extends('layouts.app')
 
 @section('title', 'Suscripción y límites de uso')
@@ -187,7 +187,7 @@
         </x-card>
     </div>
 
-    {{-- Catálogo de Paquetes Oficiales (MPW-V2 Tabla 15) --}}
+    {{-- Catálogo de Paquetes Oficiales (MPW-V3 Tabla 8) --}}
     <div class="space-y-4">
         <x-section-header
             title="Catálogo de paquetes docentes"

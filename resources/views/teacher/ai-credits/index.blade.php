@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: teacher/ai-credits/index.blade.php (MPW-V2 §4.1.2, §5.1.4, §7.3, §8.6, RF-IAR-001, RF-IAR-011, RF-EVA-008, ADR-059) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: teacher/ai-credits/index.blade.php (MPW-V3 §4.1.2, §5.1.4, §7.3, §8.6, RF-IAR-001, RF-IAR-011, RF-EVA-008, ADR-059) --}}
 @extends('layouts.app')
 
 @section('title', 'Créditos de inteligencia artificial')

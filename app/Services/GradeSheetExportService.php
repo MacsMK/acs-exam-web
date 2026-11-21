@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        GradeSheetExportService.php
  * Ubicación:      app/Services/GradeSheetExportService.php
- * Requerimiento:  RF-REP-014, RF-REP-015, RF-CAL-021, RW-28, RW-38 (MPW-V2 §6.11)
+ * Requerimiento:  RF-REP-014, RF-REP-015, RF-CAL-021, RW-28, RW-38 (MPW-V3 §6.11)
  * Autor:          Equipo de Ingeniería (A-Code Solutions)
  * Versión:        1.0.0
  * Descripción:    Servicio especializado en la generación estandarizada de hojas
@@ -34,7 +34,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class GradeSheetExportService
 {
-    // Paleta de Colores Institucionales A-Code Solutions (§8.1.1, MC-V2)
+    // Paleta de Colores Institucionales A-Code Solutions (§8.1.1, MC-V3)
     public const COLOR_PRIMARY = '142B4A';   // Azul Marino Oficial
     public const COLOR_TECH    = '2563A6';   // Azul Tecnológico
     public const COLOR_ACCENT  = '16A6A1';   // Verde Éxito / Aprobado
@@ -61,7 +61,7 @@ class GradeSheetExportService
 
         $weights = $this->parseFormulaWeights($period->formula);
 
-        // 1. Bloque Institucional y Metadatos Normativos (RF-REP-015, MC-V2)
+        // 1. Bloque Institucional y Metadatos Normativos (RF-REP-015, MC-V3)
         $this->applyInstitutionHeader($sheet, $group, $period, $teacher);
 
         // 2. Fila de Encabezados de Columnas

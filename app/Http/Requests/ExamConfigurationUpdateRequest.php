@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        ExamConfigurationUpdateRequest.php
  * Ubicación:      app/Http/Requests/ExamConfigurationUpdateRequest.php
- * Requerimiento:  RW-17..20, RW-25, MPW-V2 §6.3, Tabla 30
+ * Requerimiento:  RW-17..20, RW-25, MPW-V3 §6.3, Tabla 7
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.2.0
  * Fecha Creación: 09/11/2026

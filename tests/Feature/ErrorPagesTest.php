@@ -8,7 +8,7 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     ErrorPagesTest.php
  * Ubicación:   tests/Feature/ErrorPagesTest.php
- * Actividad:   ACT-WEB-055 (MPW-V2 §6.6.2, §7.3, §8.2)
+ * Actividad:   ACT-WEB-055 (MPW-V3 §6.6.2, §7.3, §8.2)
  * Descripción: Las páginas de error 403, 404 y 500 usan la plantilla común,
  *              los componentes del UI Kit y muestran el folio de incidente.
  * ============================================================================

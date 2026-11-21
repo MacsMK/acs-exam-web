@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        EloquentAttemptRepository.php
  * Ubicación:      app/Repositories/Eloquent/EloquentAttemptRepository.php
- * Requerimiento:  RF-EXA / RF-CAL (Aplicación y Calificación, MPW-V2 §2.4 y §6.7)
+ * Requerimiento:  RF-EXA / RF-CAL (Aplicación y Calificación, MPW-V3 §2.4 y §6.7)
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 28/10/2026

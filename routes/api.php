@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Descripción: API v1 consumida por la app móvil acs-exam-mobile (Sanctum).
  *              Contrato alineado 1:1 contra ApiEndpoints
  *              (acs-exam-mobile, lib/core/network/api_endpoints.dart,
- *              MPM-V4 Tabla 12) — ver docs/04_DECISIONES_ADR.md para el
+ *              MPM-V3 Tabla 12) — ver docs/04_DECISIONES_ADR.md para el
  *              detalle de cada punto que estaba "pendiente de
  *              confirmación con el equipo backend" (DE-03) y cómo se
  *              resolvió del lado del servidor.

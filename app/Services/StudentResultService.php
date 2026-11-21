@@ -47,7 +47,7 @@ class StudentResultService
 
     /**
      * Construye el resumen normalizado para la vista web de resultado de intento
-     * (MPW-V2 §5.2.2, ADR-050, ADR-056, ADR-059), evitando lógica de escala en Blade.
+     * (MPW-V3 §5.2.2, ADR-050, ADR-056, ADR-059), evitando lógica de escala en Blade.
      *
      * @param StudentAttempt $attempt Intento del alumno con relación exam disponible.
      * @return array{

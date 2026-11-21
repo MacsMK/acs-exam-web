@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Layout: exam-runner.blade.php (MPW-V2 §7.2, §7.7, §8.10.2, ADR-020, ADR-042) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Layout: exam-runner.blade.php (MPW-V3 §7.2, §7.7, §8.10.2, ADR-020, ADR-042) --}}
 <!DOCTYPE html>
 <html lang="es" class="h-full">
 <head>
@@ -68,7 +68,7 @@
     <header class="sticky top-0 z-40 h-14 bg-acode-navy text-white shadow-md border-b border-white/10 select-none">
         <div class="max-w-4xl mx-auto px-4 h-full flex items-center justify-between">
             <div class="flex items-center gap-3">
-                {{-- Logotipo oficial para fondo oscuro (MPW-V2 §8.1) --}}
+                {{-- Logotipo oficial para fondo oscuro (MPW-V3 §8.1) --}}
                 <img src="{{ asset('images/branding/logo-fondo-claro.png') }}" alt="A-Code Solutions" class="h-8 w-auto object-contain">
                 <span aria-hidden="true" class="h-6 w-px bg-white/20"></span>
                 <span class="text-xs text-white/70">Modo de evaluación supervisada</span>
@@ -119,7 +119,7 @@
             }
         });
 
-        // Sensor anti-fraude de pérdida de foco o cambio de pestaña (MPW-V2 §7.7, ADR-042, RNF-SEG-001)
+        // Sensor anti-fraude de pérdida de foco o cambio de pestaña (MPW-V3 §7.7, ADR-042, RNF-SEG-001)
         let focusLossWarnings = 0;
         document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'hidden') {

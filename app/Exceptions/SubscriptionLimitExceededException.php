@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        SubscriptionLimitExceededException.php
  * Ubicación:      app/Exceptions/SubscriptionLimitExceededException.php
- * Requerimiento:  RF-SUS-007, RF-SUS-010, RNF-SEG-003 (MPW-V2 §6.6.2)
+ * Requerimiento:  RF-SUS-007, RF-SUS-010, RNF-SEG-003 (MPW-V3 §6.6.2)
  * Autor:          Equipo de Ingeniería (A-Code Solutions)
  * Versión:        1.0.0
  * Descripción:    Excepción de dominio disparada cuando un docente alcanza
@@ -52,7 +52,7 @@ class SubscriptionLimitExceededException extends DomainException implements Http
     }
 
     /**
-     * Renderizado uniforme para Web y API v1 (MPW-V2 §6.6 / MPM-V4 §6.5.2).
+     * Renderizado uniforme para Web y API v1 (MPW-V3 §6.6 / MPM-V3 §6.5.2).
      */
     public function render(Request $request): RedirectResponse|JsonResponse
     {

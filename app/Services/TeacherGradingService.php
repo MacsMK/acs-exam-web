@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     TeacherGradingService.php
  * Ubicación:   app/Services/TeacherGradingService.php
  * Descripción: Consulta optimizada sin N+1 de calificaciones y estadísticas
- *              para docentes y alumnos (Módulo 8, MPW-V2 §6.1).
+ *              para docentes y alumnos (Módulo 8, MPW-V3 §6.1).
  * ============================================================================
  */
 

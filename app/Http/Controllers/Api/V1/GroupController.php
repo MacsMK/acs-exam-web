@@ -8,7 +8,7 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     GroupController.php
  * Ubicación:   app/Http/Controllers/Api/V1/GroupController.php
- * Descripción: api.v1.groups.* (MPM-V4 Tabla 12, MPW-V2 §6.1, §6.3) para la
+ * Descripción: api.v1.groups.* (MPM-V3 Tabla 12, MPW-V3 §6.1, §6.3) para la
  *              app móvil: listar grupos (según rol), unirse por folio o QR,
  *              verificar pertenencia por QR/folio, listar alumnos de un grupo
  *              y salir de un grupo (alumno).

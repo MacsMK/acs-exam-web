@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: auth/register-student.blade.php (MPW-V2 §7.3, §7.8.2, §8.5, §8.6.1, Tabla 20, Tabla 28) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: auth/register-student.blade.php (MPW-V3 §7.3, §7.8.2, §8.5, §8.6.1, Tabla 10, Tabla 18) --}}
 @extends('layouts.guest')
 
 @section('title', 'Registro de Alumno')
@@ -173,7 +173,7 @@
             </div>
         </form>
 
-        {{-- Modal de Términos de Servicio y Privacidad con scroll obligatorio (RF-AUT-011, MPW-V2 §8.6.1) --}}
+        {{-- Modal de Términos de Servicio y Privacidad con scroll obligatorio (RF-AUT-011, MPW-V3 §8.6.1) --}}
         <x-modal name="terms-modal" title="Aviso de Privacidad y Términos de Servicio" maxWidth="2xl">
             <div class="space-y-3">
                 <p class="text-xs text-slate-500">

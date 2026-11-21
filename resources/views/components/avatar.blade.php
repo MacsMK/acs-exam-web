@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-avatar (RF-AUT-008, RF-AUT-009; MPW-V2 §7.3, Tabla 16) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-avatar (RF-AUT-008, RF-AUT-009; MPW-V3 §7.3, Tabla 17) --}}
 {{-- Muestra la fotografía de perfil si existe; si no, la imagen predeterminada con la inicial del nombre (ADR-049). --}}
 @props([
     'user',              // cuenta cuyo avatar se muestra

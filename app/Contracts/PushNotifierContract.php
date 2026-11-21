@@ -8,7 +8,7 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     PushNotifierContract.php
  * Ubicación:   app/Contracts/PushNotifierContract.php
- * Descripción: Contrato del envío de notificaciones push (MPM-V4 §6.8). Aísla
+ * Descripción: Contrato del envío de notificaciones push (MPM-V3 §6.8). Aísla
  *              a Firebase Cloud Messaging detrás de una interfaz, igual que
  *              AiEvaluatorContract aísla a la IA: el resto del código no sabe
  *              si el envío es real (FcmPushNotifier) o está deshabilitado

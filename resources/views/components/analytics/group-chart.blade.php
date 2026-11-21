@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-analytics.group-chart (MPW-V2 §7.3, §7.9, Tabla 23) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-analytics.group-chart (MPW-V3 §7.3, §7.9) --}}
 @props([
     'passedCount' => 0,
     'failedCount' => 0,

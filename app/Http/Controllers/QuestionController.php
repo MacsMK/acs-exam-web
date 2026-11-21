@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        QuestionController.php
  * Ubicación:      app/Http/Controllers/QuestionController.php
- * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V2 §6.1, §6.3)
+ * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §6.1, §6.3)
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        2.0.0
  * Descripción:    Controlador delgado (Skinny Controller) del Banco de Reactivos:

@@ -7,7 +7,7 @@
     Descripción: Layout maestro de la plataforma.
                  Navegación lateral retráctil (docente, administración y
                  estudiantes), topbar institucional y footer de dos secciones
-                 (MPW-V2 §7.3, §7.4.2, §7.8.2, §8.10; MC-V2 §2.4).
+                 (MPW-V3 §7.3, §7.4.2, §7.8.2, §8.10; MC-V3 §2.4).
     ============================================================================
 --}}
 <!DOCTYPE html>
@@ -645,7 +645,7 @@
                     @yield('content')
                 </main>
 
-                {{-- Footer Institucional de Dos Secciones (MPW-V2 §8.10.7) --}}
+                {{-- Footer Institucional de Dos Secciones (MPW-V3 §8.10.7) --}}
                 <footer class="mt-auto border-t border-slate-200 bg-white py-6">
                     <div class="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-4 px-4 sm:px-6 lg:flex-row lg:px-8 text-xs text-slate-500">
                         <div class="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 text-center sm:text-left">

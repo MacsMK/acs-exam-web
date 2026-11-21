@@ -15,17 +15,17 @@ declare(strict_types=1);
  * Versión:        2.0.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Crea acs_users conforme al Manual de Base de Datos
- *                 (MBD-V4, Tabla 20, sección 5.5.1): super admin, docentes
+ *                 (MBD-V3 cap. 6; ficha BD-02 de acs_users): super admin, docentes
  *                 y alumnos en una sola tabla, diferenciados por la columna
  *                 "role". Contrato de autenticación: Laravel Fortify (web)
- *                 + Laravel Sanctum (móvil), hashing Argon2id (MBD-V4 §6.3).
+ *                 + Laravel Sanctum (móvil), hashing bcrypt (MPW-V3 §1.3.1 y MBD-V3 §7.4).
  *
  *                 CAMBIOS v2.0.0 (acuerdo de equipo con Balam, 26/10/2026,
  *                 sobre los 3 puntos abiertos de la v1.0.0):
  *                 - Se confirma first_name/last_name por separado (no
  *                   "name" único) y email obligatorio para los 3 roles.
  *                 - two_factor_enabled (boolean) se sustituye por el
- *                   mecanismo de código de un solo uso de MPM-V2 §6.6.1
+ *                   mecanismo de código de un solo uso de MPM-V3 §6.6.1
  *                   (enviado por correo/SMS, no TOTP de Fortify):
  *                   two_factor_code, two_factor_expires_at,
  *                   two_factor_verified_at. email_verified_at y
@@ -37,8 +37,8 @@ declare(strict_types=1);
  *                   cada inicio de sesión.
  *                 - phone se acorta a 10 dígitos (validación MX a 10
  *                   dígitos, confirmada por Balam para el rol docente en
- *                   MPW-V2); sigue siendo nullable porque para el alumno
- *                   el teléfono es opcional (MPM-V2, pantalla de registro
+ *                   MPW-V3); sigue siendo nullable porque para el alumno
+ *                   el teléfono es opcional (MPM-V3, pantalla de registro
  *                   de alumno) — la obligatoriedad condicionada por rol se
  *                   valida en los Form Request de Laravel, no en la
  *                   columna, ya que es una regla de negocio por rol y no

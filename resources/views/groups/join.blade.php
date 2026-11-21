@@ -5,7 +5,7 @@
     Archivo:     resources/views/groups/join.blade.php
     Ubicación:   resources/views/groups/join.blade.php
     Descripción: Formulario institucional para que el alumno se inscriba a un grupo
-                 mediante folio alfanumérico (MPW-V2 §7.3, §7.8.2, §8.5; MC-V2 §2.4).
+                 mediante folio alfanumérico (MPW-V3 §7.3, §7.8.2, §8.5; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')

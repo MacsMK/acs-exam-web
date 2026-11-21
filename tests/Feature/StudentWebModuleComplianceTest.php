@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     StudentWebModuleComplianceTest.php
  * Ubicación:   tests/Feature/StudentWebModuleComplianceTest.php
  * Descripción: Suite de certificación normativa y funcional del módulo web del
- *              estudiante en acs-exam-web (MPW-V2 §7 y §8, MC-V2, P-01 a P-226).
+ *              estudiante en acs-exam-web (MPW-V3 §7 y §8, MC-V3, P-01 a P-226).
  * ============================================================================
  */
 
@@ -94,7 +94,7 @@ class StudentWebModuleComplianceTest extends TestCase
         $response->assertSee('Aviso de privacidad');
         $response->assertSee('Cerrar sesión');
 
-        // Footer normativo de dos secciones (MPW-V2 §8.10.7)
+        // Footer normativo de dos secciones (MPW-V3 §8.10.7)
         $response->assertSee('© 2026 A-Code Solutions.');
         $response->assertSee('Plataforma Evaluadora de Exámenes');
         $response->assertSee('v1.0.0');

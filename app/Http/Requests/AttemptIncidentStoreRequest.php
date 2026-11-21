@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     AttemptIncidentStoreRequest.php
  * Ubicación:   app/Http/Requests/AttemptIncidentStoreRequest.php
  * Descripción: Validación de reporte de incidentes anti-fraude durante la
- *              aplicación de un examen (api.v1.exams.incidents, MPM-V4 §7.7).
+ *              aplicación de un examen (api.v1.exams.incidents, MPM-V3 §7.7).
  * ============================================================================
  */
 

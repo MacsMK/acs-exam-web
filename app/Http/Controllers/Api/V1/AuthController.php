@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        AuthController.php
  * Ubicación:      app/Http/Controllers/Api/V1/AuthController.php
- * Requerimiento:  RF-AUT-001..011, MPM-V4 §6.6.1, ADR-010, ADR-035, ADR-057
+ * Requerimiento:  RF-AUT-001..011, MPM-V3 §6.6.1, ADR-010, ADR-035, ADR-057
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        2.1.0
  * Fecha Creación: 26/10/2026
@@ -119,7 +119,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Completa el segundo factor (api.v1.auth.two-factor, MPM-V4 Tabla 12,
+     * Completa el segundo factor (api.v1.auth.two-factor, MPM-V3 Tabla 12,
      * ADR-010) y emite un token personal Sanctum para la app móvil.
      *
      * @param VerifyTwoFactorRequest $request Solicitud validada con código 2FA.

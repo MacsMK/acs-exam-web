@@ -17,7 +17,7 @@ declare(strict_types=1);
  * Descripción:    Certificación integral de la pasarela de pago simulada
  *                 (tarjeta Luhn y SPEI instantáneo), onboarding obligatorio
  *                 post-verificación docente con Prueba Gratuita (Freemium),
- *                 validaciones normativas MPW-V2 Tabla 17, protección estricta
+ *                 validaciones normativas MPW-V3 Tabla 18, protección estricta
  *                 sin persistencia de PAN/CVV, desbloqueo de cuotas y control
  *                 de acceso / visibilidad en el portal Superadministrador.
  * ============================================================================

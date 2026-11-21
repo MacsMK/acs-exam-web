@@ -8,7 +8,7 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     ExamController.php
  * Ubicación:   app/Http/Controllers/Api/V1/ExamController.php
- * Descripción: api.v1.exams.index y api.v1.exams.progress (MPM-V4 Tabla
+ * Descripción: api.v1.exams.index y api.v1.exams.progress (MPM-V3 Tabla
  *              12). La aplicación del examen en sí (take/answers/
  *              incidents) vive en AttemptController — este controlador
  *              solo lista y reporta avance, nunca cambia estado de

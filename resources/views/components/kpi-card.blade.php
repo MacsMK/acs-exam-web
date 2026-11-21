@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-kpi-card (MPW-V2 §7.3, §8.1.1, §8.2, MC-V2 §2.4) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-kpi-card (MPW-V3 §7.3, §8.1.1, §8.2, MC-V3 §2.4) --}}
 @props([
     'label',
     'value' => null,

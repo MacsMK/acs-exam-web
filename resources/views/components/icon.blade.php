@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-icon (MPW-V2 §7.3, §8.12, Tabla 31) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-icon (MPW-V3 §7.3, §8.12, Tabla 19) --}}
 @props([
     'name',
     'class' => 'w-5 h-5',

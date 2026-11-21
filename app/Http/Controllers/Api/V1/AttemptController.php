@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Ubicación:   app/Http/Controllers/Api/V1/AttemptController.php
  * Descripción: Aplicación contrarreloj del examen desde la app móvil
  *              (Módulo 7): api.v1.exams.take, api.v1.exams.answers y
- *              api.v1.exams.incidents (MPM-V4 Tabla 12, MPW-V2 §6.1, §6.3).
+ *              api.v1.exams.incidents (MPM-V3 Tabla 12, MPW-V3 §6.1, §6.3).
  * ============================================================================
  */
 
@@ -98,8 +98,8 @@ class AttemptController extends Controller
         }
 
         // late_answer: la respuesta llegó después del límite de la pregunta más
-        // la tolerancia de 3 s (MPW-V2 §5.6.1); se guardó con cero puntos y el
-        // cliente muestra el mensaje oficial de tiempo agotado (MPM-V4 §5.4.1).
+        // la tolerancia de 3 s (MPW-V3 §5.6.1); se guardó con cero puntos y el
+        // cliente muestra el mensaje oficial de tiempo agotado (MPM-V3 §5.4.1).
         return ApiResponse::success(array_merge($this->questionResponse($attempt), ['late_answer' => $isLate]));
     }
 

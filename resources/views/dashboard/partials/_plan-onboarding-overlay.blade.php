@@ -7,7 +7,7 @@
     Descripción: Capa bloqueante post-verificación docente sobre el Dashboard
                  con flujo Alpine.js en 2 pasos (selección de paquete o prueba
                  gratuita + pago simulado con tarjeta Luhn o SPEI) sin cierre
-                 por Escape, clic fuera ni botón X (ADR-060, MPW-V2 §7 y §8).
+                 por Escape, clic fuera ni botón X (ADR-060, MPW-V3 §7 y §8).
     ============================================================================
 --}}
 <div

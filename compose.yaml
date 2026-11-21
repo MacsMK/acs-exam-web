@@ -1,4 +1,4 @@
-# Entorno de contenedores oficial (MPW-V2 §1.3.4 / MBD-V4 §9.2): Laravel
+# Entorno de contenedores oficial (MPW-V3 §1.3.4 / MBD-V3 §2.3): Laravel
 # Sail. 3 servicios, sin Redis (cola/sesion/cache sobre el propio
 # PostgreSQL via QUEUE_CONNECTION=database):
 #   - laravel.test: aplicacion PHP 8.3 (servidor HTTP)

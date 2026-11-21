@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: account/profile.blade.php (RF-AUT-013; MPW-V2 §7.3, §8.6, §8.7, §8.10.4) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: account/profile.blade.php (RF-AUT-013; MPW-V3 §7.3, §8.6, §8.7, §8.10.4) --}}
 @extends('layouts.app')
 
 @section('title', 'Mi perfil')

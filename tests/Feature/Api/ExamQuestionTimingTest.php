@@ -14,8 +14,8 @@ declare(strict_types=1);
  * Autor:          Calvo Sandoval Miguel Alexander (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 03/11/2026
- * Descripción:    Verifica la doble validación de tiempo de MPW-V2 §5.6.1 y
- *                 MPM-V4 §5.4.1: el servidor es la autoridad. El tiempo
+ * Descripción:    Verifica la doble validación de tiempo de MPW-V3 §5.6.1 y
+ *                 MPM-V3 §5.4.1: el servidor es la autoridad. El tiempo
  *                 restante de la pregunta activa sale del reloj del
  *                 servidor (no se reinicia al reabrir la app), una respuesta
  *                 dentro del límite más 3 segundos se califica normal y una

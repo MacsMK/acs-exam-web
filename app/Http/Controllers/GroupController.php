@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     GroupController.php
  * Ubicación:   app/Http/Controllers/GroupController.php
  * Descripción: CRUD de grupos del docente + folio/QR y cierre semestral seguro
- *              (RW-32 a RW-36, RF-GRU-018, MPW-V2 §5.2.1, §6.1).
+ *              (RW-32 a RW-36, RF-GRU-018, MPW-V3 §5.2.1, §6.1).
  * ============================================================================
  */
 

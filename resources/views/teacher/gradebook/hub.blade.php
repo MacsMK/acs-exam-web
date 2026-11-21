@@ -6,7 +6,7 @@
     Ubicación:   resources/views/teacher/gradebook/hub.blade.php
     Descripción: Hub concentrador de control de calificaciones y periodos de
                  evaluación por grupo escolar, homologado con UI Kit A-Code
-                 (MPW-V2 §7.3, §7.4.2, §7.8.2, §8.1–§8.12; MC-V2 §2.4).
+                 (MPW-V3 §7.3, §7.4.2, §7.8.2, §8.1–§8.12; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')

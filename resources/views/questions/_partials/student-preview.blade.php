@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Parcial: questions/_partials/student-preview.blade.php (MPW-V2 §7, §8) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Parcial: questions/_partials/student-preview.blade.php (MPW-V3 §7, §8) --}}
 <aside class="lg:sticky lg:top-24 space-y-4" aria-label="Vista previa en tiempo real para el estudiante">
     <x-card class="border-slate-200 shadow-sm">
         <div class="flex items-center justify-between gap-2 pb-3 mb-4 border-b border-slate-100">
@@ -113,7 +113,7 @@
             ></textarea>
         </div>
 
-        {{-- Vista previa: Código fuente (MPW-V2 Tabla 13 & MC-V2 Tabla 4) --}}
+        {{-- Vista previa: Código fuente (MPW-V3 Tabla 14 & MC-V3 Tabla 4) --}}
         <div x-show="type === 'code'" x-cloak class="space-y-3">
             <div class="flex flex-wrap items-center justify-between gap-2">
                 <span class="font-mono text-xs font-semibold px-2.5 py-0.5 rounded-md bg-acode-tech/10 text-acode-tech border border-acode-tech/30" x-text="programmingLanguage || 'Código'"></span>

@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-group.qr-modal (MPW-V2 §7.3, §7.8.2, §8.6, §8.7, §8.9.2, Tabla 20, Tabla 31) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-group.qr-modal (MPW-V3 §7.3, §7.8.2, §8.6, §8.7, §8.9.2, Tabla 10) --}}
 @props([
     'name' => 'group-qr-modal',
     'groupName' => 'Grupo escolar',

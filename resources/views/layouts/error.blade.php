@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Plantilla: layouts/error.blade.php (MPW-V2 §6.6.2, §7.3, §8.1, §8.2, §8.10.7) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Plantilla: layouts/error.blade.php (MPW-V3 §6.6.2, §7.3, §8.1, §8.2, §8.10.7) --}}
 {{-- Plantilla común de las páginas institucionales de error (403, 404, 500): un solo encabezado, tarjeta y pie (ACT-WEB-055). --}}
 <!DOCTYPE html>
 <html lang="es" class="h-full">
@@ -58,7 +58,7 @@
 <body class="min-h-screen bg-acode-surface font-sans text-acode-ink antialiased flex flex-col">
     <header class="bg-acode-primary text-white border-b border-white/10 shadow-sm">
         <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-            {{-- Logotipo oficial para fondo oscuro, el mismo del menú lateral (MPW-V2 §8.1) --}}
+            {{-- Logotipo oficial para fondo oscuro, el mismo del menú lateral (MPW-V3 §8.1) --}}
             <a href="{{ url('/') }}" aria-label="Ir al inicio de A-Code Solutions">
                 <img src="{{ asset('images/branding/logo-fondo-claro.png') }}" alt="A-Code Solutions" class="h-10 w-auto object-contain">
             </a>
@@ -90,7 +90,7 @@
                     @yield('message')
                 </p>
 
-                {{-- Folio de incidente: código del sistema, por eso en Fira Code (MPW-V2 Tabla 13) --}}
+                {{-- Folio de incidente: código del sistema, por eso en Fira Code (MPW-V3 Tabla 14) --}}
                 <div class="mt-6 inline-flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3 rounded-xl bg-acode-surface border border-slate-200 px-4 py-3">
                     <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
                         Folio de incidente
@@ -113,7 +113,7 @@
         </section>
     </main>
 
-    {{-- Pie institucional (MPW-V2 §8.10.7) --}}
+    {{-- Pie institucional (MPW-V3 §8.10.7) --}}
     <footer class="py-6 text-center text-xs text-slate-500 select-none">
         <p>&copy; 2026 A-Code Solutions. Plataforma Evaluadora de Exámenes. Todos los derechos reservados.</p>
     </footer>

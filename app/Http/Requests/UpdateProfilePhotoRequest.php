@@ -13,7 +13,7 @@ declare(strict_types=1);
  * Autor:          Meneses Mendoza Elizabeth (A-Code Solutions)
  * Fecha Creación: 19/11/2026
  * Descripción:    Valida la nueva fotografía del estudiante: JPG o PNG de
- *                 hasta 5 MB, con mensajes conforme a MPW-V2 Tabla 17.
+ *                 hasta 5 MB, con mensajes conforme a MPW-V3 Tabla 18.
  * ============================================================================
  */
 

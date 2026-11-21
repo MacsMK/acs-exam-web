@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Ubicación:   app/Services/GroupEnrollmentService.php
  * Descripción: Servicio de dominio para gestión de grupos, inscripción por
  *              folio/QR, verificación de pertenencia, listado de exámenes
- *              disponibles y cierre semestral seguro (RF-GRU-018, MPW-V2 §5.2.1).
+ *              disponibles y cierre semestral seguro (RF-GRU-018, MPW-V3 §5.2.1).
  * ============================================================================
  */
 
@@ -38,7 +38,7 @@ class GroupEnrollmentService
 
     /**
      * Crea un grupo para el docente con un folio único garantizado mediante
-     * ciclo finito (MPW-V2 §5.2.1) validando cuotas de suscripción (RF-SUS-007, RF-SUS-010).
+     * ciclo finito (MPW-V3 §5.2.1) validando cuotas de suscripción (RF-SUS-007, RF-SUS-010).
      *
      * @param array<string, mixed> $data
      */
@@ -285,7 +285,7 @@ class GroupEnrollmentService
     }
 
     /**
-     * Genera un folio único con límite de reintentos finito (MPW-V2 §5.2.1).
+     * Genera un folio único con límite de reintentos finito (MPW-V3 §5.2.1).
      */
     public function generateUniqueFolio(): string
     {

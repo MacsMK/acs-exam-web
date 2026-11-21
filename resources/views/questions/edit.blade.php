@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: questions/edit.blade.php (MPW-V2 §7, §8, Tabla 20, RF-BAN-007) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: questions/edit.blade.php (MPW-V3 §7, §8, Tabla 10, RF-BAN-007) --}}
 @extends('layouts.app')
 
 @section('title', 'Editar Reactivo · ' . $question->title)

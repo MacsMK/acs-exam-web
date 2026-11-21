@@ -5,7 +5,7 @@
     Archivo:     resources/views/exams/student-index.blade.php
     Ubicación:   resources/views/exams/student-index.blade.php
     Descripción: Catálogo de exámenes asignados y disponibles para el alumno,
-                 homologado al UI Kit A-Code (MPW-V2 §5.2.2, §7.3, §7.8.2; MC-V2 §2.4).
+                 homologado al UI Kit A-Code (MPW-V3 §5.2.2, §7.3, §7.8.2; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')

@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     DeviceRegisterRequest.php
  * Ubicación:   app/Http/Requests/DeviceRegisterRequest.php
  * Descripción: Validación del registro de token FCM / dispositivo móvil
- *              (api.v1.devices.store, MPM-V4 §6.8, MPW-V2 §6.3).
+ *              (api.v1.devices.store, MPM-V3 §6.8, MPW-V3 §6.3).
  * ============================================================================
  */
 

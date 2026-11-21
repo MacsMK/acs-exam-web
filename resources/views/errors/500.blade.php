@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: errors/500.blade.php (MPW-V2 §6.6.2, §7.3, §8.1, §8.2) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: errors/500.blade.php (MPW-V3 §6.6.2, §7.3, §8.1, §8.2) --}}
 @extends('layouts.error')
 
 @section('code', '500')

@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        LandingController.php
  * Ubicación:      app/Http/Controllers/LandingController.php
- * Requerimiento:  RF-SUS-001 (Consulta de paquetes), RW-01, MC-V2
+ * Requerimiento:  RF-SUS-001 (Consulta de paquetes), RW-01, MC-V3
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 08/11/2026

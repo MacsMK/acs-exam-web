@@ -14,8 +14,8 @@ declare(strict_types=1);
  * Autor:          Equipo de Base de Datos (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 26/10/2026
- * Descripción:    Modelo Eloquent de acs_privacy_notices (MBD-V4 Tabla 29).
- *                 Expuesto por api.v1.privacy.show (MPM-V2 §6.6.3).
+ * Descripción:    Modelo Eloquent de acs_privacy_notices (ficha BD-02 de acs_privacy_notices).
+ *                 Expuesto por api.v1.privacy.show (MPM-V3 §6.6.3).
  * ============================================================================
  */
 
@@ -32,7 +32,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PrivacyNotice extends Model
 {
     /**
-     * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4).
+     * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3).
      *
      * @var string
      */

@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/monitor.blade.php (MPW-V2 §4.1.2, §7, §8, RW-12, RW-16) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/monitor.blade.php (MPW-V3 §4.1.2, §7, §8, RW-12, RW-16) --}}
 @extends('layouts.app')
 
 @section('title', 'Monitoreo en Vivo - ' . $exam->title)

@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     AttemptService.php
  * Ubicación:   app/Services/AttemptService.php
  * Descripción: Lógica transaccional de aplicación de examen (Módulo 7)
- *              compartida entre el panel web y la API móvil v1 (MPW-V2 §5.6,
+ *              compartida entre el panel web y la API móvil v1 (MPW-V3 §5.6,
  *              §6.4): validación server-side de ventana y cronómetro,
  *              calificación proporcional en relación de columnas (RF-EVA-002),
  *              omisión de IA en respuestas en blanco (RF-EVA-008) y exposición
@@ -37,8 +37,8 @@ class AttemptService
 {
     /**
      * Tolerancia técnica de red, en segundos, que se suma al límite de cada
-     * pregunta antes de considerar una respuesta extemporánea (MPW-V2 §5.6.1
-     * y MPM-V4 §5.4.1: tres segundos).
+     * pregunta antes de considerar una respuesta extemporánea (MPW-V3 §5.6.1
+     * y MPM-V3 §5.4.1: tres segundos).
      */
     public const QUESTION_TIME_TOLERANCE_SECONDS = 3;
 
@@ -164,7 +164,7 @@ class AttemptService
 
     /**
      * Segundos transcurridos en la pregunta activa según el reloj del
-     * servidor (MPW-V2 §5.6.1: el cliente nunca es la autoridad del tiempo).
+     * servidor (MPW-V3 §5.6.1: el cliente nunca es la autoridad del tiempo).
      */
     public function elapsedOnActiveQuestion(StudentAttempt $attempt): float
     {
@@ -174,7 +174,7 @@ class AttemptService
     /**
      * Segundos que le quedan al alumno en la pregunta activa, entre 0 y el
      * límite de la pregunta. Reabrir la app o volver a consultar el examen ya
-     * no devuelve el tiempo completo (MPM-V4 §5.4.1).
+     * no devuelve el tiempo completo (MPM-V3 §5.4.1).
      */
     public function remainingSeconds(StudentAttempt $attempt, int $timeLimitSeconds): int
     {
@@ -215,7 +215,7 @@ class AttemptService
      * Registra y califica la respuesta de una pregunta validando estado activo
      * y tiempo del lado servidor: la ventana del examen (con margen de 60
      * segundos) y el límite de la propia pregunta (con tolerancia de 3
-     * segundos, MPW-V2 §5.6.1). Una respuesta extemporánea se conserva para
+     * segundos, MPW-V3 §5.6.1). Una respuesta extemporánea se conserva para
      * la revisión docente, pero se califica con cero puntos y sin evaluador
      * de IA; el intento avanza igual a la siguiente pregunta.
      *
@@ -381,7 +381,7 @@ class AttemptService
 
     /**
      * Verifica la ventana y duración del intento en el servidor con margen de
-     * tolerancia de red de 60 segundos (MPW-V2 §5.6.1, RNF-CON-001).
+     * tolerancia de red de 60 segundos (MPW-V3 §5.6.1, RNF-CON-001).
      *
      * @throws DomainException
      */

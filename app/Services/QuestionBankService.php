@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        QuestionBankService.php
  * Ubicación:      app/Services/QuestionBankService.php
- * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V2 §6.4.1)
+ * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §6.4.1)
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        2.0.0
  * Descripción:    Servicio transaccional del Banco de Reactivos: gestión de las

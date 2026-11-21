@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     2026_10_26_190000_bd01_2026_022_create_acs_audit_logs_table.php
  * Ubicación:   database/migrations/
  * Versión:     1.0.0
- * Descripción: Bitácora de auditoría (MBD-V4 §6.4) — no viene del Listado
+ * Descripción: Bitácora de auditoría (MBD-V3 §7.4) — no viene del Listado
  *              de requerimientos, viene de que la materia es Auditoría de
  *              Sistemas. Registro inmutable: sin updated_at.
  * ============================================================================

@@ -57,7 +57,7 @@ class AuthService
     /** Intentos de verificación permitidos por código (RF-AUT-007). */
     public const TWO_FACTOR_MAX_ATTEMPTS = 5;
 
-    /** Mensaje cuando el código agotó sus intentos (MPW-V2 Tabla 17, plantilla 7). */
+    /** Mensaje cuando el código agotó sus intentos (MPW-V3 Tabla 18, plantilla 7). */
     public const TWO_FACTOR_LOCKED_MESSAGE = 'Superaste los 5 intentos permitidos para este código. Solicita un nuevo código';
 
     /**

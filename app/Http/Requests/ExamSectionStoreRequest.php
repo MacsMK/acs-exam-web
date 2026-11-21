@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     ExamSectionStoreRequest.php
  * Ubicación:   app/Http/Requests/ExamSectionStoreRequest.php
  * Descripción: Validación de armado de apartado de examen y sorteo del banco
- *              (RW-12, RW-13, MPW-V2 §6.3, Tabla 17).
+ *              (RW-12, RW-13, MPW-V3 §6.3, Tabla 18).
  * ============================================================================
  */
 

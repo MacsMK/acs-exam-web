@@ -18,8 +18,8 @@ lados.
 
 ## Entorno oficial: Docker + Laravel Sail
 
-Conforme al Manual de Programación Web con Laravel (MPW-V2 §1.3.4) y al
-Manual de Base de Datos (MBD-V4 §9.2), el entorno autoritativo del proyecto
+Conforme al Manual de Programación Web (MPW-V3 §1.3.4) y al
+Manual de Base de Datos (MBD-V3 §2.3), el entorno autoritativo del proyecto
 es el que levanta **Laravel Sail**, con 3 contenedores (`compose.yaml` en la
 raíz): `laravel.test` (la app, PHP 8.3), `pgsql` (PostgreSQL 15) y `reverb`
 (WebSockets). Sin Redis: cola y caché van sobre drivers nativos.
@@ -166,7 +166,7 @@ manuales oficiales, ver la carpeta [`docs/`](docs/README.md).
 
 ```
 app/
-  Models/          22 modelos Eloquent (prefijo de tabla acs_, MBD-V4)
+  Models/          22 modelos Eloquent (prefijo de tabla acs_, MBD-V3)
   Services/        Lógica de negocio compartida (web + API)
   Http/Controllers/        Panel web (sesión)
   Http/Controllers/Api/V1/ API para la app móvil (Sanctum)
@@ -181,7 +181,7 @@ routes/
   api.php          API v1 para Flutter
 ```
 
-## Desviaciones conocidas respecto al stack congelado (MPW-V2 Tabla 2)
+## Desviaciones conocidas respecto al stack congelado (MPW-V3 Tabla 2)
 
 Documentado explícitamente para que no parezca un descuido — recomendable
 pasarlo por un Formato DE-06 (Registro de cambios) con su justificación:
@@ -198,7 +198,7 @@ pasarlo por un Formato DE-06 (Registro de cambios) con su justificación:
   se prefirió lo segundo.
 - **Autenticación: `AuthService`/`LoginController` a mano, no Laravel
   Fortify.** El resultado funcional es el mismo (login + 2FA de 6 dígitos
-  por correo, igual que especifica MPM-V2 §6.6.1), pero no está construido
+  por correo, igual que especifica MPM-V3 §6.6.1), pero no está construido
   sobre el paquete Fortify que manda el manual. Se decidió no migrarlo
   bajo presión de la fecha de entrega: es la pieza con más riesgo de
   romper algo que ya funciona, para un beneficio principalmente de

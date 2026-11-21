@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Parcial: questions/_partials/form-fields.blade.php (MPW-V2 §7, §8, Tabla 20, Tabla 28, Tabla 29) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Parcial: questions/_partials/form-fields.blade.php (MPW-V3 §7, §8, Tabla 10, Tabla 18) --}}
 @props([
     'mode' => 'create',
     'subjects' => collect(),

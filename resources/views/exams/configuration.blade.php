@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/configuration.blade.php (MPW-V2 §4.1.2, §7, §8, ADR-043, ADR-056) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/configuration.blade.php (MPW-V3 §4.1.2, §7, §8, ADR-043, ADR-056) --}}
 @extends('layouts.app')
 
 @section('title', 'Configuración: ' . $exam->title)
@@ -218,7 +218,7 @@
                                         x-text="`${totalWeight.toFixed(2)} / 100.00 pts`"
                                     ></span>
                                 </div>
-                                {{-- Ancho en 12 pasos (w-N/12, Tailwind 3.4), sin style inline (MPW-V2 §7.4.2) --}}
+                                {{-- Ancho en 12 pasos (w-N/12, Tailwind 3.4), sin style inline (MPW-V3 §7.4.2) --}}
                                 <div class="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden" role="progressbar" aria-label="Suma de ponderaciones" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(progressPercent)">
                                     <div
                                         class="h-full rounded-full transition-all duration-200"

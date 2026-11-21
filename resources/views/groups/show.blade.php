@@ -7,7 +7,7 @@
     Descripción: Vista operativa detallada de grupo escolar y sus 4 apartados
                  (Estudiantes, Exámenes, Calificaciones y Periodos de Evaluación)
                  homologada con componentes canónicos A-Code Solutions, cero N+1
-                 y tokens oficiales acode-* (MPW-V2 §7.3, §7.4.2, §7.8.2, §8.1–§8.12).
+                 y tokens oficiales acode-* (MPW-V3 §7.3, §7.4.2, §7.8.2, §8.1–§8.12).
     ============================================================================
 --}}
 @extends('layouts.app')

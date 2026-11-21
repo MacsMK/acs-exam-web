@@ -7,8 +7,8 @@
     Descripción: Panel de control docente con arquitectura jerárquica de 4 niveles:
                  hero institucional y barra de acciones rápidas, tarjetas KPI
                  interactivas, analítica de distribución de calificaciones con
-                 grupos recientes y catálogo operativo de exámenes (MPW-V2 §4.1.2,
-                 §5.2.2, §7.2, §7.3, §7.8.2, §7.9, §8, Tabla 20; MC-V2 §2.4).
+                 grupos recientes y catálogo operativo de exámenes (MPW-V3 §4.1.2,
+                 §5.2.2, §7.2, §7.3, §7.8.2, §7.9, §8, Tabla 10; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')

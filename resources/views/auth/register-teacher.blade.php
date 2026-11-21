@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: auth/register-teacher.blade.php (MPW-V2 §4.1.2, §7.3, §7.8.2, §8.5, §8.6.1, §8.10.6, Tabla 20, Tabla 28, ADR-057) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: auth/register-teacher.blade.php (MPW-V3 §4.1.2, §7.3, §7.8.2, §8.5, §8.6.1, §8.10.6, Tabla 10, Tabla 18, ADR-057) --}}
 @extends('layouts.guest')
 
 @section('title', 'Registro de Docente')
@@ -107,7 +107,7 @@
             }
         }"
     >
-        {{-- Indicador compacto de asistente en 2 pasos (Ley de Hick, MPW-V2 §7.8.2) --}}
+        {{-- Indicador compacto de asistente en 2 pasos (Ley de Hick, MPW-V3 §7.8.2) --}}
         <div class="mb-5">
             <div class="flex items-center justify-between text-xs font-semibold mb-2">
                 <span x-bind:class="step === 1 ? 'text-acode-primary' : 'text-acode-accent'">
@@ -431,7 +431,7 @@
                     </div>
                 </div>
 
-                {{-- Botones de acción del Paso 2 (MPW-V2 §7.8.2: Volver / Enviar solicitud) --}}
+                {{-- Botones de acción del Paso 2 (MPW-V3 §7.8.2: Volver / Enviar solicitud) --}}
                 <div class="flex items-center gap-3 pt-2">
                     <x-button
                         type="button"
@@ -456,7 +456,7 @@
             </div>
         </form>
 
-        {{-- Modal de Términos de Servicio y Privacidad con scroll obligatorio (MPW-V2 §8.6.1) --}}
+        {{-- Modal de Términos de Servicio y Privacidad con scroll obligatorio (MPW-V3 §8.6.1) --}}
         <x-modal name="terms-modal" title="Aviso de Privacidad y Términos de Servicio" maxWidth="2xl">
             <div class="space-y-3">
                 <p class="text-xs text-slate-500">
@@ -539,7 +539,7 @@
 
 @push('scripts')
 <script>
-    {{-- Validación en cliente (MPW-V2 Tabla 17/18): mensajes en español bajo cada campo, sin punto final. --}}
+    {{-- Validación en cliente (MPW-V3 Tabla 18): mensajes en español bajo cada campo, sin punto final. --}}
     (function () {
         const form = document.getElementById('register-form');
 

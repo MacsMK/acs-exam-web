@@ -15,10 +15,10 @@ declare(strict_types=1);
  * Versión:        1.0.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Crea acs_subscription_packages: catálogo de los paquetes
- *                 de suscripción que puede contratar un docente (MBD-V4
- *                 Tabla 21 / Listado de requerimientos, tabla de paquetes).
+ *                 de suscripción que puede contratar un docente (ficha BD-02 de
+ *                 acs_subscription_packages / Listado de requerimientos, tabla de paquetes).
  *                 Nombres de nivel (tier) acordados con Balam el
- *                 26/10/2026: basic / advanced / pro (MPW-V2 Tabla 8),
+ *                 26/10/2026: basic / advanced / pro (MPW-V3 Tabla 8),
  *                 sustituyendo los nombres provisionales free/standard/
  *                 premium de la v1.0.0 anterior de este borrador.
  *                 max_concurrent_students no es nullable porque los 3
@@ -29,8 +29,7 @@ declare(strict_types=1);
  *                 si "pro" es realmente ilimitado o solo un número alto).
  *                 ai_requests_limit queda nullable y SIN resolver: el
  *                 Listado marca con nota al pie que el límite de uso de IA
- *                 por paquete "lo definirá el equipo" (MBD-V4 §8.3, punto
- *                 abierto aparte de los 3 ya cerrados hoy) — no se inventa
+ *                 por paquete "lo definirá el equipo" (punto abierto del Listado de requerimientos) — no se inventa
  *                 un número aquí.
  * ============================================================================
  */

@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-modal (MPW-V2 §7.3, §8.6, Tabla 29) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-modal (MPW-V3 §7.3, §8.6) --}}
 @props([
     'name' => 'modal',
     'title' => null,

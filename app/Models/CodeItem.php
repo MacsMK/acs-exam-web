@@ -31,14 +31,14 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
 class CodeItem extends Model
 {
     /**
-     * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4).
+     * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3).
      *
      * @var string
      */
     protected $table = 'acs_code_items';
 
     /**
-     * Columnas asignables en masa (MPW-V2 §2.3.1).
+     * Columnas asignables en masa (MPW-V3 §2.3.1).
      *
      * @var list<string>
      */
@@ -61,7 +61,7 @@ class CodeItem extends Model
     }
 
     /**
-     * Conversión de atributos (MPW-V2 Tabla 6 Bloque 16).
+     * Conversión de atributos (MPW-V3 Tabla 6 Bloque 16).
      *
      * @return array<string, string>
      */

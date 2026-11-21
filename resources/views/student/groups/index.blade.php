@@ -7,7 +7,7 @@
     Descripción: Catálogo de Mis Grupos del estudiante homologado al UI Kit A-Code.
                  Permite consultar asignaturas matriculadas, docentes titulares,
                  estado de grupo y salida voluntaria (RF-GRU-010, RF-GRU-012;
-                 MPW-V2 §7.3, §7.4.2, §7.8.2, §8.1–§8.6; MC-V2 §2.4).
+                 MPW-V3 §7.3, §7.4.2, §7.8.2, §8.1–§8.6; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')
@@ -281,7 +281,7 @@
         </div>
     </div>
 
-    {{-- Modal institucional de confirmación de salida voluntaria de grupo (MPW-V2 §8.6, RF-GRU-012) --}}
+    {{-- Modal institucional de confirmación de salida voluntaria de grupo (MPW-V3 §8.6, RF-GRU-012) --}}
     <div
         x-show="leaveModalOpen"
         x-cloak

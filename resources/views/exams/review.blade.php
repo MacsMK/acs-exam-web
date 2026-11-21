@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/review.blade.php (MPW-V2 §4.1.2, §7, §8, ADR-056) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/review.blade.php (MPW-V3 §4.1.2, §7, §8, ADR-056) --}}
 @extends('layouts.app')
 
 @section('title', 'Revisar y publicar: ' . $exam->title)

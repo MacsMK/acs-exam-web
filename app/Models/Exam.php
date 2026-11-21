@@ -15,7 +15,7 @@ declare(strict_types=1);
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_exams con relaciones, scopes de
  *                 aislamiento multi-docente, filtros de tablero y métodos de
- *                 ciclo de vida operativo (MPW-V2 §2.3.4, §6.6).
+ *                 ciclo de vida operativo (MPW-V3 §2.3.4, §6.6).
  * ============================================================================
  */
 
@@ -47,7 +47,7 @@ class Exam extends Model
     public const STATUS_CLOSED = 'closed';
 
     /**
-     * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4).
+     * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3).
      *
      * @var string
      */
@@ -75,7 +75,7 @@ class Exam extends Model
 
     /**
      * Resuelve el enlace de ruta sin scopes globales para permitir que la capa de
-     * políticas/controlador emita 403 Forbidden ante intentos de IDOR (MPW-V2 §6.6).
+     * políticas/controlador emita 403 Forbidden ante intentos de IDOR (MPW-V3 §6.6).
      *
      * @param mixed       $value Valor recibido en la ruta.
      * @param string|null $field Columna de búsqueda alternativa.
@@ -137,7 +137,7 @@ class Exam extends Model
     }
 
     /**
-     * Scope local de aislamiento multi-docente (MPW-V2 §2.3.4, §6.6).
+     * Scope local de aislamiento multi-docente (MPW-V3 §2.3.4, §6.6).
      *
      * @param Builder<Exam> $query     Constructor de la consulta Eloquent.
      * @param int           $teacherId Identificador del docente propietario.
@@ -234,7 +234,7 @@ class Exam extends Model
     }
 
     /**
-     * Scope local para filtrar exámenes publicados (MPW-V2 §2.3.4).
+     * Scope local para filtrar exámenes publicados (MPW-V3 §2.3.4).
      *
      * @param Builder<Exam> $query Constructor de la consulta Eloquent.
      * @return Builder<Exam>
@@ -245,7 +245,7 @@ class Exam extends Model
     }
 
     /**
-     * Scope local para filtrar exámenes publicados y vigentes en ventana de tiempo (MPW-V2 §2.3.4).
+     * Scope local para filtrar exámenes publicados y vigentes en ventana de tiempo (MPW-V3 §2.3.4).
      *
      * @param Builder<Exam> $query Constructor de la consulta Eloquent.
      * @return Builder<Exam>
@@ -367,7 +367,7 @@ class Exam extends Model
     }
 
     /**
-     * Conversión de atributos (MPW-V2 Tabla 6 Bloque 16).
+     * Conversión de atributos (MPW-V3 Tabla 6 Bloque 16).
      *
      * @return array<string, string>
      */

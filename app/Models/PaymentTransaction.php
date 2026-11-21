@@ -45,14 +45,14 @@ class PaymentTransaction extends Model
     public const METHOD_SPEI = 'spei';
 
     /**
-     * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4).
+     * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3).
      *
      * @var string
      */
     protected $table = 'acs_payment_transactions';
 
     /**
-     * Columnas asignables en masa (MPW-V2 §2.3.1: sin PAN completo ni CVV).
+     * Columnas asignables en masa (MPW-V3 §2.3.1: sin PAN completo ni CVV).
      *
      * @var list<string>
      */
@@ -164,7 +164,7 @@ class PaymentTransaction extends Model
     }
 
     /**
-     * Conversión de atributos (MPW-V2 Tabla 6 Bloque 16).
+     * Conversión de atributos (MPW-V3 Tabla 6 Bloque 16).
      *
      * @return array<string, string>
      */

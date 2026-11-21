@@ -6,7 +6,7 @@
     Ubicación:   resources/views/groups/create.blade.php
     Descripción: Formulario institucional para crear un nuevo grupo escolar
                  con generación automática de código QR y folio alfanumérico
-                 (MPW-V2 §7.3, §7.4.2, §8.1–§8.12; MC-V2 §2.4).
+                 (MPW-V3 §7.3, §7.4.2, §8.1–§8.12; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')

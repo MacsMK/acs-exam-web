@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-logo (MPW-V2 §7.3, §8.1.2) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-logo (MPW-V3 §7.3, §8.1.2) --}}
 {{-- Usa exclusivamente los archivos oficiales de public/images/branding; no dibujar el logotipo a mano. --}}
 @props([
     'variant' => 'full', // 'full' (fondo claro), 'compact' / 'symbol' (isotipo), 'negative' (fondo oscuro)

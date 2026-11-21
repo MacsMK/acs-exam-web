@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/take-exam.blade.php (MPW-V2 §5.5, §7.3, §7.5.1, §7.7, §7.8.2, §8.9.1, ADR-020, ADR-042) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/take-exam.blade.php (MPW-V3 §5.5, §7.3, §7.5.1, §7.7, §7.8.2, §8.9.1, ADR-020, ADR-042) --}}
 @extends('layouts.exam-runner')
 
 @section('title', 'Presentando examen · ' . $attempt->exam->title)
@@ -134,7 +134,7 @@
             </form>
         </x-card>
 
-        {{-- Formulario para Finalizar Examen con Confirmación SweetAlert2 (Tabla 20) --}}
+        {{-- Formulario para Finalizar Examen con Confirmación SweetAlert2 (MPW-V3 §8.6) --}}
         <div class="flex justify-end pt-2">
             <form
                 id="finish-exam-form"

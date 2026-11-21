@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        NormalizesQuestionInputs.php
  * Ubicación:      app/Http/Requests/Concerns/NormalizesQuestionInputs.php
- * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V2 §6.3, Tabla 17)
+ * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §6.3, Tabla 18)
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 12/11/2026
@@ -291,7 +291,7 @@ trait NormalizesQuestionInputs
     }
 
     /**
-     * Mensajes canónicos en español conforme a MPW-V2 Tabla 17.
+     * Mensajes canónicos en español conforme a MPW-V3 Tabla 18.
      *
      * @return array<string, string>
      */

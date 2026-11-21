@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/review-attempt.blade.php (MPW-V2 §4.1.2, §7, §8, RF-IAR-001..014, RF-EVA-004..009, RW-11, ADR-059) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/review-attempt.blade.php (MPW-V3 §4.1.2, §7, §8, RF-IAR-001..014, RF-EVA-004..009, RW-11, ADR-059) --}}
 @extends('layouts.app')
 
 @section('title', 'Recoteje de Intento: ' . ($attempt->student?->full_name ?? 'Estudiante'))

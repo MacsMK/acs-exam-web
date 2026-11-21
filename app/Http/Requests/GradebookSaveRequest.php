@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     GradebookSaveRequest.php
  * Ubicación:   app/Http/Requests/GradebookSaveRequest.php
  * Descripción: Validación de guardado de sábana de calificaciones por periodo
- *              (RF-CAL-009, RF-CAL-012, RF-CAL-021, MPW-V2 Tabla 17).
+ *              (RF-CAL-009, RF-CAL-012, RF-CAL-021, MPW-V3 Tabla 18).
  * ============================================================================
  */
 

@@ -8,7 +8,7 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     AuditLog.php
  * Ubicación:   app/Models/AuditLog.php
- * Descripción: Modelo Eloquent de acs_audit_logs (MBD-V4 §6.4). Registro
+ * Descripción: Modelo Eloquent de acs_audit_logs (MBD-V3 §7.4). Registro
  *              inmutable: sin updated_at.
  * ============================================================================
  */

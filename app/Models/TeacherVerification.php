@@ -71,14 +71,14 @@ class TeacherVerification extends Model
     ];
 
     /**
-     * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4).
+     * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3).
      *
      * @var string
      */
     protected $table = 'acs_teacher_verifications';
 
     /**
-     * Columnas asignables en masa (MPW-V2 §2.3.1: $guarded = [] prohibido).
+     * Columnas asignables en masa (MPW-V3 §2.3.1: $guarded = [] prohibido).
      *
      * @var list<string>
      */
@@ -217,7 +217,7 @@ class TeacherVerification extends Model
     }
 
     /**
-     * Conversión de atributos (MPW-V2 Tabla 6 Bloque 16).
+     * Conversión de atributos (MPW-V3 Tabla 6 Bloque 16).
      *
      * @return array<string, string>
      */

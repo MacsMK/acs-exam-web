@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-progress-bar (MPW-V2 §7.3, §7.4.2, §8.1) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-progress-bar (MPW-V3 §7.3, §7.4.2, §8.1) --}}
 {{-- Barra de progreso institucional: el avance se expresa con una clase de fracción de Tailwind (w-N/12), sin style="". --}}
 @props([
     'value' => 0,          // 0 a 100

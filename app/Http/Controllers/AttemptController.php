@@ -8,7 +8,7 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     AttemptController.php
  * Ubicación:   app/Http/Controllers/AttemptController.php
- * Descripción: Versión web (sesión) de la aplicación de examen (MPW-V2 §5.6,
+ * Descripción: Versión web (sesión) de la aplicación de examen (MPW-V3 §5.6,
  *              §6.1, §6.3): delega a AttemptService y bloquea envíos fuera
  *              de secuencia o en intentos inactivos.
  * ============================================================================
@@ -100,7 +100,7 @@ class AttemptController extends Controller
 
         $next = redirect()->route('attempts.show', $attempt);
 
-        // Mensaje oficial "Tiempo agotado" (MPW-V2 §7.8) cuando la respuesta llegó fuera de tiempo.
+        // Mensaje oficial "Tiempo agotado" (MPW-V3 §7.8) cuando la respuesta llegó fuera de tiempo.
         return $isLate
             ? $next->with('status', 'El tiempo asignado a este reactivo ha concluido. Tu avance fue guardado.')
             : $next;
@@ -108,7 +108,7 @@ class AttemptController extends Controller
 
     /**
      * Registra un incidente anti-trampa detectado en el navegador web durante
-     * el intento activo y emite el evento en vivo por Reverb (MPW-V2 §7.7, ADR-042).
+     * el intento activo y emite el evento en vivo por Reverb (MPW-V3 §7.7, ADR-042).
      */
     public function incident(AttemptIncidentStoreRequest $request, StudentAttempt $attempt): JsonResponse
     {

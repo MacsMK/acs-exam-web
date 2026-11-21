@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/review-index.blade.php (MPW-V2 §4.1.2, §7, §8, RF-IAR-002, RW-11) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/review-index.blade.php (MPW-V3 §4.1.2, §7, §8, RF-IAR-002, RW-11) --}}
 @extends('layouts.app')
 
 @section('title', 'Revisiones de Examen: ' . $exam->title)

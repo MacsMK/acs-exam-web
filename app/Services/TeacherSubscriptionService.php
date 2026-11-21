@@ -58,7 +58,7 @@ class TeacherSubscriptionService
     public const SIMULATED_BENEFICIARY = 'A-Code Solutions S.A. de C.V.';
 
     /**
-     * Cota máxima de reintentos al generar folios únicos de pago (MPW-V2 §5.2.1).
+     * Cota máxima de reintentos al generar folios únicos de pago (MPW-V3 §5.2.1).
      */
     private const MAX_REFERENCE_ATTEMPTS = 20;
 
@@ -516,7 +516,7 @@ class TeacherSubscriptionService
 
     /**
      * Genera un folio único con formato ACS-PAY-YYYYMMDD-XXXXXX respetando la cota
-     * máxima de reintentos establecida en MPW-V2 §5.2.1.
+     * máxima de reintentos establecida en MPW-V3 §5.2.1.
      *
      * @return string Folio único de transacción.
      *

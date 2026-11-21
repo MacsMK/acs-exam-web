@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-form.select (MPW-V2 §7.3, §8.3.4, §8.5, Tabla 28) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-form.select (MPW-V3 §7.3, §8.3.4, §8.5, Tabla 18) --}}
 @props([
     'name' => null,
     'size' => 'md', // sm, md, lg

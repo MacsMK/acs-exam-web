@@ -16,7 +16,7 @@ declare(strict_types=1);
  * Descripción:    Valida los datos del checkout de suscripción docente para
  *                 tarjeta bancaria (normalización, Luhn, vigencia MM/AA y CVV
  *                 diferenciado Amex/estándar) o transferencia SPEI instantánea,
- *                 con mensajes normalizados conforme a MPW-V2 Tabla 17.
+ *                 con mensajes normalizados conforme a MPW-V3 Tabla 18.
  * ============================================================================
  */
 
@@ -77,7 +77,7 @@ class ProcessSubscriptionCheckoutRequest extends FormRequest
     }
 
     /**
-     * Mensajes de validación normalizados conforme a MPW-V2 §8.11 / Tabla 17.
+     * Mensajes de validación normalizados conforme a MPW-V3 §8.11 / Tabla 18.
      *
      * @return array<string, string>
      */

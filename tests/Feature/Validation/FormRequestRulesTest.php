@@ -604,7 +604,7 @@ class FormRequestRulesTest extends TestCase
 
     /**
      * Los tres primeros valores son los que envía hoy la app móvil
-     * (ExamIncidentEnum.apiValue, MPM-V4 §7.7): si el backend dejara de
+     * (ExamIncidentEnum.apiValue, MPM-V3 §7.7): si el backend dejara de
      * aceptarlos, la app móvil rompería.
      *
      * @return array<string, array{0: array<string, mixed>, 1: ?string}>
@@ -681,7 +681,7 @@ class FormRequestRulesTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // Mensajes: cada error visible debe estar en español (MPW-V2)
+    // Mensajes: cada error visible debe estar en español (MPW-V3)
     // ------------------------------------------------------------------
 
     public function test_error_messages_are_in_spanish_for_registration(): void
@@ -703,7 +703,7 @@ class FormRequestRulesTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // Banco de Preguntas: MPW-V2 Tabla 17, Unicode, paridad e inmutabilidad
+    // Banco de Preguntas: MPW-V3 Tabla 18, Unicode, paridad e inmutabilidad
     // ------------------------------------------------------------------
 
     public function test_question_store_validation_messages_are_spanish_and_never_raw_translation_keys(): void

@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        AppServiceProvider.php
  * Ubicación:      app/Providers/AppServiceProvider.php
- * Requerimiento:  MPW-V2 §2.3, ADR-002, ADR-016, ADR-030, ADR-057
+ * Requerimiento:  MPW-V3 §2.3, ADR-002, ADR-016, ADR-030, ADR-057
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        2.0.0
  * Fecha Creación: 26/10/2026
@@ -70,7 +70,7 @@ class AppServiceProvider extends ServiceProvider
 
         // FCM_ENABLED=false (demo, desarrollo y CI) no contacta a Firebase;
         // true envía por FCM HTTP v1 con la cuenta de servicio de
-        // FCM_CREDENTIALS_PATH (MPM-V4 §6.8).
+        // FCM_CREDENTIALS_PATH (MPM-V3 §6.8).
         $this->app->bind(PushNotifierContract::class, static fn () => config('services.fcm.enabled')
             ? app(FcmPushNotifier::class)
             : app(NullPushNotifier::class));

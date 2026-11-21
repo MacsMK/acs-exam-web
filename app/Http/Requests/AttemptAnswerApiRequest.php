@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Ubicación:   app/Http/Requests/AttemptAnswerApiRequest.php
  * Descripción: Validación de respuesta por reactivo desde la API móvil v1
  *              con blindaje contra producto cartesiano en matching [CRÍTICA-03]
- *              (api.v1.exams.answers, MPM-V4 Tabla 12, MPW-V2 §6.3).
+ *              (api.v1.exams.answers, MPM-V3 Tabla 12, MPW-V3 §6.3).
  * ============================================================================
  */
 

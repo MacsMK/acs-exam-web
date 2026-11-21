@@ -100,7 +100,7 @@ class TeacherVerificationService
     private const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
     /**
-     * Cota máxima de intentos para generación de códigos únicos (MPW-V2 §5.2.1).
+     * Cota máxima de intentos para generación de códigos únicos (MPW-V3 §5.2.1).
      */
     private const MAX_CODE_GENERATION_ATTEMPTS = 30;
 
@@ -1516,7 +1516,7 @@ class TeacherVerificationService
 
     /**
      * Genera un código único con formato PREFIX-XXXX-XXXX dentro de una cota
-     * máxima acotada de intentos (MPW-V2 §5.2.1).
+     * máxima acotada de intentos (MPW-V3 §5.2.1).
      *
      * @param string $prefix Prefijo alfanumérico sanitizado.
      * @return string Código institucional único.

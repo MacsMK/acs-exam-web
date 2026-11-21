@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: questions/batch-create.blade.php (MPW-V2 §7, §8, Tabla 20) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: questions/batch-create.blade.php (MPW-V3 §7, §8, Tabla 10) --}}
 @extends('layouts.app')
 
 @section('title', 'Captura rápida en lote')

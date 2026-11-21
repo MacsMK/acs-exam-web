@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     StudentExamController.php
  * Ubicación:   app/Http/Controllers/StudentExamController.php
  * Descripción: Versión web (sesión) del lado alumno: unirse a un grupo por
- *              folio y ver los exámenes publicados asignados (MPW-V2 §6.1).
+ *              folio y ver los exámenes publicados asignados (MPW-V3 §6.1).
  * ============================================================================
  */
 

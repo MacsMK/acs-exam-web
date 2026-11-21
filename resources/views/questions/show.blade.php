@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: questions/show.blade.php (MPW-V2 §2.4, §5.2.2, §6.3, §7.3, §7.8, §8.4, §8.7, Tabla 20, Tabla 31, RF-BAN-007, RF-BAN-010) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: questions/show.blade.php (MPW-V3 §2.4, §5.2.2, §6.3, §7.3, §7.8, §8.4, §8.7, Tabla 10, RF-BAN-007, RF-BAN-010) --}}
 @extends('layouts.app')
 
 @section('title', 'Detalle del Reactivo · ' . $question->title)
@@ -320,7 +320,7 @@
                 </div>
                 @break
 
-            {{-- 4. Código Fuente (MPW-V2 Tabla 13 & MC-V2 Tabla 4) --}}
+            {{-- 4. Código Fuente (MPW-V3 Tabla 14 & MC-V3 Tabla 4) --}}
             @case('code')
                 <x-card>
                     <div class="space-y-5">

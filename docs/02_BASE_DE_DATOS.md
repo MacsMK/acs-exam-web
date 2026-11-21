@@ -7,7 +7,7 @@
 > migraciones mandan.
 
 Todas las tablas usan el prefijo **`acs_`** (convención del Manual de Base
-de Datos, MBD-V4) y todas tienen `timestamps()` salvo donde se indica lo
+de Datos, MBD-V3) y todas tienen `timestamps()` salvo donde se indica lo
 contrario. PK autoincremental (`id()`) en todas.
 
 ## 1. Usuarios y acceso (001–003)
@@ -21,7 +21,7 @@ contrario. PK autoincremental (`id()`) en todas.
   el registro.
 - `two_factor_code` (6 dígitos), `two_factor_expires_at`,
   `two_factor_verified_at` — **no** es TOTP de Fortify: es un código de un
-  solo uso enviado por correo, acorde a MPM-V2 §6.6.1 (ver ADR sobre por
+  solo uso enviado por correo, acorde a MPM-V3 §6.6.1 (ver ADR sobre por
   qué no se usó Fortify).
 
 **`acs_privacy_notices`** — versiones del aviso de privacidad (`version`,

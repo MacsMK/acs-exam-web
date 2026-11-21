@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: admin/invitations/index.blade.php (MPW-V2 §4.1.2, §7.3, §7.8.2, §8.5, §8.6, §8.7, Tabla 20) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: admin/invitations/index.blade.php (MPW-V3 §4.1.2, §7.3, §7.8.2, §8.5, §8.6, §8.7, Tabla 10) --}}
 @extends('layouts.app')
 
 @section('title', 'Códigos de Invitación Institucional')
