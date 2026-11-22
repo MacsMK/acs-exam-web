@@ -23,7 +23,6 @@ use DomainException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 
 class GroupController extends Controller
@@ -32,28 +31,9 @@ class GroupController extends Controller
     {
     }
 
-    public function index(): View|JsonResponse
+    public function index(): View
     {
         $groups = request()->user()->groupsAsTeacher()->withCount('students')->latest()->get();
-
-        if (request()->wantsJson()) {
-            return response()->json([
-                'total_groups' => $groups->count(),
-                'active_groups' => $groups->where('is_closed', false)->count(),
-                'closed_groups' => $groups->where('is_closed', true)->count(),
-                'total_students' => (int) $groups->sum('students_count'),
-                'groups' => $groups->map(static fn ($group) => [
-                    'id' => $group->id,
-                    'name' => $group->name,
-                    'subject' => $group->subject ?? 'Sin asignatura',
-                    'students_count' => (int) $group->students_count,
-                    'is_closed' => (bool) $group->is_closed,
-                    'folio' => $group->access_folio,
-                    'url' => route('groups.show', $group),
-                    'periods_url' => route('groups.periods.index', $group),
-                ])->values(),
-            ]);
-        }
 
         return view('groups.index', ['groups' => $groups]);
     }
@@ -70,7 +50,7 @@ class GroupController extends Controller
         return redirect()->route('groups.show', $group)->with('status', 'Grupo creado.');
     }
 
-    public function show(Group $group): View|JsonResponse
+    public function show(Group $group): View
     {
         $this->authorizeOwnership($group);
 
@@ -99,25 +79,6 @@ class GroupController extends Controller
             ->with(['student', 'exam'])
             ->latest('started_at')
             ->get();
-
-        if (request()->wantsJson()) {
-            return response()->json([
-                'students_count' => $group->students->count(),
-                'attempts_count' => $attempts->count(),
-                'submitted_count' => $attempts->where('status', 'submitted')->count(),
-                'in_progress_count' => $attempts->where('status', 'in_progress')->count(),
-                'students' => $group->students->map(static fn ($student) => [
-                    'id' => $student->id,
-                    'full_name' => $student->full_name,
-                    'initial' => strtoupper(substr($student->first_name ?? $student->full_name, 0, 1)),
-                    'email' => $student->email,
-                    'joined_at' => $student->pivot->joined_at
-                        ? \Carbon\Carbon::parse($student->pivot->joined_at)->format('d/m/Y H:i')
-                        : '—',
-                    'haystack' => mb_strtolower($student->full_name . ' ' . $student->email),
-                ])->values(),
-            ]);
-        }
 
         return view('groups.show', [
             'group' => $group,

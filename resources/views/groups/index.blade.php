@@ -37,30 +37,6 @@
                 'periods_url' => route('groups.periods.index', $group),
             ])->values()
         ),
-        totalStudentsCount: {{ (int) $groups->sum('students_count') }},
-
-        init() {
-            setInterval(() => this.pollGroupsState(), 3000);
-        },
-
-        async pollGroupsState() {
-            try {
-                const res = await fetch(window.location.href, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                });
-                if (!res.ok) return;
-                const data = await res.json();
-                if (!Array.isArray(data.groups)) return;
-
-                this.groups = data.groups;
-                this.totalStudentsCount = Number(data.total_students ?? this.totalStudentsCount);
-            } catch (e) {
-                // Reintenta en el siguiente ciclo
-            }
-        },
 
         get filteredGroups() {
             const term = this.search.trim().toLocaleLowerCase();
@@ -159,14 +135,11 @@
 
         <x-kpi-card
             label="Estudiantes inscritos"
+            :value="$groups->sum('students_count')"
             meta="Censo total en tus aulas"
             icon="user"
             tone="primary"
-        >
-            <x-slot:valueSlot>
-                <span x-text="totalStudentsCount">{{ $groups->sum('students_count') }}</span>
-            </x-slot:valueSlot>
-        </x-kpi-card>
+        />
     </div>
 
     {{-- Nivel 3: Barra de Búsqueda, Filtros de Estado y Alternador de Vista --}}

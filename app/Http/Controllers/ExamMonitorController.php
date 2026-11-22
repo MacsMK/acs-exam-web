@@ -20,7 +20,6 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use Illuminate\Contracts\View\View;
-use Illuminate\Http\JsonResponse;
 
 use App\Models\Exam;
 use App\Repositories\Contracts\ExamRepositoryInterface;
@@ -38,9 +37,9 @@ class ExamMonitorController extends Controller
     }
 
     /**
-     * Muestra el tablero de monitoreo en tiempo real del examen o devuelve el estado JSON en vivo.
+     * Muestra el tablero de monitoreo en tiempo real del examen.
      */
-    public function show(Exam $exam): View|JsonResponse
+    public function show(Exam $exam): View
     {
         $this->authorizeTeacher($exam);
 
@@ -78,17 +77,6 @@ class ExamMonitorController extends Controller
                 ],
             ];
         })->all();
-
-        if (request()->wantsJson()) {
-            return response()->json([
-                'totalEnrolled' => $totalEnrolled,
-                'inProgressCount' => $inProgressCount,
-                'submittedCount' => $submittedCount,
-                'cancelledCount' => $cancelledCount,
-                'totalIncidents' => $totalIncidents,
-                'studentsPayload' => $studentsPayload,
-            ]);
-        }
 
         $scheme = (string) config('broadcasting.connections.reverb.options.scheme', 'http');
         $reverbConfig = [
