@@ -868,24 +868,7 @@
                     },
 
                     get codeExtension() {
-                        const map = {
-                            python: 'py',
-                            py: 'py',
-                            javascript: 'js',
-                            js: 'js',
-                            typescript: 'ts',
-                            ts: 'ts',
-                            php: 'php',
-                            java: 'java',
-                            sql: 'sql',
-                            c: 'c',
-                            'c++': 'cpp',
-                            cpp: 'cpp',
-                            'c#': 'cs',
-                            csharp: 'cs',
-                            go: 'go',
-                            golang: 'go',
-                        };
+                        const map = @js(\App\Models\CodeItem::FILE_EXTENSIONS);
                         const normalized = (this.programmingLanguage || '').trim().toLowerCase();
                         return map[normalized] || 'txt';
                     },

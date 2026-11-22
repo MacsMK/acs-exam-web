@@ -258,6 +258,27 @@ class QuestionBankManagementTest extends TestCase
     }
 
     /**
+     * 3.5 Código fuente: el archivo usa la extensión real del lenguaje (solution.py)
+     *     y las instrucciones técnicas, al ser opcionales, no se muestran vacías.
+     */
+    public function test_code_question_detail_uses_file_extension_and_hides_empty_instructions(): void
+    {
+        $teacher = $this->createTeacher();
+        $codeQuestion = $this->createCodeQuestion($teacher, ['title' => 'Código sin instrucciones']);
+        $codeQuestion->questionable->update(['programming_language' => 'Python', 'instructions' => '']);
+
+        $response = $this->actingAs($teacher)->get(route('questions.show', $codeQuestion));
+
+        $response->assertOk();
+        $response->assertSee('solution.py');
+        $response->assertDontSee('solution.python');
+        $response->assertDontSee('Instrucciones Técnicas');
+
+        $this->assertSame('cpp', (new CodeItem(['programming_language' => 'C++']))->fileExtension());
+        $this->assertSame('txt', (new CodeItem(['programming_language' => 'Otro']))->fileExtension());
+    }
+
+    /**
      * 4. Certifica la edición in-situ cuando un reactivo NO está vinculado a ningún examen:
      *    Se modifica directamente el registro existente conservando su ID original.
      */

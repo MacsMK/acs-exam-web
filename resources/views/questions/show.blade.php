@@ -341,15 +341,15 @@
                             </div>
                         </div>
 
-                        {{-- Instrucciones técnicas --}}
-                        <div>
-                            <span class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                Instrucciones Técnicas
-                            </span>
-                            <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 leading-5">
-                                {{ $question->questionable->instructions }}
+                        {{-- Instrucciones técnicas (opcionales: solo se muestran si existen) --}}
+                        @if (filled($question->questionable->instructions))
+                            <div>
+                                <span class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                                    Instrucciones Técnicas
+                                </span>
+                                <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 leading-5 whitespace-pre-wrap">{{ $question->questionable->instructions }}</div>
                             </div>
-                        </div>
+                        @endif
 
                         {{-- Código inicial si aplica --}}
                         @if (!empty($question->questionable->starter_code))
@@ -362,7 +362,7 @@
                                 </div>
                                 <div class="rounded-lg overflow-hidden border border-slate-300 border-l-4 border-l-acode-primary bg-slate-100">
                                     <div class="bg-white/80 px-3.5 py-1.5 border-b border-slate-200 text-xs font-mono text-slate-600 flex items-center justify-between">
-                                        <span>starter_code.{{ strtolower($question->questionable->programming_language ?? 'txt') }}</span>
+                                        <span>starter_code.{{ $question->questionable->fileExtension() }}</span>
                                         <span class="uppercase tracking-wider text-slate-500 font-sans font-semibold">Sólo lectura</span>
                                     </div>
                                     <pre class="p-3.5 text-xs font-mono text-acode-ink overflow-x-auto leading-5"><code>{{ $question->questionable->starter_code }}</code></pre>
@@ -380,7 +380,7 @@
                             </div>
                             <div class="rounded-lg overflow-hidden border border-slate-300 border-l-4 border-l-acode-accent bg-slate-100">
                                 <div class="bg-white/80 px-3.5 py-1.5 border-b border-slate-200 text-xs font-mono text-slate-600 flex items-center justify-between">
-                                    <span>solution.{{ strtolower($question->questionable->programming_language ?? 'txt') }}</span>
+                                    <span>solution.{{ $question->questionable->fileExtension() }}</span>
                                     <span class="uppercase tracking-wider text-acode-accent font-sans font-semibold">Respuesta Correcta</span>
                                 </div>
                                 <pre class="p-3.5 text-xs font-mono text-acode-ink overflow-x-auto leading-5"><code>{{ $question->questionable->reference_solution }}</code></pre>
