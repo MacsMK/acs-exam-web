@@ -17,7 +17,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'A-Code Solutions') · Plataforma de Exámenes</title>
-    <link rel="icon" type="image/png" href="{{ asset('images/branding/isotipo.png') }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/branding/favicon-32.png') }}" sizes="32x32">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

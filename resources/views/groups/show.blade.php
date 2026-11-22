@@ -29,47 +29,12 @@
         gradeSearch: '',
         gradeStatus: 'all',
 
-        studentsCount: {{ $studentsCount }},
-        submittedCount: {{ $submittedCount }},
-        inProgressCount: {{ $inProgressCount }},
-        attemptsCount: {{ $attempts->count() }},
-
         studentsIndex: @js(
             $group->students->map(fn ($student) => [
                 'id' => $student->id,
-                'full_name' => $student->full_name,
-                'initial' => strtoupper(substr($student->first_name ?? $student->full_name, 0, 1)),
-                'email' => $student->email,
-                'joined_at' => $student->pivot->joined_at ? \Carbon\Carbon::parse($student->pivot->joined_at)->format('d/m/Y H:i') : '—',
                 'haystack' => mb_strtolower($student->full_name . ' ' . $student->email),
             ])->values()
         ),
-
-        init() {
-            setInterval(() => this.pollGroupDetail(), 3000);
-        },
-
-        async pollGroupDetail() {
-            try {
-                const res = await fetch(window.location.href, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                });
-                if (!res.ok) return;
-                const data = await res.json();
-                if (!Array.isArray(data.students)) return;
-
-                this.studentsIndex = data.students;
-                this.studentsCount = Number(data.students_count ?? data.students.length);
-                this.submittedCount = Number(data.submitted_count ?? this.submittedCount);
-                this.inProgressCount = Number(data.in_progress_count ?? this.inProgressCount);
-                this.attemptsCount = Number(data.attempts_count ?? this.attemptsCount);
-            } catch (e) {
-                // Reintenta en el siguiente ciclo
-            }
-        },
 
         attemptsIndex: @js(
             $attempts->map(fn ($attempt) => [
@@ -193,8 +158,8 @@
 
             <span class="inline-flex items-center gap-1.5 text-slate-600">
                 <x-icon name="userGroup" class="w-3.5 h-3.5 text-acode-tech" />
-                <strong class="text-acode-primary" x-text="studentsCount">{{ $studentsCount }}</strong>
-                <span x-text="studentsCount === 1 ? 'estudiante inscrito' : 'estudiantes inscritos'">{{ $studentsCount === 1 ? 'estudiante inscrito' : 'estudiantes inscritos' }}</span>
+                <strong class="text-acode-primary">{{ $studentsCount }}</strong>
+                {{ $studentsCount === 1 ? 'estudiante inscrito' : 'estudiantes inscritos' }}
             </span>
         </x-slot:meta>
 
@@ -255,14 +220,11 @@
     <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <x-kpi-card
             label="Estudiantes inscritos"
+            :value="$studentsCount"
             meta="Alumnos matriculados"
             nav-icon="groups"
             tone="tech"
-        >
-            <x-slot:valueSlot>
-                <span x-text="studentsCount">{{ $studentsCount }}</span>
-            </x-slot:valueSlot>
-        </x-kpi-card>
+        />
 
         <x-kpi-card
             label="Exámenes asignados"
@@ -342,20 +304,22 @@
             title="Censo de estudiantes"
             :subtitle="$studentsCount . ' ' . ($studentsCount === 1 ? 'integrante matriculado' : 'integrantes matriculados') . ' en este grupo.'"
         >
-            <x-slot:actions>
-                <div class="w-full sm:w-72" x-show="studentsIndex.length > 0">
-                    <x-form.input
-                        type="search"
-                        prefixIcon="search"
-                        x-model="studentSearch"
-                        placeholder="Buscar por nombre o correo..."
-                        aria-label="Buscar estudiante"
-                    />
-                </div>
-            </x-slot:actions>
+            @if ($group->students->isNotEmpty())
+                <x-slot:actions>
+                    <div class="w-full sm:w-72">
+                        <x-form.input
+                            type="search"
+                            prefixIcon="search"
+                            x-model="studentSearch"
+                            placeholder="Buscar por nombre o correo..."
+                            aria-label="Buscar estudiante"
+                        />
+                    </div>
+                </x-slot:actions>
+            @endif
         </x-section-header>
 
-        <div x-show="studentsIndex.length === 0">
+        @if ($group->students->isEmpty())
             <x-empty-state
                 icon="userGroup"
                 title="Aún no hay estudiantes en este grupo"
@@ -371,9 +335,7 @@
                     Abrir QR
                 </x-button>
             </x-empty-state>
-        </div>
-
-        <div x-show="studentsIndex.length > 0">
+        @else
             <div x-show="filteredStudents.length > 0">
                 <x-table>
                     <x-slot:header>
@@ -383,24 +345,36 @@
                         <x-table.th align="center">Estado</x-table.th>
                     </x-slot:header>
 
-                    <template x-for="student in filteredStudents" :key="student.id">
-                        <tr>
+                    @forelse ($group->students as $student)
+                        <tr
+                            x-show="!studentSearch.trim() || @js(mb_strtolower($student->full_name . ' ' . $student->email)).includes(studentSearch.toLowerCase().trim())"
+                        >
                             <x-table.td>
                                 <div class="flex items-center gap-3">
-                                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-acode-primary text-sm font-bold text-white shadow-sm" x-text="student.initial"></div>
+                                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-acode-primary text-sm font-bold text-white shadow-sm">
+                                        {{ strtoupper(substr($student->first_name ?? $student->full_name, 0, 1)) }}
+                                    </div>
                                     <div>
-                                        <p class="font-bold text-acode-primary leading-tight" x-text="student.full_name"></p>
-                                        <p class="text-xs text-slate-400 mt-0.5 font-mono" x-text="'ID #' + student.id"></p>
+                                        <p class="font-bold text-acode-primary leading-tight">
+                                            {{ $student->full_name }}
+                                        </p>
+                                        <p class="text-xs text-slate-400 mt-0.5 font-mono">
+                                            ID #{{ $student->id }}
+                                        </p>
                                     </div>
                                 </div>
                             </x-table.td>
 
                             <x-table.td>
-                                <a :href="'mailto:' + student.email" class="text-xs sm:text-sm font-medium text-acode-tech hover:underline" x-text="student.email"></a>
+                                <a href="mailto:{{ $student->email }}" class="text-xs sm:text-sm font-medium text-acode-tech hover:underline">
+                                    {{ $student->email }}
+                                </a>
                             </x-table.td>
 
                             <x-table.td>
-                                <span class="text-xs text-slate-600" x-text="student.joined_at"></span>
+                                <span class="text-xs text-slate-600">
+                                    {{ $student->pivot->joined_at ? \Carbon\Carbon::parse($student->pivot->joined_at)->format('d/m/Y H:i') : '—' }}
+                                </span>
                             </x-table.td>
 
                             <x-table.td align="center">
@@ -409,7 +383,18 @@
                                 </x-badge>
                             </x-table.td>
                         </tr>
-                    </template>
+                    @empty
+                        <tr>
+                            <td colspan="4" class="p-0">
+                                <x-empty-state
+                                    class="border-0 shadow-none rounded-none"
+                                    icon="userGroup"
+                                    title="Sin estudiantes registrados"
+                                    message="Aún no hay alumnos inscritos en este grupo."
+                                />
+                            </td>
+                        </tr>
+                    @endforelse
                 </x-table>
             </div>
 
@@ -424,7 +409,7 @@
                     </x-button>
                 </x-empty-state>
             </div>
-        </div>
+        @endif
     </section>
 
     {{-- Nivel 4B: Apartado 2 - Exámenes --}}

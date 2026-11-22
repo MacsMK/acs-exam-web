@@ -36,19 +36,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (! Schema::hasColumn('acs_teacher_verifications', 'plan_onboarding_completed_at')) {
-            Schema::table('acs_teacher_verifications', function (Blueprint $table): void {
-                $table->timestamp('plan_onboarding_completed_at')
-                    ->nullable()
-                    ->after('reviewed_at');
-            });
-        }
+        Schema::table('acs_teacher_verifications', function (Blueprint $table): void {
+            $table->timestamp('plan_onboarding_completed_at')
+                ->nullable()
+                ->after('reviewed_at');
+        });
 
         DB::table('acs_teacher_verifications')
             ->where('status', 'approved')
             ->whereNull('plan_onboarding_completed_at')
             ->update([
-                'plan_onboarding_completed_at' => DB::raw('COALESCE(reviewed_at, CURRENT_TIMESTAMP)'),
+                'plan_onboarding_completed_at' => DB::raw('COALESCE(reviewed_at, NOW())'),
             ]);
 
         Schema::create('acs_payment_transactions', function (Blueprint $table): void {
