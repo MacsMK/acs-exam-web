@@ -183,7 +183,7 @@
                     label="Grupos escolares creados"
                 />
                 @if (! $activePackage && ! ($isSuspendedSubscription ?? false) && $cumulativeGroupsCount >= 1)
-                    <p class="text-xs text-acode-danger mt-1.5">Alcanzaste el límite de tu prueba gratuita. Contrata un paquete para agregar más grupos.</p>
+                    <p class="text-xs text-acode-warning-dark mt-1.5">Alcanzaste el límite de tu prueba gratuita. Contrata un paquete para agregar más grupos.</p>
                 @endif
             </div>
 

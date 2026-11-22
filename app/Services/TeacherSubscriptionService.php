@@ -720,8 +720,10 @@ class TeacherSubscriptionService
 
     private function renewalAttemptedToday(TeacherSubscription $subscription): bool
     {
+        // Solo cuentan los rechazos: un cobro aprobado ya movió el vencimiento al mes siguiente
         return PaymentTransaction::where('teacher_subscription_id', $subscription->id)
             ->where('concept', PaymentTransaction::CONCEPT_RENEWAL)
+            ->where('status', PaymentTransaction::STATUS_FAILED)
             ->where('created_at', '>=', now()->startOfDay())
             ->exists();
     }
@@ -853,7 +855,7 @@ class TeacherSubscriptionService
 
         $remaining = max(0, $limit - $used);
         $percent = $limit > 0 ? min(100, (int) round(($used / $limit) * 100)) : 100;
-        $variant = $percent >= 90 ? 'danger' : ($percent >= 75 ? 'warning' : 'tech');
+        $variant = $percent >= 75 ? 'warning' : 'tech';
 
         return [
             'used' => $used,

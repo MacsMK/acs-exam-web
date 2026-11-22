@@ -178,6 +178,19 @@ class SubscriptionRenewalTest extends TestCase
         $this->assertSame($this->package('advanced')->id, $subscription->fresh()->subscription_package_id);
     }
 
+    public function test_a_renewal_paid_today_does_not_block_a_later_due_charge(): void
+    {
+        $subscription = $this->subscription('4242', now()->subHour());
+        $this->artisan('subscriptions:renew');
+
+        // Vuelve a vencer el mismo día con una tarjeta sin fondos: debe intentarse el cobro
+        $subscription->refresh()->update(['card_last4' => '0002', 'expires_at' => now()->subMinute()]);
+        $this->artisan('subscriptions:renew');
+
+        $this->assertSame('overdue', $subscription->fresh()->payment_status);
+        $this->assertSame(1, PaymentTransaction::where('teacher_subscription_id', $subscription->id)->where('status', 'failed')->count());
+    }
+
     public function test_upgrade_is_rejected_when_the_renewal_is_cancelled(): void
     {
         $subscription = $this->subscription('4242', now()->addDays(10));

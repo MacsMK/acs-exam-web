@@ -398,7 +398,7 @@ class SubscriptionLimitService
             $limit = self::FREEMIUM_MAX_AI_EVALUATIONS;
             $remaining = max(0, $limit - $used);
             $percent = min(100, (int) round(($used / max(1, $limit)) * 100));
-            $variant = $percent >= 90 ? 'danger' : ($percent >= 75 ? 'warning' : 'tech');
+            $variant = $percent >= 75 ? 'warning' : 'tech';
 
             return [
                 'used' => $used,
@@ -443,7 +443,7 @@ class SubscriptionLimitService
 
         $remaining = max(0, $limit - $used);
         $percent = min(100, (int) round(($used / max(1, $limit)) * 100));
-        $variant = $percent >= 90 ? 'danger' : ($percent >= 75 ? 'warning' : 'tech');
+        $variant = $percent >= 75 ? 'warning' : 'tech';
 
         return [
             'used' => $used,
