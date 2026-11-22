@@ -14,3 +14,6 @@ Schedule::command('exams:push-due')->everyMinute()->withoutOverlapping();
 
 // Vigencia de grupos cerrados: aviso a 30 días y eliminación a los 12 meses (RF-GRU-015, CAM-009).
 Schedule::command('groups:purge-expired')->dailyAt('03:00')->withoutOverlapping();
+
+// Renovación mensual domiciliada con reintentos de 3 días (RF-SUS-005, CAM-010).
+Schedule::command('subscriptions:renew')->dailyAt('02:00')->withoutOverlapping();

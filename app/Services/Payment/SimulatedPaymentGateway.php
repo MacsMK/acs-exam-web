@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Services/Payment/SimulatedPaymentGateway.php
  * Requerimiento:  RF-SUS-013, RF-SUS-015, ADR-058 (Pasarela de Pago Simulada)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Fecha Creación: 18/11/2026
  * Descripción:    Implementación simulada ('simulated') de PaymentGatewayContract
  *                 con soporte dual para tarjeta bancaria (validación Luhn y
@@ -185,6 +185,58 @@ class SimulatedPaymentGateway implements PaymentGatewayContract
             'failure_message' => null,
             'metadata' => [
                 'simulated' => true,
+                'authorization_code' => 'SIM-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            ],
+        ];
+    }
+
+    /**
+     * Cobro simulado de renovación con la tarjeta domiciliada (RF-SUS-005). Aplica las
+     * mismas reglas deterministas de rechazo por los últimos 4 dígitos que process().
+     *
+     * @return array<string, mixed>
+     */
+    public function chargeStoredCard(
+        SubscriptionPackage $package,
+        User $teacher,
+        string $cardBrand,
+        string $cardLast4,
+        ?string $cardHolderName,
+    ): array {
+        $base = [
+            'provider' => self::PROVIDER_CARD,
+            'method' => PaymentTransaction::METHOD_CARD,
+            'card_brand' => $cardBrand,
+            'card_last4' => $cardLast4,
+            'card_holder_name' => $cardHolderName,
+            'spei_tracking_key' => null,
+        ];
+
+        if ($cardLast4 === '0002') {
+            return $base + [
+                'approved' => false,
+                'failure_code' => 'insufficient_funds',
+                'failure_message' => 'Pago rechazado por el banco emisor: fondos insuficientes',
+                'metadata' => ['simulated' => true, 'recurring' => true],
+            ];
+        }
+
+        if ($cardLast4 === '0009') {
+            return $base + [
+                'approved' => false,
+                'failure_code' => 'card_declined',
+                'failure_message' => 'La tarjeta de prueba fue rechazada por validación de seguridad',
+                'metadata' => ['simulated' => true, 'recurring' => true],
+            ];
+        }
+
+        return $base + [
+            'approved' => true,
+            'failure_code' => null,
+            'failure_message' => null,
+            'metadata' => [
+                'simulated' => true,
+                'recurring' => true,
                 'authorization_code' => 'SIM-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
             ],
         ];

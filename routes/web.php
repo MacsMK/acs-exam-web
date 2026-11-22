@@ -96,6 +96,13 @@ Route::middleware('auth')->group(function (): void {
             ->whereNumber('package')
             ->middleware('throttle:15,1')
             ->name('teacher.subscription.pay');
+        Route::post('docente/suscripcion/actualizar/{package}', [TeacherSubscriptionController::class, 'upgrade'])
+            ->whereNumber('package')
+            ->middleware('throttle:15,1')
+            ->name('teacher.subscription.upgrade');
+        Route::post('docente/suscripcion/cancelar-renovacion', [TeacherSubscriptionController::class, 'cancelRenewal'])
+            ->middleware('throttle:15,1')
+            ->name('teacher.subscription.cancel-renewal');
         Route::post('docente/suscripcion/prueba-gratuita', [TeacherSubscriptionController::class, 'startFreeTrial'])
             ->middleware('throttle:15,1')
             ->name('teacher.subscription.free-trial');

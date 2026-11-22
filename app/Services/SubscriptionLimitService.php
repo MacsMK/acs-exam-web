@@ -98,7 +98,7 @@ class SubscriptionLimitService
             if ($cumulativeGroups >= self::FREEMIUM_MAX_CUMULATIVE_GROUPS) {
                 throw new SubscriptionLimitExceededException(
                     sprintf(
-                        'El beneficio de prueba gratuita permite crear un máximo histórico de %d grupo (RF-SUS-010). Eliminar o cerrar el grupo no restablece el beneficio. Contrata un plan para continuar.',
+                        'El beneficio de prueba gratuita permite crear un máximo histórico de %d grupo. Eliminar o cerrar el grupo no restablece el beneficio. Contrata un plan para continuar.',
                         self::FREEMIUM_MAX_CUMULATIVE_GROUPS
                     ),
                     'groups',
@@ -252,7 +252,7 @@ class SubscriptionLimitService
             if ($cumulativeExams >= self::FREEMIUM_MAX_CUMULATIVE_EXAMS) {
                 throw new SubscriptionLimitExceededException(
                     sprintf(
-                        'El beneficio de prueba gratuita permite crear un máximo histórico de %d examen (RF-SUS-010). Contrata un paquete docente para diseñar más evaluaciones.',
+                        'El beneficio de prueba gratuita permite crear un máximo histórico de %d examen. Contrata un paquete docente para diseñar más evaluaciones.',
                         self::FREEMIUM_MAX_CUMULATIVE_EXAMS
                     ),
                     'exams',
@@ -410,7 +410,7 @@ class SubscriptionLimitService
                 'percent' => $percent,
                 'variant' => $variant,
                 'is_suspended' => false,
-                'cycle_label' => 'Prueba gratuita (histórico acumulado)',
+                'cycle_label' => 'Histórico acumulado de la prueba gratuita',
             ];
         }
 
@@ -543,6 +543,11 @@ class SubscriptionLimitService
                 0,
                 'suspended'
             );
+        }
+
+        // Cobro de renovación rechazado: el plan sigue vigente durante los reintentos (CAM-010)
+        if ($subscription->isInRenewalGracePeriod()) {
+            return $subscription->subscriptionPackage;
         }
 
         if ($subscription->payment_status !== 'paid') {

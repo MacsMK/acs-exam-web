@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Http/Requests/ProcessSubscriptionCheckoutRequest.php
  * Requerimiento:  RF-SUS-013, RF-SUS-015, ADR-058 (Pasarela de Pago Simulada)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Fecha Creación: 18/11/2026
  * Descripción:    Valida los datos del checkout de suscripción docente para
  *                 tarjeta bancaria (normalización, Luhn, vigencia MM/AA y CVV
@@ -73,6 +73,8 @@ class ProcessSubscriptionCheckoutRequest extends FormRequest
             'spei_sender_bank' => ['required_if:payment_method,spei', 'nullable', 'string', 'in:BBVA México,Santander,Banorte,Citibanamex,HSBC,Nu México,Mercado Pago,Otro'],
             'spei_account_holder' => ['required_if:payment_method,spei', 'nullable', 'string', 'min:3', 'max:120'],
             'onboarding_overlay' => ['nullable', 'boolean'],
+            // Autorización de cobros domiciliados con la tarjeta (RF-SUS-003, CAM-010)
+            'authorize_recurring' => ['nullable', 'boolean'],
         ];
     }
 

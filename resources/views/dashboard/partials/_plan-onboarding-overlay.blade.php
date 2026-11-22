@@ -496,6 +496,22 @@
                                             </div>
                                         </div>
 
+                                        {{-- Autorización de cobro mensual domiciliado (RF-SUS-003, CAM-010) --}}
+                                        <label class="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3.5 text-xs text-slate-700">
+                                            <input type="hidden" name="authorize_recurring" value="0" x-bind:disabled="paymentMethod !== 'card'">
+                                            <input
+                                                type="checkbox"
+                                                name="authorize_recurring"
+                                                value="1"
+                                                class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-acode-tech focus:ring-acode-tech"
+                                                x-bind:disabled="paymentMethod !== 'card'"
+                                                @checked(old('authorize_recurring', '1') === '1')
+                                            >
+                                            <span>
+                                                Autorizo que esta tarjeta se use para el <strong>cobro mensual automático</strong> del paquete. Puedo cancelar la renovación en cualquier momento desde Suscripción.
+                                            </span>
+                                        </label>
+
                                         <div class="flex items-start gap-2.5 rounded-xl border border-acode-accent/30 bg-acode-accent/10 p-3.5 text-xs text-acode-primary">
                                             <x-icon name="shield" class="w-4 h-4 text-acode-accent shrink-0 mt-0.5" />
                                             <p>

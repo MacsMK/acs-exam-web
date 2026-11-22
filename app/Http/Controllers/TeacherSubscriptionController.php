@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Http/Controllers/TeacherSubscriptionController.php
  * Requerimiento:  RF-SUS-001..015, RF-SUS-008, RF-SUS-013, RW-01..04, ADR-058
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        2.0.0
+ * Versión:        2.1.0
  * Fecha Creación: 09/11/2026
  * Descripción:    Controlador Skinny de autoservicio para consulta de cuotas,
  *                 onboarding post-verificación con Prueba Gratuita y checkout
@@ -25,7 +25,9 @@ use App\Http\Requests\ProcessSubscriptionCheckoutRequest;
 use App\Models\PaymentTransaction;
 use App\Models\SubscriptionPackage;
 use App\Models\User;
+use App\Services\SubscriptionLimitService;
 use App\Services\TeacherSubscriptionService;
+use DomainException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -44,6 +46,7 @@ class TeacherSubscriptionController extends Controller
      */
     public function __construct(
         private readonly TeacherSubscriptionService $teacherSubscriptionService,
+        private readonly SubscriptionLimitService $subscriptionLimitService,
     ) {
     }
 
@@ -74,10 +77,14 @@ class TeacherSubscriptionController extends Controller
      * @param SubscriptionPackage $package Paquete SaaS seleccionado.
      * @return View
      */
-    public function checkout(Request $request, SubscriptionPackage $package): View
+    public function checkout(Request $request, SubscriptionPackage $package): View|RedirectResponse
     {
         /** @var User $teacher */
         $teacher = $request->user();
+
+        if ($redirect = $this->redirectIfAlreadySubscribed($teacher)) {
+            return $redirect;
+        }
 
         $data = $this->teacherSubscriptionService->getCheckoutData($teacher, $package);
 
@@ -98,6 +105,11 @@ class TeacherSubscriptionController extends Controller
     ): RedirectResponse {
         /** @var User $teacher */
         $teacher = $request->user();
+
+        if ($redirect = $this->redirectIfAlreadySubscribed($teacher)) {
+            return $redirect;
+        }
+
         $wasOnboarding = $teacher->needsPlanOnboarding();
         $fromOverlay = $request->boolean('onboarding_overlay');
 
@@ -166,5 +178,60 @@ class TeacherSubscriptionController extends Controller
                 'status',
                 'Tu Prueba Gratuita (Freemium) está lista. Ya puedes crear tu primer grupo, banco de reactivos y evaluación.',
             );
+    }
+
+    /**
+     * Actualización a un nivel superior sin cobro inmediato (RF-SUS-011, RF-SUS-012).
+     */
+    public function upgrade(Request $request, SubscriptionPackage $package): RedirectResponse
+    {
+        try {
+            $this->teacherSubscriptionService->upgradePackage(
+                $request->user(),
+                $package,
+                $request->ip(),
+                $request->userAgent(),
+            );
+        } catch (DomainException $e) {
+            return redirect()->route('teacher.subscription.index')->withErrors(['subscription' => $e->getMessage()]);
+        }
+
+        return redirect()
+            ->route('teacher.subscription.index')
+            ->with('status', "Tu plan ahora es {$package->name}. Sus capacidades ya están activas y el nuevo precio se cobrará en tu siguiente renovación.");
+    }
+
+    /**
+     * Cancelación de la renovación automática (RF-SUS-014).
+     */
+    public function cancelRenewal(Request $request): RedirectResponse
+    {
+        try {
+            $subscription = $this->teacherSubscriptionService->cancelRenewal(
+                $request->user(),
+                $request->ip(),
+                $request->userAgent(),
+            );
+        } catch (DomainException $e) {
+            return redirect()->route('teacher.subscription.index')->withErrors(['subscription' => $e->getMessage()]);
+        }
+
+        return redirect()
+            ->route('teacher.subscription.index')
+            ->with('status', 'Cancelaste la renovación. No se harán más cobros y tu plan sigue vigente hasta el '.$subscription->expires_at?->format('d/m/Y').'.');
+    }
+
+    /**
+     * Con una suscripción activa no se vuelve a contratar: se actualiza de nivel (RF-SUS-011).
+     */
+    private function redirectIfAlreadySubscribed(User $teacher): ?RedirectResponse
+    {
+        if ($this->subscriptionLimitService->resolveActivePackage($teacher) === null) {
+            return null;
+        }
+
+        return redirect()
+            ->route('teacher.subscription.index')
+            ->withErrors(['subscription' => 'Ya tienes una suscripción activa. Para un nivel superior usa «Actualizar a este nivel».']);
     }
 }

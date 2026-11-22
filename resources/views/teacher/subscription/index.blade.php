@@ -75,11 +75,11 @@
             <h2 class="text-xs font-semibold uppercase tracking-wider text-acode-tech mb-1">Plan actual</h2>
             <div class="flex items-baseline gap-2 mb-2">
                 <span class="text-2xl font-black text-acode-primary">
-                    {{ $activePackage ? $activePackage->name : 'Prueba Freemium' }}
+                    {{ $activePackage ? $activePackage->name : 'Prueba gratuita' }}
                 </span>
             </div>
             <p class="text-xs text-slate-500 mb-4 leading-relaxed">
-                {{ $activePackage ? 'Paquete activo con cuota mensual asignada.' : 'Beneficio gratuito inicial (RF-SUS-010: límite histórico acumulado).' }}
+                {{ $activePackage ? 'Paquete activo con cuota mensual asignada.' : 'Beneficio gratuito inicial con límite histórico acumulado.' }}
             </p>
 
             <div class="pt-3 border-t border-slate-200/60 text-xs text-slate-600 space-y-2">
@@ -91,19 +91,75 @@
                         <x-badge variant="accent">Activo</x-badge>
                     @endif
                 </div>
-                @if (($currentSubscription ?? null)?->expires_at)
+                @if ($activePackage && ($currentSubscription ?? null)?->expires_at)
                     <div class="flex justify-between items-center gap-2">
                         <span>Vigencia:</span>
                         <span class="font-medium text-slate-800">{{ $currentSubscription->expires_at->format('d/m/Y') }}</span>
                     </div>
                 @endif
-                <div class="flex justify-between items-center gap-2">
-                    <span>Modalidad de pago:</span>
-                    <span class="font-medium text-slate-800 text-right">
-                        {{ $activePackage ? 'Pago en línea simulado / WhatsApp' : 'Prueba gratuita / WhatsApp' }}
-                    </span>
-                </div>
+                @if ($activePackage)
+                    {{-- Medio de pago domiciliado y próxima fecha de cobro (RF-SUS-003, RF-SUS-006) --}}
+                    <div class="flex justify-between items-center gap-2">
+                        <span>Medio de pago:</span>
+                        <span class="font-medium text-slate-800 text-right">{{ $currentSubscription?->maskedCard() ?? 'Sin domiciliar' }}</span>
+                    </div>
+                    <div class="flex justify-between items-center gap-2">
+                        <span>Precio mensual:</span>
+                        <span class="font-medium text-slate-800 tabular-nums">${{ number_format((float) $activePackage->monthly_price, 2) }} MXN</span>
+                    </div>
+                    <div class="flex justify-between items-center gap-2">
+                        <span>Próximo cobro:</span>
+                        <span class="font-medium text-slate-800 text-right">
+                            @if ($nextChargeAt ?? null)
+                                {{ $nextChargeAt->format('d/m/Y') }}
+                            @elseif ($currentSubscription?->cancelled_at)
+                                Sin cobro: renovación cancelada
+                            @else
+                                Sin renovación automática
+                            @endif
+                        </span>
+                    </div>
+                @else
+                    <div class="flex justify-between items-center gap-2">
+                        <span>Modalidad de pago:</span>
+                        <span class="font-medium text-slate-800 text-right">Prueba gratuita / WhatsApp</span>
+                    </div>
+                @endif
             </div>
+
+            @if ($isInGracePeriod ?? false)
+                <p class="mt-3 rounded-lg bg-acode-warning/10 p-2.5 text-xs text-amber-800">
+                    El cobro de tu renovación fue rechazado. Lo reintentaremos durante 3 días; mientras tanto tu plan sigue activo.
+                </p>
+            @endif
+
+            @if ($activePackage && ($currentSubscription ?? null)?->renewsAutomatically())
+                {{-- Cancelación de la renovación (RF-SUS-014) --}}
+                <form
+                    method="POST"
+                    action="{{ route('teacher.subscription.cancel-renewal') }}"
+                    class="mt-4"
+                    x-data
+                    x-on:submit.prevent="window.AcodeAlert.confirm({
+                        title: '¿Cancelar la renovación?',
+                        text: 'No se harán más cobros. Tu plan seguirá activo hasta el {{ $currentSubscription->expires_at?->format('d/m/Y') }}.',
+                        confirmButtonText: 'Cancelar renovación',
+                        cancelButtonText: 'Volver',
+                        isDanger: true,
+                        onConfirm: () => $el.submit(),
+                    })"
+                >
+                    @csrf
+                    <x-button type="submit" variant="neutral" size="md" class="w-full">
+                        <x-icon name="xMark" class="w-4 h-4" />
+                        Cancelar renovación
+                    </x-button>
+                </form>
+            @elseif ($activePackage && ($currentSubscription ?? null)?->cancelled_at)
+                <p class="mt-3 text-xs text-slate-500">
+                    Cancelaste la renovación el {{ $currentSubscription->cancelled_at->format('d/m/Y') }}. Tu plan termina el {{ $currentSubscription->expires_at?->format('d/m/Y') }}.
+                </p>
+            @endif
         </x-card>
 
         {{-- Barras de cuotas y consumo (consumidas desde TeacherSubscriptionService::$quotaMetrics) --}}
@@ -251,6 +307,31 @@
                             <x-button variant="neutral" size="md" class="w-full" disabled>
                                 Plan vigente
                             </x-button>
+                        @elseif ($activePackage && (float) $pkg->monthly_price > (float) $activePackage->monthly_price)
+                            {{-- Actualización a nivel superior sin cobro inmediato (RF-SUS-011, RF-SUS-012) --}}
+                            <form
+                                method="POST"
+                                action="{{ route('teacher.subscription.upgrade', $pkg) }}"
+                                x-data
+                                x-on:submit.prevent="window.AcodeAlert.confirm({
+                                    title: '¿Actualizar a {{ $pkg->name }}?',
+                                    text: 'Sus capacidades se activan de inmediato y sin cobro. Desde tu siguiente renovación pagarás ${{ number_format((float) $pkg->monthly_price, 2) }} MXN al mes.',
+                                    confirmButtonText: 'Actualizar a este nivel',
+                                    cancelButtonText: 'Cancelar',
+                                    isDanger: false,
+                                    onConfirm: () => $el.submit(),
+                                })"
+                            >
+                                @csrf
+                                <x-button type="submit" variant="primary" size="md" class="w-full">
+                                    <x-icon name="check" class="w-4 h-4" />
+                                    Actualizar a este nivel
+                                </x-button>
+                            </form>
+                        @elseif ($activePackage)
+                            <x-button variant="neutral" size="md" class="w-full" disabled>
+                                No disponible con tu plan actual
+                            </x-button>
                         @else
                             <x-button :href="route('teacher.subscription.checkout', $pkg)" variant="primary" size="md" class="w-full">
                                 <x-icon name="lock" class="w-4 h-4" />
@@ -294,6 +375,7 @@
             <x-slot:header>
                 <x-table.th>Folio</x-table.th>
                 <x-table.th>Fecha</x-table.th>
+                <x-table.th>Concepto</x-table.th>
                 <x-table.th>Paquete</x-table.th>
                 <x-table.th>Método</x-table.th>
                 <x-table.th>Monto</x-table.th>
@@ -308,6 +390,9 @@
                     <x-table.td class="whitespace-nowrap text-xs text-slate-600">
                         {{ $tx->created_at?->format('d/m/Y H:i') ?? '—' }}
                     </x-table.td>
+                    <x-table.td class="whitespace-nowrap text-xs text-slate-700">
+                        {{ $tx->conceptLabel() }}
+                    </x-table.td>
                     <x-table.td class="font-semibold text-acode-primary text-xs">
                         {{ $tx->package?->name ?? 'Paquete SaaS' }}
                     </x-table.td>
@@ -320,6 +405,11 @@
                     <x-table.td>
                         @if ($tx->status === 'paid')
                             <x-badge variant="success">Pagado</x-badge>
+                        @elseif ($tx->status === 'no_charge')
+                            <x-badge variant="neutral">Sin cobro</x-badge>
+                            @if ($tx->metadata['next_charge_amount'] ?? null)
+                                <p class="mt-1 text-xs text-slate-500">Se cobra ${{ number_format((float) $tx->metadata['next_charge_amount'], 2) }} MXN desde la siguiente renovación.</p>
+                            @endif
                         @else
                             <x-badge variant="danger">Rechazado</x-badge>
                             @if ($tx->failure_message)
@@ -330,7 +420,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" class="p-0">
+                    <td colspan="7" class="p-0">
                         <x-empty-state
                             class="border-0 shadow-none rounded-none py-8"
                             icon="document"
