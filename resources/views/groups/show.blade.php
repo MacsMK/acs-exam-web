@@ -209,7 +209,6 @@
                     variant="danger"
                     size="md"
                 >
-                    <x-icon name="lock" class="w-4 h-4" />
                     Cerrar grupo
                 </x-button>
             @endif

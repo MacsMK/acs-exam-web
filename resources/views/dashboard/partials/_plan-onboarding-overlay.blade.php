@@ -226,7 +226,6 @@
                                             class="w-full"
                                             @click="selectPackage({{ $pkg->id }})"
                                         >
-                                            <x-icon name="lock" class="w-4 h-4" />
                                             Seleccionar paquete
                                         </x-button>
                                     </div>
@@ -605,7 +604,6 @@
                                             x-bind:disabled="isSubmitting || !selectedPackage"
                                         >
                                             <span x-show="!isSubmitting" class="inline-flex items-center gap-2">
-                                                <x-icon name="lock" class="w-4 h-4" />
                                                 Confirmar y activar plan
                                             </span>
                                             <span x-show="isSubmitting" x-cloak>

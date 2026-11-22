@@ -371,7 +371,6 @@
                             x-bind:disabled="isSubmitting"
                         >
                             <span x-show="!isSubmitting" class="inline-flex items-center gap-2">
-                                <x-icon name="lock" class="w-4 h-4" />
                                 Enviar pago
                             </span>
                             <span x-show="isSubmitting" x-cloak>

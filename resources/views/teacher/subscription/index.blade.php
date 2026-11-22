@@ -338,7 +338,6 @@
                             </x-button>
                         @else
                             <x-button :href="route('teacher.subscription.checkout', $pkg)" variant="primary" size="md" class="w-full">
-                                <x-icon name="lock" class="w-4 h-4" />
                                 Contratar este paquete
                             </x-button>
 
