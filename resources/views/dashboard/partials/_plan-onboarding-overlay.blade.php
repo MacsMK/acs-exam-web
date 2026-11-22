@@ -495,7 +495,7 @@
                                             </div>
                                         </div>
 
-                                        {{-- Autorización de cobro mensual domiciliado (RF-SUS-003, CAM-010) --}}
+                                        {{-- Autorización de cobro mensual domiciliado (RF-SUS-003) --}}
                                         <label class="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3.5 text-xs text-slate-700">
                                             <input type="hidden" name="authorize_recurring" value="0" x-bind:disabled="paymentMethod !== 'card'">
                                             <input

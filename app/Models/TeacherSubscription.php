@@ -64,7 +64,7 @@ class TeacherSubscription extends Model
 
     /**
      * Días de reintento del cobro de renovación rechazado, durante los cuales
-     * el plan sigue vigente (CAM-010).
+     * el plan sigue vigente (RF-SUS-005).
      */
     public const RENEWAL_GRACE_DAYS = 3;
 
@@ -132,7 +132,7 @@ class TeacherSubscription extends Model
     }
 
     /**
-     * Vencida, con cobro de renovación rechazado y dentro de los días de reintento (CAM-010).
+     * Vencida, con cobro de renovación rechazado y dentro de los días de reintento (RF-SUS-005).
      */
     public function isInRenewalGracePeriod(): bool
     {

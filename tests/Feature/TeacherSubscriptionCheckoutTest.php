@@ -226,7 +226,7 @@ class TeacherSubscriptionCheckoutTest extends TestCase
             ->assertDontSee('onboarding_overlay', false);
         $this->actingAs($teacher->fresh())->get(route('groups.index'))->assertOk();
 
-        // Con suscripción activa no se vuelve a contratar ni a cobrar: se actualiza de nivel (RF-SUS-011/012, CAM-010)
+        // Con suscripción activa no se vuelve a contratar ni a cobrar: se actualiza de nivel (RF-SUS-011/012)
         $proPackage = SubscriptionPackage::where('tier', 'pro')->firstOrFail();
         $this->actingAs($teacher->fresh())
             ->post(route('teacher.subscription.pay', $proPackage), [

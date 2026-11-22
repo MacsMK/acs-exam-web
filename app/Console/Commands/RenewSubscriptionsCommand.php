@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        RenewSubscriptionsCommand.php
  * Ubicación:      app/Console/Commands/RenewSubscriptionsCommand.php
- * Requerimiento:  RF-SUS-005 (Renovación mensual, CAM-010)
+ * Requerimiento:  RF-SUS-005 (Renovación mensual)
  * Actividad:      ACT-WEB-023
  * Autor:          Meneses Mendoza Elizabeth (A-Code Solutions)
  * Versión:        1.0.0

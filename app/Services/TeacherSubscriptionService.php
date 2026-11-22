@@ -351,7 +351,7 @@ class TeacherSubscriptionService
                     ->lockForUpdate()
                     ->first();
 
-                // Solo la tarjeta autorizada se domicilia; SPEI paga un mes sin renovación (RF-SUS-002/003, CAM-010)
+                // Solo la tarjeta autorizada se domicilia; SPEI paga un mes sin renovación (RF-SUS-002/003)
                 $isRecurringCard = $result['method'] === PaymentTransaction::METHOD_CARD
                     && filter_var($paymentData['authorize_recurring'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
@@ -556,7 +556,7 @@ class TeacherSubscriptionService
             throw new DomainException('Solo puedes actualizar a un nivel superior a tu plan actual.');
         }
 
-        // Sin renovación activa no hay siguiente factura donde aplicar el nuevo precio (CAM-010)
+        // Sin renovación activa no hay siguiente factura donde aplicar el nuevo precio (RF-SUS-011)
         if (! $teacher->subscription?->renewsAutomatically()) {
             throw new DomainException('Para actualizar de nivel tu suscripción debe renovarse con tarjeta. Puedes contratar el nuevo nivel al terminar tu periodo actual.');
         }
@@ -632,7 +632,7 @@ class TeacherSubscriptionService
     /**
      * Cobra las renovaciones vencidas con la tarjeta domiciliada (RF-SUS-005). Un cobro
      * rechazado se reintenta una vez al día durante 3 días, con el plan vigente; al tercer
-     * rechazo se desactiva la renovación y el plan termina (CAM-010).
+     * rechazo se desactiva la renovación y el plan termina (RF-SUS-005).
      *
      * @return array{renewed: int, failed: int}
      */
@@ -695,7 +695,7 @@ class TeacherSubscriptionService
                     : [
                         'payment_status' => 'overdue',
                         'renewal_attempts' => $attempts,
-                        // Tercer rechazo: termina la renovación (CAM-010)
+                        // Tercer rechazo: termina la renovación (RF-SUS-005)
                         'auto_renew' => $attempts < TeacherSubscription::RENEWAL_GRACE_DAYS,
                     ]);
 

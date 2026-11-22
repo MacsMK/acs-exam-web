@@ -8,8 +8,8 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     SubscriptionRenewalTest.php
  * Ubicación:   tests/Feature/SubscriptionRenewalTest.php
- * Requerimiento: RF-SUS-002, 003, 005, 006, 011, 012, 013, 014 (CAM-010;
- *              ACT-WEB-023, 024, 025; BD01-2026-034 y 035)
+ * Requerimiento: RF-SUS-002, 003, 005, 006, 011, 012, 013, 014
+ *              (ACT-WEB-023, 024, 025; BD01-2026-034 y 035)
  * Descripción: Suscripción domiciliada con tarjeta, renovación mensual con
  *              reintentos de 3 días, cancelación de la renovación,
  *              actualización a nivel superior sin cobro inmediato y concepto

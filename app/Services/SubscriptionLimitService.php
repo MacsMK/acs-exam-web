@@ -545,7 +545,7 @@ class SubscriptionLimitService
             );
         }
 
-        // Cobro de renovación rechazado: el plan sigue vigente durante los reintentos (CAM-010)
+        // Cobro de renovación rechazado: el plan sigue vigente durante los reintentos (RF-SUS-005)
         if ($subscription->isInRenewalGracePeriod()) {
             return $subscription->subscriptionPackage;
         }

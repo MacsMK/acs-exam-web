@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Archivo:        2026_11_22_000003_bd01_2026_034_add_renewal_columns_to_acs_teacher_subscriptions_table.php
  * Ubicación:      database/migrations/
  * Requerimiento:  RF-SUS-002, RF-SUS-003, RF-SUS-005,
- *                 RF-SUS-006, RF-SUS-014 (CAM-010)
+ *                 RF-SUS-006, RF-SUS-014
  * Actividad:      ACT-WEB-023, ACT-WEB-024, ACT-WEB-025
  * Folio BD-01:    BD01-2026-034
  * Autor:          Meneses Mendoza Elizabeth (A-Code Solutions)

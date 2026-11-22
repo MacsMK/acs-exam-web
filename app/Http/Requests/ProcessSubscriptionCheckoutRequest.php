@@ -73,7 +73,7 @@ class ProcessSubscriptionCheckoutRequest extends FormRequest
             'spei_sender_bank' => ['required_if:payment_method,spei', 'nullable', 'string', 'in:BBVA México,Santander,Banorte,Citibanamex,HSBC,Nu México,Mercado Pago,Otro'],
             'spei_account_holder' => ['required_if:payment_method,spei', 'nullable', 'string', 'min:3', 'max:120'],
             'onboarding_overlay' => ['nullable', 'boolean'],
-            // Autorización de cobros domiciliados con la tarjeta (RF-SUS-003, CAM-010)
+            // Autorización de cobros domiciliados con la tarjeta (RF-SUS-003)
             'authorize_recurring' => ['nullable', 'boolean'],
         ];
     }
