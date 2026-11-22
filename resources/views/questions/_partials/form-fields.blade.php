@@ -517,6 +517,21 @@
                 >{{ old('instructions', $question?->questionable?->instructions ?? '') }}</x-form.textarea>
             </x-form.group>
 
+            {{-- Criterios de evaluación opcionales (RF-BAN-004); se envían a la evaluación asistida por IA (RF-IAR-003) --}}
+            <x-form.group
+                name="evaluation_rubric"
+                label="Criterios de evaluación (opcional)"
+                help-text="Aspectos que deben cumplirse para calificar la solución: lógica, casos límite, buenas prácticas o puntaje por criterio."
+            >
+                <x-form.textarea
+                    name="evaluation_rubric"
+                    x-model="evaluationRubric"
+                    rows="3"
+                    maxlength="10000"
+                    placeholder="Ej. Usa un ciclo, maneja la lista vacía y devuelve el resultado sin imprimirlo…"
+                >{{ old('evaluation_rubric', $question?->questionable?->evaluation_rubric ?? '') }}</x-form.textarea>
+            </x-form.group>
+
             <x-form.group
                 name="starter_code"
                 label="Código base / Código con error"

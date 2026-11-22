@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Http/Requests/Concerns/NormalizesQuestionInputs.php
  * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §6.3, Tabla 18)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Fecha Creación: 12/11/2026
  * Descripción:    Trait compartido para saneamiento Unicode de entradas de
  *                 reactivos, reglas polimórficas unificadas, validación de
@@ -253,7 +253,8 @@ trait NormalizesQuestionInputs
 
             // open
             $prefix . 'reference_answer' => ["exclude_unless:{$typeKey},open", 'required', 'string', 'max:10000'],
-            $prefix . 'evaluation_rubric' => ["exclude_unless:{$typeKey},open", 'nullable', 'string', 'max:10000'],
+            // Criterios opcionales en preguntas abiertas y de programación (RF-BAN-003, RF-BAN-004)
+            $prefix . 'evaluation_rubric' => ["exclude_unless:{$typeKey},open,code", 'nullable', 'string', 'max:10000'],
 
             // code
             $prefix . 'programming_language' => ["exclude_unless:{$typeKey},code", 'required', 'string', 'max:40'],

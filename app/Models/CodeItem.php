@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Models/CodeItem.php
  * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, Variante 4)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.2.0
+ * Versión:        1.3.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_code_items (variante polimórfica de
  *                 programación / código fuente, Módulo 5).
@@ -73,6 +73,7 @@ class CodeItem extends Model
         'starter_code',
         'reference_solution',
         'instructions',
+        'evaluation_rubric',
     ];
 
     /**

@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Services/QuestionBankService.php
  * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §6.4.1)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        2.0.0
+ * Versión:        2.1.0
  * Descripción:    Servicio transaccional del Banco de Reactivos: gestión de las
  *                 4 variantes polimórficas con IDs opacos en matching [CRÍTICA-02],
  *                 Copy-On-Write bajo bloqueo pesimista [ALTA-08], cuotas SaaS
@@ -409,6 +409,7 @@ class QuestionBankService
                         'starter_code' => $data['starter_code'] ?? null,
                         'reference_solution' => (string) $data['reference_solution'],
                         'instructions' => (string) ($data['instructions'] ?? ''),
+                        'evaluation_rubric' => $data['evaluation_rubric'] ?? null,
                     ]),
                     default => null,
                 };
@@ -1496,6 +1497,7 @@ class QuestionBankService
                 'starter_code' => $data['starter_code'] ?? null,
                 'reference_solution' => (string) $data['reference_solution'],
                 'instructions' => (string) ($data['instructions'] ?? ''),
+                'evaluation_rubric' => $data['evaluation_rubric'] ?? null,
             ]),
             default => throw ValidationException::withMessages([
                 'question_type' => ['La opción seleccionada en tipo de reactivo no es válida'],

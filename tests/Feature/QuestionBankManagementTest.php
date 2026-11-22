@@ -279,6 +279,35 @@ class QuestionBankManagementTest extends TestCase
     }
 
     /**
+     * 3.6 Código fuente: criterios de evaluación opcionales (RF-BAN-004), visibles en el detalle.
+     */
+    public function test_code_question_stores_optional_evaluation_criteria(): void
+    {
+        $teacher = $this->createTeacher();
+        $codeQuestion = $this->createCodeQuestion($teacher, ['title' => 'Código con criterios']);
+        $codeQuestion->questionable->update(['evaluation_rubric' => "Usa un ciclo\nManeja la lista vacía"]);
+
+        $this->actingAs($teacher)
+            ->get(route('questions.show', $codeQuestion))
+            ->assertOk()
+            ->assertSee('Criterios de Evaluación')
+            ->assertSee('Maneja la lista vacía');
+
+        $this->actingAs($teacher)->post(route('questions.store'), [
+            'title' => 'Código nuevo con criterios',
+            'stem' => 'Escribe una función que sume una lista.',
+            'question_type' => 'code',
+            'programming_language' => 'Python',
+            'reference_solution' => 'def suma(xs):\n    return sum(xs)',
+            'evaluation_rubric' => 'Maneja la lista vacía',
+            'default_points' => 10,
+            'default_time_seconds' => 120,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('acs_code_items', ['evaluation_rubric' => 'Maneja la lista vacía']);
+    }
+
+    /**
      * 4. Certifica la edición in-situ cuando un reactivo NO está vinculado a ningún examen:
      *    Se modifica directamente el registro existente conservando su ID original.
      */

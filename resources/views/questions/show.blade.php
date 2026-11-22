@@ -351,6 +351,16 @@
                             </div>
                         @endif
 
+                        {{-- Criterios de evaluación (opcionales, RF-BAN-004) --}}
+                        @if (filled($question->questionable->evaluation_rubric))
+                            <div>
+                                <span class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                                    Criterios de Evaluación
+                                </span>
+                                <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 leading-5 whitespace-pre-wrap">{{ $question->questionable->evaluation_rubric }}</div>
+                            </div>
+                        @endif
+
                         {{-- Código inicial si aplica --}}
                         @if (!empty($question->questionable->starter_code))
                             <div class="space-y-1.5">
