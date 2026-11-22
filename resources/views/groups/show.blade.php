@@ -216,6 +216,17 @@
         </x-slot:actions>
     </x-page-header>
 
+    {{-- Aviso de eliminación automática del grupo cerrado (RF-GRU-015, CAM-009) --}}
+    @if ($deletionDate)
+        <div class="flex items-start gap-3 rounded-xl border border-acode-warning/40 bg-acode-warning/10 px-4 py-3.5 text-acode-primary" role="status">
+            <x-icon name="warning" class="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+            <p class="text-sm leading-relaxed">
+                Este grupo está cerrado y se eliminará automáticamente el <strong>{{ $deletionDate->format('d/m/Y') }}</strong>.
+                Antes de esa fecha puedes exportar sus calificaciones desde <strong>Abrir periodos</strong> o reabrirlo para conservarlo.
+            </p>
+        </div>
+    @endif
+
     {{-- Formularios POST ocultos para cierre y reapertura semestral --}}
     <form id="group-close-form" method="POST" action="{{ route('groups.close', $group) }}" class="hidden">
         @csrf

@@ -12,7 +12,7 @@ declare(strict_types=1);
  * Requerimiento:  RF-GRU (confirmar código específico en DE-01 con Eli;
  *                 ver Formato BD-01 folio BD01-2026-006)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.2.0
+ * Versión:        1.3.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_groups: grupo de alumnos
  *                 administrado por un docente, identificable por un folio
@@ -33,6 +33,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 /**
@@ -43,9 +44,13 @@ use Illuminate\Support\Str;
 #[ScopedBy([TenantTeacherScope::class])]
 class Group extends Model
 {
+    // Borrado lógico de grupos vencidos (RF-GRU-015, CAM-009, BD01-2026-033)
+    use SoftDeletes;
+
     /**
-     * Resuelve el enlace de ruta sin scopes globales para permitir que la capa de
+     * Resuelve el enlace de ruta sin el ámbito por docente para permitir que la capa de
      * políticas/controlador emita 403 Forbidden ante intentos de IDOR (MPW-V3 §6.6).
+     * Conserva el ámbito de borrado lógico: un grupo eliminado responde 404.
      *
      * @param mixed $value
      * @param string|null $field
@@ -53,7 +58,7 @@ class Group extends Model
      */
     public function resolveRouteBinding($value, $field = null): ?Model
     {
-        return $this->withoutGlobalScopes()->where($field ?? $this->getRouteKeyName(), $value)->first();
+        return $this->withoutGlobalScope(TenantTeacherScope::class)->where($field ?? $this->getRouteKeyName(), $value)->first();
     }
 
     /**

@@ -11,3 +11,6 @@ Artisan::command('inspire', function () {
 // Notificaciones push de ventanas de examen (MPM-V3 §6.8). En producción
 // requiere la entrada de cron de Laravel: `* * * * * php artisan schedule:run`.
 Schedule::command('exams:push-due')->everyMinute()->withoutOverlapping();
+
+// Vigencia de grupos cerrados: aviso a 30 días y eliminación a los 12 meses (RF-GRU-015, CAM-009).
+Schedule::command('groups:purge-expired')->dailyAt('03:00')->withoutOverlapping();

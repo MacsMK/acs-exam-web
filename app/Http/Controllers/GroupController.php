@@ -22,6 +22,7 @@ use App\Models\StudentAttempt;
 use App\Models\User;
 use App\Services\SubscriptionLimitService;
 use App\Services\GroupEnrollmentService;
+use App\Services\GroupRetentionService;
 use DomainException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -82,7 +83,7 @@ class GroupController extends Controller
         return redirect()->route('groups.show', $group)->with('status', 'Grupo actualizado.');
     }
 
-    public function show(Group $group): View
+    public function show(Group $group, GroupRetentionService $retention): View
     {
         $this->authorizeOwnership($group);
 
@@ -115,6 +116,7 @@ class GroupController extends Controller
         return view('groups.show', [
             'group' => $group,
             'attempts' => $attempts,
+            'deletionDate' => $retention->deletionDateFor($group),
         ]);
     }
 
