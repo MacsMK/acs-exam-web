@@ -178,6 +178,19 @@ class SubscriptionRenewalTest extends TestCase
         $this->assertSame($this->package('advanced')->id, $subscription->fresh()->subscription_package_id);
     }
 
+    public function test_upgrade_is_rejected_when_the_renewal_is_cancelled(): void
+    {
+        $subscription = $this->subscription('4242', now()->addDays(10));
+        $subscription->update(['auto_renew' => false, 'cancelled_at' => now()]);
+
+        $this->actingAs($subscription->teacher)
+            ->post(route('teacher.subscription.upgrade', $this->package('pro')))
+            ->assertSessionHasErrors('subscription');
+
+        $this->assertSame($this->package('basic')->id, $subscription->fresh()->subscription_package_id);
+        $this->actingAs($subscription->teacher)->get(route('teacher.subscription.index'))->assertSee('Disponible al terminar tu periodo');
+    }
+
     private function subscription(string $last4, \DateTimeInterface $expiresAt, string $tier = 'basic'): TeacherSubscription
     {
         $teacher = $this->verifiedTeacher();

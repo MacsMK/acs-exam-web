@@ -556,6 +556,11 @@ class TeacherSubscriptionService
             throw new DomainException('Solo puedes actualizar a un nivel superior a tu plan actual.');
         }
 
+        // Sin renovación activa no hay siguiente factura donde aplicar el nuevo precio (CAM-010)
+        if (! $teacher->subscription?->renewsAutomatically()) {
+            throw new DomainException('Para actualizar de nivel tu suscripción debe renovarse con tarjeta. Puedes contratar el nuevo nivel al terminar tu periodo actual.');
+        }
+
         return DB::transaction(function () use ($teacher, $package, $currentPackage, $ipAddress, $userAgent): PaymentTransaction {
             $subscription = $teacher->teacherSubscriptions()->lockForUpdate()->firstOrFail();
             $subscription->update(['subscription_package_id' => $package->id]);

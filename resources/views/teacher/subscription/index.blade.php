@@ -307,7 +307,7 @@
                             <x-button variant="neutral" size="md" class="w-full" disabled>
                                 Plan vigente
                             </x-button>
-                        @elseif ($activePackage && (float) $pkg->monthly_price > (float) $activePackage->monthly_price)
+                        @elseif ($activePackage && (float) $pkg->monthly_price > (float) $activePackage->monthly_price && $currentSubscription?->renewsAutomatically())
                             {{-- Actualización a nivel superior sin cobro inmediato (RF-SUS-011, RF-SUS-012) --}}
                             <form
                                 method="POST"
@@ -328,6 +328,10 @@
                                     Actualizar a este nivel
                                 </x-button>
                             </form>
+                        @elseif ($activePackage && (float) $pkg->monthly_price > (float) $activePackage->monthly_price)
+                            <x-button variant="neutral" size="md" class="w-full" disabled>
+                                Disponible al terminar tu periodo
+                            </x-button>
                         @elseif ($activePackage)
                             <x-button variant="neutral" size="md" class="w-full" disabled>
                                 No disponible con tu plan actual

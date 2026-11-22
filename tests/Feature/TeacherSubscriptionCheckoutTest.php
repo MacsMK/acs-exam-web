@@ -155,6 +155,7 @@ class TeacherSubscriptionCheckoutTest extends TestCase
                 'card_number' => '4242 4242 4242 4242',
                 'card_expiry' => '12/30',
                 'card_cvv' => $rawCvv,
+                'authorize_recurring' => '1',
             ]);
 
         $payResponse->assertRedirect(route('dashboard'))
