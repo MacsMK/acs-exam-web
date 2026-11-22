@@ -122,9 +122,10 @@
     {{-- Nivel 1: Encabezado Institucional con Breadcrumbs, Folio Copiable y Acciones --}}
     <x-page-header
         :title="$group->name"
-        :subtitle="$group->subject
-            ? 'Gestiona matrícula, exámenes asignados, calificaciones y periodos de evaluación de ' . $group->subject . '.'
-            : 'Gestiona matrícula, exámenes asignados, calificaciones y periodos de evaluación de este grupo escolar.'"
+        :subtitle="$group->description
+            ?: ($group->subject
+                ? 'Gestiona matrícula, exámenes asignados, calificaciones y periodos de evaluación de ' . $group->subject . '.'
+                : 'Gestiona matrícula, exámenes asignados, calificaciones y periodos de evaluación de este grupo escolar.')"
         :breadcrumbs="[
             ['label' => 'Grupos', 'href' => route('groups.index')],
             ['label' => $group->name],
@@ -183,6 +184,13 @@
                 <x-icon name="clock" class="w-4 h-4" />
                 Abrir periodos
             </x-button>
+
+            @unless ($group->is_closed)
+                <x-button :href="route('groups.edit', $group)" variant="neutral" size="md">
+                    <x-icon name="edit" class="w-4 h-4" />
+                    Editar grupo
+                </x-button>
+            @endunless
 
             @if ($group->is_closed)
                 <x-button

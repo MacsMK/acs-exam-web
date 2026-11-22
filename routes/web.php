@@ -101,7 +101,7 @@ Route::middleware('auth')->group(function (): void {
             ->name('teacher.subscription.free-trial');
 
         Route::middleware('teacher.plan_onboarded')->group(function (): void {
-            Route::resource('groups', GroupController::class)->only(['index', 'create', 'store', 'show']);
+            Route::resource('groups', GroupController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update']);
         Route::post('groups/{group}/cerrar', [GroupController::class, 'close'])->name('groups.close');
         Route::post('groups/{group}/reabrir', [GroupController::class, 'reopen'])->name('groups.reopen');
         Route::delete('groups/{group}/alumnos/{student}', [GroupController::class, 'removeStudent'])

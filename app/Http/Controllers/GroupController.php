@@ -16,6 +16,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Requests\GroupStoreRequest;
+use App\Http\Requests\GroupUpdateRequest;
 use App\Models\Group;
 use App\Models\StudentAttempt;
 use App\Models\User;
@@ -50,6 +51,35 @@ class GroupController extends Controller
         $group = $this->groupEnrollmentService->createGroup($request->user(), $request->validated());
 
         return redirect()->route('groups.show', $group)->with('status', 'Grupo creado.');
+    }
+
+    /**
+     * Formulario de modificación de un grupo activo (RF-GRU-003, ACT-WEB-020).
+     */
+    public function edit(Group $group): View|RedirectResponse
+    {
+        $this->authorizeOwnership($group);
+
+        if ($group->is_closed) {
+            return redirect()
+                ->route('groups.show', $group)
+                ->withErrors(['group' => 'Solo puedes modificar grupos activos. Reabre el grupo para editarlo.']);
+        }
+
+        return view('groups.edit', ['group' => $group]);
+    }
+
+    public function update(GroupUpdateRequest $request, Group $group): RedirectResponse
+    {
+        $this->authorizeOwnership($group);
+
+        try {
+            $this->groupEnrollmentService->updateGroup($group, $request->validated());
+        } catch (DomainException $e) {
+            return redirect()->route('groups.show', $group)->withErrors(['group' => $e->getMessage()]);
+        }
+
+        return redirect()->route('groups.show', $group)->with('status', 'Grupo actualizado.');
     }
 
     public function show(Group $group): View

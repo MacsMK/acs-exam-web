@@ -12,7 +12,7 @@ declare(strict_types=1);
  * Requerimiento:  RF-GRU (confirmar código específico en DE-01 con Eli;
  *                 ver Formato BD-01 folio BD01-2026-006)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.1.0
+ * Versión:        1.2.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_groups: grupo de alumnos
  *                 administrado por un docente, identificable por un folio
@@ -82,6 +82,7 @@ class Group extends Model
         'teacher_id',
         'name',
         'subject',
+        'description',
         'access_folio',
         'is_closed',
         'closed_at',

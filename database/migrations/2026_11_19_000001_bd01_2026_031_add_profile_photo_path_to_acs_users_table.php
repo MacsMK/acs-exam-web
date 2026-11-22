@@ -7,11 +7,12 @@ declare(strict_types=1);
  * A-CODE SOLUTIONS - ANALIZAMOS, DISEÑAMOS, TRANSFORMAMOS
  * ============================================================================
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
- * Archivo:        2026_11_19_000001_add_profile_photo_path_to_acs_users_table.php
+ * Archivo:        2026_11_19_000001_bd01_2026_031_add_profile_photo_path_to_acs_users_table.php
  * Ubicación:      database/migrations/
  * Requerimiento:  RF-AUT-008 (Carga de fotografía del estudiante),
  *                 RF-AUT-009 (Imagen de perfil predeterminada)
  * Actividad:      ACT-WEB-038
+ * Folio BD-01:    BD01-2026-031
  * Autor:          Meneses Mendoza Elizabeth (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 19/11/2026

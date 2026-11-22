@@ -51,6 +51,7 @@ class GroupEnrollmentService
                 'teacher_id' => $teacher->id,
                 'name' => (string) $data['name'],
                 'subject' => ! empty($data['subject']) ? (string) $data['subject'] : null,
+                'description' => ! empty($data['description']) ? (string) $data['description'] : null,
                 'access_folio' => $this->generateUniqueFolio(),
             ]);
         });
@@ -261,6 +262,28 @@ class GroupEnrollmentService
                 'user_agent' => mb_substr((string) request()->userAgent(), 0, 255),
             ]);
         });
+    }
+
+    /**
+     * Modifica nombre, materia y descripción de un grupo activo (RF-GRU-003, ACT-WEB-020).
+     *
+     * @param array<string, mixed> $data
+     *
+     * @throws DomainException Si el grupo está cerrado.
+     */
+    public function updateGroup(Group $group, array $data): Group
+    {
+        if ($group->is_closed) {
+            throw new DomainException('Solo puedes modificar grupos activos. Reabre el grupo para editarlo.');
+        }
+
+        $group->update([
+            'name' => (string) $data['name'],
+            'subject' => ! empty($data['subject']) ? (string) $data['subject'] : null,
+            'description' => ! empty($data['description']) ? (string) $data['description'] : null,
+        ]);
+
+        return $group;
     }
 
     public function closeGroup(Group $group): void
