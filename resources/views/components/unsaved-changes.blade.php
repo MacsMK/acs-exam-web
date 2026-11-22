@@ -5,6 +5,8 @@
     x-data="{
         dirty: false,
         submitting: false,
+        leaving: false,
+        historyGuard: false,
         showConfirm: false,
         destination: @js($cancelUrl),
 
@@ -26,6 +28,10 @@
 
                 this.dirty =
                     JSON.stringify(current) !== JSON.stringify(initialValues);
+
+                if (this.dirty) {
+                    this.armHistoryGuard();
+                }
             };
 
             form.addEventListener('input', updateDirty);
@@ -56,6 +62,46 @@
                 this.destination = link.href;
                 this.showConfirm = true;
             }, true);
+
+            // Botón Atrás del navegador: la entrada extra del historial se
+            // consume sin salir de la página y se muestra el modal propio.
+            window.addEventListener('popstate', () => {
+                if (!this.historyGuard) return;
+
+                this.historyGuard = false;
+
+                if (!this.dirty || this.submitting) {
+                    history.back();
+                    return;
+                }
+
+                this.destination = null;
+                this.showConfirm = true;
+            });
+
+            // Recargar o cerrar la pestaña: el navegador no permite un modal
+            // propio en estos casos; solo su aviso nativo evita perder datos.
+            window.addEventListener('beforeunload', (event) => {
+                if (!this.dirty || this.submitting || this.leaving) return;
+
+                event.preventDefault();
+                event.returnValue = '';
+            });
+        },
+
+        armHistoryGuard() {
+            if (this.historyGuard) return;
+
+            history.pushState({ acsUnsavedChanges: true }, '', window.location.href);
+            this.historyGuard = true;
+        },
+
+        keepEditing() {
+            this.showConfirm = false;
+
+            if (this.dirty) {
+                this.armHistoryGuard();
+            }
         },
 
         cancel() {
@@ -69,7 +115,14 @@
 
         discard() {
             this.dirty = false;
+            this.leaving = true;
             this.showConfirm = false;
+
+            if (this.destination === null) {
+                history.back();
+                return;
+            }
+
             window.location.href = this.destination;
         }
     }"
@@ -114,7 +167,7 @@
                         variant="neutral"
                         size="md"
                         class="rounded-xl"
-                        @click="showConfirm = false"
+                        @click="keepEditing()"
                     >
                         Continuar editando
                     </x-button>
@@ -126,7 +179,7 @@
                         class="rounded-xl"
                         @click="discard()"
                     >
-                        Descartar cambios
+                        Cancelar cambios
                     </x-button>
                 </div>
             </div>
