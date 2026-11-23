@@ -71,6 +71,19 @@ class StudentProfilePhotoTest extends TestCase
         $this->assertNotNull(User::where('email', 'alumna@example.test')->value('profile_photo_path'));
     }
 
+    public function test_api_shows_the_official_message_when_the_photo_does_not_reach_the_server(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'foto');
+        file_put_contents($path, 'parcial');
+        $photo = new UploadedFile($path, 'foto.jpg', 'image/jpeg', UPLOAD_ERR_INI_SIZE, true);
+
+        $this->post('/api/v1/auth/register/student', $this->payload(['photo' => $photo]), ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.photo.0', 'La fotografía no debe exceder los 5 MB');
+
+        $this->assertFalse(User::where('email', 'alumna@example.test')->exists());
+    }
+
     public function test_without_photo_the_default_image_is_shown(): void
     {
         $student = $this->student();

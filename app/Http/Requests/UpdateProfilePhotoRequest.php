@@ -48,6 +48,8 @@ class UpdateProfilePhotoRequest extends FormRequest
             'photo.file' => 'La fotografía no tiene un formato válido',
             'photo.mimes' => 'La fotografía debe ser una imagen JPG o PNG',
             'photo.max' => 'La fotografía no debe exceder los 5 MB',
+            // El archivo no llegó completo: casi siempre excede upload_max_filesize del servidor.
+            'photo.uploaded' => 'La fotografía no debe exceder los 5 MB',
         ];
     }
 }
