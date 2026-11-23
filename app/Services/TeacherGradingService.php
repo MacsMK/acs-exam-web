@@ -29,7 +29,9 @@ class TeacherGradingService
 
     /**
      * Devuelve el listado paginado de calificaciones sin N+1 y preservando el
-     * contrato exacto esperado por la aplicación móvil.
+     * contrato exacto esperado por la aplicación móvil. Para el alumno, cada
+     * fila incluye el grupo del intento y `$groupId` limita el listado a un
+     * grupo (ADR-061); el docente conserva sus filas por examen.
      *
      * @param array<string, mixed> $query
      */
@@ -39,10 +41,11 @@ class TeacherGradingService
         int $page = 1,
         string $path = '',
         array $query = [],
+        ?int $groupId = null,
     ): LengthAwarePaginator {
         $rows = $user->role === 'teacher'
             ? $this->gradeRowsForUser($user)
-            : $this->studentListRows($user);
+            : $this->studentListRows($user, $groupId);
 
         return new LengthAwarePaginator(
             $rows->forPage($page, $perPage)->values(),
@@ -56,18 +59,20 @@ class TeacherGradingService
     /**
      * Listado del alumno: calificaciones publicadas y, sin dato alguno de
      * calificación, los intentos con evaluación pendiente (RF-REP-002),
-     * del más reciente al más antiguo.
+     * del más reciente al más antiguo. Cada fila incluye el grupo del
+     * intento; con `$groupId` solo se listan los intentos de ese grupo.
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function studentListRows(User $student): Collection
+    private function studentListRows(User $student, ?int $groupId): Collection
     {
         $published = StudentAttempt::where('student_id', $student->id)
             ->current()
             ->inCurrentGroupsOfStudent($student->id)
+            ->when($groupId !== null, static fn ($query) => $query->where('group_id', $groupId))
             ->whereNotNull('final_score')
             ->whereHas('exam', static fn ($query) => $query->where('result_visibility_mode', '!=', 'hidden'))
-            ->with('exam')
+            ->with(['exam', 'group'])
             ->get()
             ->map(fn (StudentAttempt $attempt): array => [
                 'submitted_at' => $attempt->submitted_at,
@@ -76,11 +81,11 @@ class TeacherGradingService
                     $attempt->exam->title,
                     (float) $attempt->final_score,
                     $attempt->exam->grading_scale,
-                ),
+                ) + ['group' => $this->studentResults->groupPayload($attempt)],
             ]);
 
         return $published
-            ->concat($this->studentResults->pendingRowsForStudent($student))
+            ->concat($this->studentResults->pendingRowsForStudent($student, $groupId))
             ->sortByDesc(fn (array $entry) => $entry['submitted_at']?->getTimestamp() ?? 0)
             ->pluck('row')
             ->values();

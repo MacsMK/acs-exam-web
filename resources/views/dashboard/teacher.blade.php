@@ -229,7 +229,7 @@
                             {{ $exam->title }}
                         </p>
                         <p class="text-xs text-slate-400 mt-0.5">
-                            Escala {{ $exam->grading_scale }} • {{ $exam->starts_at?->format('d/m/Y H:i') ?? 'Sin fecha programada' }}
+                            {{ $exam->starts_at?->format('d/m/Y H:i') ?? 'Sin fecha programada' }}
                         </p>
                     </x-table.td>
 

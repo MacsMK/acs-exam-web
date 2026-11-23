@@ -9,12 +9,21 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        ExamMonitoringReverbTest.php
  * Ubicación:      tests/Feature/Realtime/ExamMonitoringReverbTest.php
- * Requerimiento:  RW-12, RW-16, RNF-CON-001, RNF-CON-002, RNF-SEG-004
+ * Requerimiento:  RF-EXA-055 (Consulta del avance del examen por el docente) /
+ *                 también RNF-CON-001 (Referencia temporal de exámenes),
+ *                 RNF-CON-002 (Integridad de operaciones relacionadas) y
+ *                 RNF-SEG-004 (Separación de información entre docentes)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Descripción:    Pruebas automatizadas de la capa de tiempo real con Laravel Reverb
  *                 y WebSockets: canales privados autorizados, IDOR multi-docente,
  *                 y despacho de eventos de inicio, incidentes y entrega.
+ *                 v1.1.0: el tablero escribe la configuración de Reverb como
+ *                 cadenas de JavaScript con comilla simple (@js); con @json la
+ *                 comilla doble cerraba el atributo x-data y el componente de
+ *                 Alpine.js no arrancaba (MPW-V3 §7.6.1). Requerimiento cita
+ *                 RF-EXA-055, el código de MPW-V3 §7.6, en lugar de los códigos
+ *                 informales RW-12 y RW-16.
  * ============================================================================
  */
 
@@ -135,6 +144,22 @@ class ExamMonitoringReverbTest extends TestCase
         $response->assertSee('Examen Parcial de Estructuras');
         $response->assertSee('Reverb Conectado en Vivo');
         $response->assertSee('wsKey =');
+    }
+
+    public function test_monitoring_dashboard_writes_reverb_settings_as_javascript_strings(): void
+    {
+        config([
+            'broadcasting.connections.reverb.options.host' => 'localhost',
+            'broadcasting.connections.reverb.key' => 'acsexamwebkey',
+        ]);
+
+        $response = $this->actingAs($this->teacher)
+            ->get(route('exams.monitor', $this->exam));
+
+        $response->assertOk();
+        $response->assertSee("const wsHost = 'localhost'", false);
+        $response->assertSee("const wsKey = 'acsexamwebkey'", false);
+        $response->assertDontSee('const wsHost = "', false);
     }
 
     public function test_foreign_teacher_cannot_access_exam_monitoring_dashboard(): void

@@ -12,6 +12,20 @@
             cancelled: {{ $cancelledCount }},
             incidents: {{ $totalIncidents }},
             alerts: [],
+            maxAlerts: 3,
+            alertLifetimes: { info: 5000, success: 5000, warning: 10000 },
+            incidentLabels: {
+                app_left: 'salió de la aplicación',
+                multi_window: 'abrió otra ventana',
+                focus_lost: 'perdió el foco de la pantalla',
+                tab_switch: 'cambió de pestaña',
+                app_background: 'dejó la aplicación en segundo plano',
+                split_screen: 'usó pantalla dividida',
+                camera_lost: 'perdió la señal de la cámara',
+                camera_covered: 'cubrió la cámara',
+                disconnect: 'perdió la conexión',
+                screenshot_attempt: 'intentó tomar una captura'
+            },
             students: @js($studentsPayload),
             maxIncidents: {{ $exam->max_allowed_incidents ?? 3 }},
             socketConnected: false,
@@ -36,11 +50,11 @@
 
             connectWebSocket() {
                 try {
-                    const useTls = @json((bool) ($reverbConfig['useTls'] ?? false)) || window.location.protocol === 'https:';
+                    const useTls = @js((bool) ($reverbConfig['useTls'] ?? false)) || window.location.protocol === 'https:';
                     const wsProtocol = useTls ? 'wss' : 'ws';
-                    const wsHost = @json($reverbConfig['host'] ?? '') || window.location.hostname;
-                    const wsPort = @json((int) ($reverbConfig['port'] ?? 8080));
-                    const wsKey = @json($reverbConfig['key'] ?? '');
+                    const wsHost = @js($reverbConfig['host'] ?? '') || window.location.hostname;
+                    const wsPort = @js((int) ($reverbConfig['port'] ?? 8080));
+                    const wsKey = @js($reverbConfig['key'] ?? '');
                     const wsUrl = `${wsProtocol}://${wsHost}:${wsPort}/app/${wsKey}?protocol=7&client=js&version=8.4.0-reverb`;
 
                     const ws = new WebSocket(wsUrl);
@@ -142,7 +156,8 @@
                         this.incidents++;
 
                         let alertType = 'warning';
-                        let alertMsg = `Sospecha detectada: ${data.student_name} — ${data.incident_type} (${data.incident_count}/${this.maxIncidents})`;
+                        const incidentLabel = this.incidentLabels[data.incident_type] || data.incident_type;
+                        let alertMsg = `Sospecha detectada: ${data.student_name} ${incidentLabel} (${data.incident_count}/${this.maxIncidents})`;
 
                         if (data.is_cancelled) {
                             if (st.status === 'in_progress') {
@@ -161,7 +176,7 @@
                             }
                         }
 
-                        this.pushAlert(alertMsg, alertType);
+                        this.pushAlert(alertMsg, alertType, `student-${data.student_id}`);
                     }
                 } else if (ev === 'exam.attempt.submitted') {
                     const st = this.students[data.student_id];
@@ -180,10 +195,22 @@
                 }
             },
 
-            pushAlert(text, type = 'info') {
-                this.alerts.unshift({ id: Date.now() + Math.random(), text, type });
-                if (this.alerts.length > 5) {
-                    this.alerts.pop();
+            pushAlert(text, type = 'info', key = null) {
+                if (key !== null) {
+                    this.alerts = this.alerts.filter((a) => a.key !== key);
+                }
+
+                const id = Date.now() + Math.random();
+                this.alerts.unshift({ id, key, text, type });
+
+                if (this.alerts.length > this.maxAlerts) {
+                    const transientIndex = this.alerts.findLastIndex((a) => a.type !== 'danger');
+                    this.alerts.splice(transientIndex === -1 ? this.alerts.length - 1 : transientIndex, 1);
+                }
+
+                const lifetime = this.alertLifetimes[type];
+                if (lifetime) {
+                    setTimeout(() => this.removeAlert(id), lifetime);
                 }
             },
 

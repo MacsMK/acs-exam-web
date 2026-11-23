@@ -134,21 +134,24 @@ class StudentResultService
 
     /**
      * Intentos enviados cuya evaluación definitiva sigue pendiente
-     * (RF-REP-002); no se expone ningún dato de la calificación.
+     * (RF-REP-002); no se expone ningún dato de la calificación. Cada fila
+     * incluye el grupo del intento y `$groupId` limita las filas a un grupo
+     * (ADR-061).
      *
      * @return Collection<int, array<string, mixed>>
      */
-    public function pendingRowsForStudent(User $student): Collection
+    public function pendingRowsForStudent(User $student, ?int $groupId = null): Collection
     {
         return StudentAttempt::where('student_id', $student->id)
             ->current()
             ->inCurrentGroupsOfStudent($student->id)
+            ->when($groupId !== null, static fn ($query) => $query->where('group_id', $groupId))
             ->where('status', 'submitted')
             ->where(static function ($query): void {
                 $query->whereNull('final_score')
                     ->orWhereHas('exam', static fn ($examQuery) => $examQuery->where('result_visibility_mode', 'hidden'));
             })
-            ->with('exam')
+            ->with(['exam', 'group'])
             ->get()
             ->map(fn (StudentAttempt $attempt): array => [
                 'submitted_at' => $attempt->submitted_at,
@@ -159,8 +162,27 @@ class StudentResultService
                     'weight' => 100.0,
                     'is_passing' => null,
                     'status' => 'pending',
+                    'group' => $this->groupPayload($attempt),
                 ],
             ]);
+    }
+
+    /**
+     * Grupo en el que el alumno presentó el intento, con su materia, para el
+     * listado de calificaciones de la app (ADR-061). `group` debe venir
+     * cargado.
+     *
+     * @return array{id: string, name: string, subject: ?string}|null
+     */
+    public function groupPayload(StudentAttempt $attempt): ?array
+    {
+        $group = $attempt->group;
+
+        return $group === null ? null : [
+            'id' => (string) $group->id,
+            'name' => $group->name,
+            'subject' => $group->subject,
+        ];
     }
 
     /**

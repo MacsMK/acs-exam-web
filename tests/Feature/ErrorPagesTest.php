@@ -66,7 +66,7 @@ class ErrorPagesTest extends TestCase
         $html = $this->get('/ruta-que-no-existe-para-prueba')->getContent();
 
         $this->assertStringContainsString('images/branding/logo-fondo-claro.png', $html);
-        $this->assertStringContainsString('images/branding/isotipo.png', $html);
+        $this->assertStringContainsString('images/branding/favicon-32.png', $html);
         $this->assertStringNotContainsString('M20 4L4 32', $html);
 
         $logo = $this->blade('<x-logo variant="compact" />');
