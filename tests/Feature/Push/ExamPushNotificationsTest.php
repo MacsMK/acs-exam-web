@@ -104,6 +104,34 @@ class ExamPushNotificationsTest extends TestCase
         $this->assertSame(['exam.opened'], $this->push->types());
     }
 
+    /**
+     * RF-EXA-025: al quedar disponible el examen, cada alumno recibe un correo con
+     * el enlace a las instrucciones, una sola vez; asignarlo a futuro no envía correo.
+     */
+    public function test_students_get_an_email_with_the_access_link_when_the_exam_opens_only_once(): void
+    {
+        $exam = $this->createExam(false, now()->addMinutes(10), now()->addHours(2));
+        $this->publish($exam);
+
+        $this->assertCount(0, $this->sentMails());
+
+        $this->travel(11)->minutes();
+        $this->artisan('exams:push-due')->assertSuccessful();
+        $this->artisan('exams:push-due')->assertSuccessful();
+
+        $mails = $this->sentMails();
+        $this->assertCount(2, $mails);
+
+        $recipients = $mails->map(static fn ($sent) => $sent->getOriginalMessage()->getTo()[0]->getAddress())->sort()->values()->all();
+        $expected = collect([$this->studentOne->email, $this->studentTwo->email])->sort()->values()->all();
+        $this->assertSame($expected, $recipients);
+
+        $this->assertStringContainsString(
+            route('student.exams.instructions', $exam),
+            $mails->first()->getOriginalMessage()->getTextBody(),
+        );
+    }
+
     public function test_publishing_twice_does_not_notify_twice(): void
     {
         $exam = $this->createExam(false, now()->addDay(), now()->addDays(2));
@@ -306,5 +334,13 @@ class ExamPushNotificationsTest extends TestCase
             'password' => 'Demo1234',
             'is_active' => true,
         ]);
+    }
+
+    /**
+     * Correos enviados en la prueba (MAIL_MAILER=array en phpunit.xml).
+     */
+    private function sentMails(): \Illuminate\Support\Collection
+    {
+        return collect($this->app['mailer']->getSymfonyTransport()->messages());
     }
 }
