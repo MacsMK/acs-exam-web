@@ -201,8 +201,9 @@ class StudentWebModuleComplianceTest extends TestCase
         $response->assertSee('Tiempo máximo');
         $response->assertSee('Orden de preguntas');
         $response->assertDontSee('Duración total');
-        // RF-EXA-040 no está implementado: las instrucciones no prometen guardado automático
-        $response->assertDontSee('Auto-guardado');
+        // RF-EXA-040: las instrucciones describen el guardado automático real (borrador en el servidor)
+        $response->assertSee('Guardado automático');
+        $response->assertDontSee('Auto-guardado permanente');
     }
 
     /**
