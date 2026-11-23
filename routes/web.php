@@ -273,6 +273,11 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('intentos/{attempt}', [AttemptController::class, 'show'])->name('attempts.show');
     Route::post('intentos/{attempt}/responder', [AttemptController::class, 'answer'])->name('attempts.answer');
+    // Guardado automático del borrador de la pregunta activa (RF-EXA-040, RF-EXA-041)
+    Route::post('intentos/{attempt}/borrador', [AttemptController::class, 'draft'])
+        ->whereNumber('attempt')
+        ->middleware('throttle:120,1')
+        ->name('attempts.draft');
     Route::post('intentos/{attempt}/incidente', [AttemptController::class, 'incident'])
         ->whereNumber('attempt')
         ->middleware('throttle:30,1')

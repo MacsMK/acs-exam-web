@@ -44,7 +44,9 @@
             'cancelled_by_incident' => 'Cancelado por incidencia',
             'graded' => 'Calificado',
         ];
-        $attemptStatusLabel = $attemptStatusLabels[$attempt->status] ?? 'En curso';
+        $attemptStatusLabel = $attempt->wasStoppedByTeacher()
+            ? 'Finalizado por detención del examen'
+            : ($attemptStatusLabels[$attempt->status] ?? 'En curso');
     @endphp
 
     <div class="space-y-6">

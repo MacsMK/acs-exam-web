@@ -31,6 +31,10 @@
             <span>
                 Entregado el <strong class="font-mono text-slate-700">{{ $attempt->submitted_at?->format('d/m/Y \a \l\a\s H:i') ?? now()->format('d/m/Y H:i') }}</strong>
             </span>
+            @if ($attempt->wasStoppedByTeacher())
+                <span>·</span>
+                <span class="font-semibold text-acode-warning-dark">Finalizado porque el docente detuvo el examen</span>
+            @endif
         </x-slot:meta>
 
         <x-slot:actions>

@@ -64,7 +64,12 @@ class AttemptController extends Controller
             return redirect()->route('attempts.result', $attempt);
         }
 
-        return view('exams.take-exam', ['attempt' => $attempt, 'current' => $current]);
+        return view('exams.take-exam', [
+            'attempt' => $attempt,
+            'current' => $current,
+            // Borrador guardado de la pregunta activa (RF-EXA-040, RF-EXA-048)
+            'draft' => $this->attemptService->draftFor($attempt, (int) $current['exam_question_id']),
+        ]);
     }
 
     public function answer(AttemptAnswerWebRequest $request, StudentAttempt $attempt): RedirectResponse
@@ -85,12 +90,7 @@ class AttemptController extends Controller
             'La pregunta enviada no corresponde al reactivo activo en secuencia.',
         );
 
-        $answerPayload = match (true) {
-            $request->has('selected_option_index') => ['selected_option_index' => (int) $request->input('selected_option_index')],
-            $request->has('pairs') => $request->input('pairs'),
-            $request->has('given_answer') => $request->input('given_answer'),
-            default => (string) ($request->input('answer_text') ?? ''),
-        };
+        $answerPayload = $this->answerPayloadFrom($request);
 
         try {
             $isLate = $this->attemptService->submitAnswer($attempt, (int) $data['exam_question_id'], $answerPayload);
@@ -180,6 +180,41 @@ class AttemptController extends Controller
             'attempt' => $attempt->loadMissing('exam', 'group.teacher'),
             'reviewData' => $reviewData,
         ]);
+    }
+
+    /**
+     * Guarda el borrador de la pregunta activa sin calificarla (RF-EXA-040). La
+     * vista solo marca la respuesta como guardada al recibir esta confirmación
+     * (RF-EXA-041).
+     */
+    public function draft(AttemptAnswerWebRequest $request, StudentAttempt $attempt): JsonResponse
+    {
+        $this->authorizeOwnership($attempt);
+
+        try {
+            $this->attemptService->saveDraft(
+                $attempt,
+                (int) $request->validated('exam_question_id'),
+                $this->answerPayloadFrom($request),
+            );
+        } catch (DomainException $e) {
+            return response()->json(['saved' => false, 'message' => $e->getMessage()], 409);
+        }
+
+        return response()->json(['saved' => true, 'saved_at' => now()->toIso8601String()]);
+    }
+
+    /**
+     * Normaliza la respuesta del formulario web según el tipo de pregunta.
+     */
+    private function answerPayloadFrom(AttemptAnswerWebRequest $request): mixed
+    {
+        return match (true) {
+            $request->has('selected_option_index') => ['selected_option_index' => (int) $request->input('selected_option_index')],
+            $request->has('pairs') => $request->input('pairs'),
+            $request->has('given_answer') => $request->input('given_answer'),
+            default => (string) ($request->input('answer_text') ?? ''),
+        };
     }
 
     private function authorizeOwnership(StudentAttempt $attempt): void

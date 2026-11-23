@@ -133,6 +133,47 @@ class ExamQuestionTimingTest extends TestCase
         ]);
     }
 
+    /**
+     * RF-EXA-040 y RF-EXA-048: el borrador de la pregunta activa se guarda en el
+     * servidor, se recupera al volver y se descarta al registrar la respuesta;
+     * no se acepta para una pregunta que no es la activa.
+     */
+    public function test_the_draft_of_the_active_question_is_saved_recovered_and_cleared(): void
+    {
+        $this->take()->assertOk();
+        $student = User::query()->where('role', 'student')->firstOrFail();
+        $attempt = \App\Models\StudentAttempt::query()->where('exam_id', $this->exam->id)->firstOrFail();
+        $sequence = $attempt->question_sequence_payload;
+
+        $this->actingAs($student)
+            ->postJson(route('attempts.draft', $attempt), ['exam_question_id' => $sequence[0], 'selected_option_index' => 1])
+            ->assertOk()
+            ->assertJsonPath('saved', true);
+
+        $this->assertSame(['selected_option_index' => 1], app(AttemptService::class)->draftFor($attempt, (int) $sequence[0]));
+        $this->actingAs($student)->get(route('attempts.show', $attempt))->assertOk()->assertViewHas('draft', ['selected_option_index' => 1]);
+
+        $this->actingAs($student)
+            ->postJson(route('attempts.draft', $attempt), ['exam_question_id' => $sequence[1], 'selected_option_index' => 0])
+            ->assertStatus(409);
+
+        $this->answer($this->questions[0], 1)->assertOk();
+        $this->assertNull(app(AttemptService::class)->draftFor($attempt, (int) $sequence[0]));
+    }
+
+    /**
+     * Hallazgo del 22/11/2026: si el servidor de tiempo real (Reverb) no responde,
+     * el examen se inicia igual.
+     */
+    public function test_the_exam_starts_even_if_realtime_broadcasting_fails(): void
+    {
+        $this->mock(\Illuminate\Contracts\Broadcasting\Factory::class, function ($mock): void {
+            $mock->shouldReceive('queue')->andThrow(new \RuntimeException('Reverb no disponible'));
+        });
+
+        $this->take()->assertOk()->assertJsonPath('data.remaining_seconds', self::LIMIT_SECONDS);
+    }
+
     public function test_the_tolerance_is_three_seconds_as_the_manuals_define(): void
     {
         $this->assertSame(3, AttemptService::QUESTION_TIME_TOLERANCE_SECONDS);
@@ -256,6 +297,14 @@ class ExamQuestionTimingTest extends TestCase
 
         $this->assertDatabaseHas('acs_student_attempts', ['exam_id' => $this->exam->id, 'status' => 'expired']);
         $this->assertSame(409, $this->answer($this->questions[0], 0)->status());
+
+        // RF-EXA-024: la causa de finalización queda identificada
+        $attempt = \App\Models\StudentAttempt::query()->where('exam_id', $this->exam->id)->firstOrFail();
+        $this->assertDatabaseHas('acs_audit_logs', [
+            'action' => \App\Models\StudentAttempt::ACTION_STOPPED_BY_TEACHER,
+            'auditable_id' => $attempt->id,
+        ]);
+        $this->assertTrue($attempt->wasStoppedByTeacher());
     }
 
     private function take(): TestResponse

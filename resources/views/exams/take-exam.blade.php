@@ -40,6 +40,32 @@
                 {{-- RF-EXA-031: se puede avanzar sin responder, previa confirmación; el auto-envío por tiempo no pregunta --}}
                 x-data="{
                     confirmedBlank: false,
+                    saveState: @js($draft !== null ? 'saved' : 'idle'),
+                    saveTimer: null,
+                    queueSave() {
+                        this.saveState = 'pending';
+                        clearTimeout(this.saveTimer);
+                        this.saveTimer = setTimeout(() => this.saveDraft(), 800);
+                    },
+                    async saveDraft() {
+                        this.saveState = 'saving';
+                        try {
+                            const token = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || '';
+                            const response = await fetch(@js(route('attempts.draft', $attempt)), {
+                                method: 'POST',
+                                headers: { 'X-CSRF-TOKEN': token, 'Accept': 'application/json' },
+                                body: new FormData(this.$el),
+                            });
+                            const data = await response.json().catch(() => ({}));
+                            this.saveState = response.ok && data.saved === true ? 'saved' : 'error';
+                        } catch (error) {
+                            this.saveState = 'error';
+                        }
+                        if (this.saveState === 'error') {
+                            clearTimeout(this.saveTimer);
+                            this.saveTimer = setTimeout(() => this.saveDraft(), 5000);
+                        }
+                    },
                     isBlank() {
                         const f = this.$el;
                         const radios = f.querySelectorAll('input[name=selected_option_index]');
@@ -62,7 +88,9 @@
                         });
                     },
                 }"
-                @submit="guard($event)"
+                @submit="clearTimeout(saveTimer); guard($event)"
+                @input="queueSave()"
+                @change="queueSave()"
                 class="space-y-4"
             >
                 @csrf
@@ -77,6 +105,7 @@
                                         type="radio"
                                         name="selected_option_index"
                                         value="{{ $option['index'] }}"
+                                        @checked(is_array($draft ?? null) && isset($draft['selected_option_index']) && (int) $draft['selected_option_index'] === (int) $option['index'])
                                         class="h-4 w-4 text-acode-tech focus:ring-acode-tech border-slate-300"
                                     />
                                     <span class="text-slate-800 font-medium">{{ $option['text'] }}</span>
@@ -100,7 +129,7 @@
                                         <x-form.select name="pairs[{{ $i }}][right_id]">
                                             <option value="">Selecciona definición…</option>
                                             @forelse ($current['question']['right_items'] as $right)
-                                                <option value="{{ $right['id'] }}">{{ $right['text'] }}</option>
+                                                <option value="{{ $right['id'] }}" @selected(is_array($draft ?? null) && collect($draft)->contains(fn ($p) => is_array($p) && ($p['left_id'] ?? null) == $left['id'] && ($p['right_id'] ?? null) == $right['id']))>{{ $right['text'] }}</option>
                                             @empty
                                                 <option value="" disabled>Sin definiciones</option>
                                             @endforelse
@@ -119,7 +148,7 @@
                                 name="answer_text"
                                 rows="6"
                                 placeholder="Escribe tu argumentación pedagógica aquí…"
-                            ></x-form.textarea>
+                            >{{ is_string($draft ?? null) ? $draft : '' }}</x-form.textarea>
                         </x-form.group>
                         @break
 
@@ -145,13 +174,19 @@
                                 @paste.prevent
                                 onpaste="return false;"
                                 placeholder="// Escribe tu solución aquí..."
-                            >{{ $current['question']['starter_code'] }}</x-form.textarea>
+                            >{{ is_string($draft ?? null) ? $draft : $current['question']['starter_code'] }}</x-form.textarea>
                         </div>
                         @break
                 @endswitch
 
-                <div class="pt-4 flex items-center justify-between">
-                    <x-button type="submit" variant="primary" size="md">
+                <div class="pt-4 flex flex-wrap items-center justify-between gap-3">
+                    {{-- RF-EXA-041: «guardada» solo tras la confirmación del servidor --}}
+                    <p class="order-2 text-xs font-medium" role="status" aria-live="polite">
+                        <span x-show="saveState === 'saved'" style="display: none" class="text-acode-accent">✓ Respuesta guardada</span>
+                        <span x-show="saveState === 'pending' || saveState === 'saving'" style="display: none" class="text-slate-500">Guardando…</span>
+                        <span x-show="saveState === 'error'" style="display: none" class="text-acode-danger">No se pudo guardar; se reintentará automáticamente</span>
+                    </p>
+                    <x-button type="submit" variant="primary" size="md" class="order-1">
                         <x-icon name="check" class="w-4 h-4" />
                         Enviar respuesta
                     </x-button>

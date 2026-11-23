@@ -134,7 +134,7 @@
                                 @elseif ($attempt->status === 'cancelled_by_incident')
                                     <x-badge variant="danger">Cancelado por Incidencias</x-badge>
                                 @elseif ($attempt->status === 'expired')
-                                    <x-badge variant="warning">Expirado</x-badge>
+                                    <x-badge variant="warning">{{ $attempt->wasStoppedByTeacher() ? 'Detenido por el docente' : 'Expirado' }}</x-badge>
                                 @else
                                     <x-badge variant="neutral">{{ $attemptStatusLabels[$attempt->status] ?? 'En curso' }}</x-badge>
                                 @endif

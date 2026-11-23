@@ -30,8 +30,11 @@ use App\Models\StudentAttempt;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use DomainException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class AttemptService
 {
@@ -108,14 +111,14 @@ class AttemptService
             $this->examNotifications->examStarted($exam, $attempt);
 
             $studentUser = $attempt->relationLoaded('student') ? $attempt->student : $attempt->student()->first();
-            ExamAttemptStarted::dispatch(
+            $this->broadcastSafely(static fn () => ExamAttemptStarted::dispatch(
                 (int) $exam->id,
                 (int) $attempt->id,
                 (int) $student->id,
                 $studentUser ? $studentUser->full_name : 'Estudiante #' . $student->id,
                 now()->format('H:i:s'),
                 'in_progress'
-            );
+            ));
         }
 
         return $attempt;
@@ -268,7 +271,59 @@ class AttemptService
             $lockedAttempt->increment('current_question_index');
         });
 
+        Cache::forget($this->draftKey($attempt, $examQuestion->id));
+
         return $isLate;
+    }
+
+    /**
+     * Guarda en el servidor el borrador de la pregunta activa mientras el alumno
+     * responde (RF-EXA-040). Solo acepta la pregunta activa de un intento en
+     * curso; el borrador dura hasta el tiempo máximo del intento y se descarta
+     * al registrar la respuesta. No califica ni avanza la secuencia.
+     *
+     * @throws DomainException
+     */
+    public function saveDraft(StudentAttempt $attempt, int $examQuestionId, mixed $payload): void
+    {
+        if (! $this->isInProgress($attempt)) {
+            throw new DomainException('El intento ya no se encuentra activo.');
+        }
+
+        $current = $this->currentQuestion($attempt);
+        if ($current === null || (int) $current['exam_question_id'] !== $examQuestionId) {
+            throw new DomainException('La pregunta ya no es la activa; vuelve a consultar el examen.');
+        }
+
+        $deadline = $this->attemptDeadline($attempt) ?? now()->addHours(6);
+        Cache::put($this->draftKey($attempt, $examQuestionId), $payload, $deadline);
+    }
+
+    /**
+     * Borrador guardado de la pregunta activa, para recuperarlo al volver al
+     * intento (RF-EXA-048). Null si no hay.
+     */
+    public function draftFor(StudentAttempt $attempt, int $examQuestionId): mixed
+    {
+        return Cache::get($this->draftKey($attempt, $examQuestionId));
+    }
+
+    private function draftKey(StudentAttempt $attempt, int $examQuestionId): string
+    {
+        return sprintf('attempt-draft:%d:%d', $attempt->id, $examQuestionId);
+    }
+
+    /**
+     * El monitoreo en tiempo real (Reverb) es auxiliar: si no responde, el
+     * examen continúa y solo se registra el error, igual que con los avisos push.
+     */
+    private function broadcastSafely(callable $dispatch): void
+    {
+        try {
+            $dispatch();
+        } catch (Throwable $e) {
+            Log::warning('No se pudo emitir el evento de monitoreo en tiempo real.', ['reason' => $e->getMessage()]);
+        }
     }
 
     /**
@@ -295,7 +350,7 @@ class AttemptService
             }
         }
 
-        ExamAttemptIncidentReported::dispatch(
+        $this->broadcastSafely(static fn () => ExamAttemptIncidentReported::dispatch(
             (int) $attempt->exam_id,
             (int) $attempt->id,
             (int) $attempt->student_id,
@@ -305,7 +360,7 @@ class AttemptService
             (int) $attempt->incidents_count,
             now()->format('H:i:s'),
             $isCancelled
-        );
+        ));
 
         return $attempt;
     }
@@ -366,7 +421,7 @@ class AttemptService
         $this->examNotifications->attemptClosed($submitted);
 
         $studentUser = $submitted->relationLoaded('student') ? $submitted->student : $submitted->student()->first();
-        ExamAttemptSubmitted::dispatch(
+        $this->broadcastSafely(static fn () => ExamAttemptSubmitted::dispatch(
             (int) $submitted->exam_id,
             (int) $submitted->id,
             (int) $submitted->student_id,
@@ -374,7 +429,7 @@ class AttemptService
             now()->format('H:i:s'),
             $submitted->final_score !== null ? (float) $submitted->final_score : null,
             (string) $submitted->status
-        );
+        ));
 
         return $submitted;
     }

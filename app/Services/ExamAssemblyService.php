@@ -22,6 +22,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
+use App\Models\AuditLog;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
 use App\Models\ExamSection;
@@ -354,10 +355,25 @@ class ExamAssemblyService
 
             // RF-EXA-024: detener la aplicación finaliza los intentos en curso conservando
             // sus respuestas; sin esto seguirían abiertos por la regla de RF-EXA-050.
-            StudentAttempt::query()
+            $stoppedIds = StudentAttempt::query()
                 ->where('exam_id', $closed->id)
                 ->where('status', 'in_progress')
+                ->pluck('id');
+
+            StudentAttempt::query()
+                ->whereIn('id', $stoppedIds)
                 ->update(['status' => 'expired', 'submitted_at' => now()]);
+
+            // RF-EXA-024: la causa de finalización queda en la bitácora de cada intento
+            foreach ($stoppedIds as $attemptId) {
+                AuditLog::query()->create([
+                    'user_id' => auth()->id(),
+                    'action' => StudentAttempt::ACTION_STOPPED_BY_TEACHER,
+                    'auditable_type' => StudentAttempt::class,
+                    'auditable_id' => $attemptId,
+                    'new_values' => ['status' => 'expired', 'cause' => 'Detención del examen por el docente'],
+                ]);
+            }
 
             return $closed;
         });

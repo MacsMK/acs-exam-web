@@ -33,6 +33,24 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class StudentAttempt extends Model
 {
     /**
+     * Acción de bitácora que identifica un intento finalizado porque el docente
+     * detuvo el examen (RF-EXA-024).
+     */
+    public const ACTION_STOPPED_BY_TEACHER = 'attempt.stopped_by_teacher';
+
+    /**
+     * Indica si el intento terminó porque el docente detuvo el examen.
+     */
+    public function wasStoppedByTeacher(): bool
+    {
+        return $this->status === 'expired' && \App\Models\AuditLog::query()
+            ->where('auditable_type', self::class)
+            ->where('auditable_id', $this->id)
+            ->where('action', self::ACTION_STOPPED_BY_TEACHER)
+            ->exists();
+    }
+
+    /**
      * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3).
      *
      * @var string
