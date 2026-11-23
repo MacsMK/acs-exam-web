@@ -112,6 +112,27 @@ class ExamQuestionTimingTest extends TestCase
         $this->assertSame(2, $this->exam->maxDurationMinutes());
     }
 
+    /**
+     * RF-EXA-031: avanzar sin responder vale cero puntos, aunque la respuesta
+     * correcta sea la primera opción (el formulario web envía la selección vacía).
+     */
+    public function test_advancing_without_answer_scores_zero_even_if_the_first_option_is_correct(): void
+    {
+        $this->take()->assertOk();
+        $this->questions[0]->questionable->update(['correct_option_index' => 0]);
+
+        $attempt = \App\Models\StudentAttempt::query()->where('exam_id', $this->exam->id)->firstOrFail();
+        $examQuestionId = (int) $attempt->question_sequence_payload[0];
+
+        app(AttemptService::class)->submitAnswer($attempt, $examQuestionId, '');
+
+        $this->assertDatabaseHas('acs_student_answers', [
+            'student_attempt_id' => $attempt->id,
+            'exam_question_id' => $examQuestionId,
+            'points_awarded' => 0,
+        ]);
+    }
+
     public function test_the_tolerance_is_three_seconds_as_the_manuals_define(): void
     {
         $this->assertSame(3, AttemptService::QUESTION_TIME_TOLERANCE_SECONDS);

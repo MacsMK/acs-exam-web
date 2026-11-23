@@ -37,6 +37,32 @@
                 method="POST"
                 action="{{ route('attempts.answer', $attempt) }}"
                 x-ref="answerForm"
+                {{-- RF-EXA-031: se puede avanzar sin responder, previa confirmación; el auto-envío por tiempo no pregunta --}}
+                x-data="{
+                    confirmedBlank: false,
+                    isBlank() {
+                        const f = this.$el;
+                        const radios = f.querySelectorAll('input[name=selected_option_index]');
+                        if (radios.length) { return ! Array.from(radios).some((r) => r.checked); }
+                        const selects = f.querySelectorAll('select[name^=pairs]');
+                        if (selects.length) { return Array.from(selects).every((s) => s.value === ''); }
+                        const text = f.querySelector('textarea[name=answer_text]');
+                        if (text) { const v = text.value.trim(); return v === '' || v === (text.dataset.starter || '').trim(); }
+                        return false;
+                    },
+                    guard(event) {
+                        if (this.confirmedBlank || ! this.isBlank()) { return; }
+                        event.preventDefault();
+                        AcodeAlert.confirm({
+                            title: '¿Continuar sin responder?',
+                            text: 'Esta pregunta obtendrá cero puntos y no podrás regresar a ella.',
+                            confirmButtonText: 'Continuar',
+                            cancelButtonText: 'Cancelar',
+                            onConfirm: () => { this.confirmedBlank = true; this.$el.submit(); },
+                        });
+                    },
+                }"
+                @submit="guard($event)"
                 class="space-y-4"
             >
                 @csrf
@@ -51,7 +77,6 @@
                                         type="radio"
                                         name="selected_option_index"
                                         value="{{ $option['index'] }}"
-                                        required
                                         class="h-4 w-4 text-acode-tech focus:ring-acode-tech border-slate-300"
                                     />
                                     <span class="text-slate-800 font-medium">{{ $option['text'] }}</span>
@@ -72,7 +97,7 @@
                                     <span class="flex-1 text-sm font-semibold text-slate-800">{{ $left['text'] }}</span>
                                     <input type="hidden" name="pairs[{{ $i }}][left_id]" value="{{ $left['id'] }}">
                                     <div class="flex-1">
-                                        <x-form.select name="pairs[{{ $i }}][right_id]" required>
+                                        <x-form.select name="pairs[{{ $i }}][right_id]">
                                             <option value="">Selecciona definición…</option>
                                             @forelse ($current['question']['right_items'] as $right)
                                                 <option value="{{ $right['id'] }}">{{ $right['text'] }}</option>
@@ -89,11 +114,10 @@
                         @break
 
                     @case('open')
-                        <x-form.group name="answer_text" label="Tu respuesta analítica" required>
+                        <x-form.group name="answer_text" label="Tu respuesta analítica">
                             <x-form.textarea
                                 name="answer_text"
                                 rows="6"
-                                required
                                 placeholder="Escribe tu argumentación pedagógica aquí…"
                             ></x-form.textarea>
                         </x-form.group>
@@ -117,7 +141,7 @@
                                 name="answer_text"
                                 rows="10"
                                 :mono="true"
-                                required
+                                data-starter="{{ $current['question']['starter_code'] }}"
                                 @paste.prevent
                                 onpaste="return false;"
                                 placeholder="// Escribe tu solución aquí..."
@@ -162,7 +186,6 @@
             >
                 @csrf
                 <x-button type="button" variant="danger" size="sm" @click="confirmFinish()">
-                    <x-icon name="lock" class="w-3.5 h-3.5" />
                     Finalizar examen
                 </x-button>
             </form>

@@ -634,6 +634,14 @@ class ExamTeacherWorkflowTest extends TestCase
         $sequence = $assemblyService->buildQuestionSequence($exam);
 
         $this->assertSame([$a0->id, $a1->id, $b0->id, $b1->id], $sequence);
+
+        // RF-EXA-015: en orden aleatorio cada apartado conserva su lugar y solo se mezclan sus preguntas
+        $exam->update(['randomize_question_order' => true]);
+        for ($run = 0; $run < 20; $run++) {
+            $random = $assemblyService->buildQuestionSequence($exam->fresh());
+            $this->assertEqualsCanonicalizing([$a0->id, $a1->id], array_slice($random, 0, 2));
+            $this->assertEqualsCanonicalizing([$b0->id, $b1->id], array_slice($random, 2, 2));
+        }
     }
 
     // ------------------------------------------------------------------

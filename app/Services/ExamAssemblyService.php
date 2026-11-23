@@ -990,7 +990,9 @@ class ExamAssemblyService
 
     /**
      * Arma el orden de preguntas que verá un alumno: ordenado primero por sección
-     * y luego por orden interno, o aleatorio según randomize_question_order (RW-20).
+     * y luego por orden interno. Con randomize_question_order el orden se mezcla
+     * por estudiante dentro de cada apartado, respetando el orden de los apartados
+     * (RF-EXA-015, RW-20).
      *
      * @return array<int, int> ids de acs_exam_question en el orden a mostrar
      */
@@ -1003,15 +1005,17 @@ class ExamAssemblyService
             ->orderBy('acs_exam_sections.id')
             ->orderBy('acs_exam_question.sort_order')
             ->orderBy('acs_exam_question.id')
-            ->pluck('acs_exam_question.id')
-            ->map(static fn (mixed $id): int => (int) $id)
-            ->all();
+            ->get(['acs_exam_question.id', 'acs_exam_question.exam_section_id']);
 
-        if ($exam->randomize_question_order) {
-            shuffle($examQuestions);
+        if (! $exam->randomize_question_order) {
+            return $examQuestions->map(static fn (ExamQuestion $row): int => (int) $row->id)->all();
         }
 
-        return $examQuestions;
+        return $examQuestions
+            ->groupBy(static fn (ExamQuestion $row): string => (string) ($row->exam_section_id ?? 'sin-apartado'))
+            ->flatMap(static fn ($rows) => $rows->pluck('id')->map(static fn (mixed $id): int => (int) $id)->shuffle())
+            ->values()
+            ->all();
     }
 
     /**

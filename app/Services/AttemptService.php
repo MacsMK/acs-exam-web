@@ -469,7 +469,9 @@ class AttemptService
      */
     private function gradeMultipleChoice(mixed $item, mixed $answerPayload, float $pointsWeight): array
     {
-        $selectedIndex = (int) (is_array($answerPayload) ? ($answerPayload['selected_option_index'] ?? -1) : $answerPayload);
+        $rawIndex = is_array($answerPayload) ? ($answerPayload['selected_option_index'] ?? null) : $answerPayload;
+        // Sin selección (avance sin responder o tiempo agotado, RF-EXA-031) vale cero: '' no debe leerse como la opción 0
+        $selectedIndex = is_int($rawIndex) || (is_string($rawIndex) && ctype_digit($rawIndex)) ? (int) $rawIndex : -1;
         $isCorrect = $selectedIndex === (int) $item->correct_option_index;
 
         return ['is_correct' => $isCorrect, 'points_awarded' => $isCorrect ? $pointsWeight : 0.0];
