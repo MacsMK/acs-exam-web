@@ -135,7 +135,10 @@ class AttemptController extends Controller
 
     private function attemptForUser(Exam $exam, User $user): StudentAttempt
     {
-        $attempt = StudentAttempt::where('exam_id', $exam->id)->where('student_id', $user->id)->first();
+        $attempt = StudentAttempt::where('exam_id', $exam->id)
+            ->where('student_id', $user->id)
+            ->orderByDesc('attempt_number')
+            ->first();
 
         abort_if($attempt === null, 404, 'No has iniciado este examen.');
 

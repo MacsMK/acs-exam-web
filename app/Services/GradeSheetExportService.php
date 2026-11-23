@@ -184,6 +184,7 @@ class GradeSheetExportService
         // Pre-carga agregada de promedios de exámenes reales (sin N+1)
         $examIds = $group->exams()->pluck('acs_exams.id');
         $examAverages = StudentAttempt::query()
+            ->current()
             ->whereIn('exam_id', $examIds)
             ->where('group_id', $group->id)
             ->whereNotNull('final_score')

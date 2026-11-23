@@ -17,6 +17,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\GroupJoinRequest;
 use App\Models\Exam;
+use App\Services\AttemptService;
 use App\Services\GroupEnrollmentService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -54,7 +55,7 @@ class StudentExamController extends Controller
     /**
      * Pantalla previa de instrucciones y condiciones antes de iniciar el cronómetro (RF-EXA-028 / P-83).
      */
-    public function instructions(Request $request, Exam $exam): View|RedirectResponse
+    public function instructions(Request $request, Exam $exam, AttemptService $attemptService): View|RedirectResponse
     {
         $student = $request->user();
 
@@ -65,22 +66,18 @@ class StudentExamController extends Controller
 
         abort_unless($isEligible, 403, 'No tienes permiso para acceder a este examen.');
 
-        $inProgress = $student->studentAttempts()
-            ->where('exam_id', $exam->id)
-            ->where('status', 'in_progress')
-            ->first();
+        // RF-EXA-052: se decide con el intento más reciente; si el docente autorizó
+        // una reaplicación, el alumno vuelve a ver las instrucciones.
+        $latest = $attemptService->latestAttemptFor($exam, $student);
 
-        if ($inProgress) {
-            return redirect()->route('attempts.show', $inProgress);
+        if ($latest !== null && $latest->status === 'in_progress') {
+            return redirect()->route('attempts.show', $latest);
         }
 
-        $submitted = $student->studentAttempts()
-            ->where('exam_id', $exam->id)
-            ->where('status', 'submitted')
-            ->first();
+        $isReapplication = $latest !== null && $latest->reapplication_authorized_at !== null;
 
-        if ($submitted) {
-            return redirect()->route('attempts.result', $submitted);
+        if ($latest !== null && $latest->status === 'submitted' && ! $isReapplication) {
+            return redirect()->route('attempts.result', $latest);
         }
 
         $exam->loadMissing(['teacher', 'groups']);
@@ -89,6 +86,7 @@ class StudentExamController extends Controller
         return view('student.exams.instructions', [
             'exam' => $exam,
             'questionsCount' => $questionsCount,
+            'reapplicationNumber' => $isReapplication ? (int) $latest->attempt_number + 1 : null,
         ]);
     }
 }

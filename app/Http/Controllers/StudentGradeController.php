@@ -41,6 +41,7 @@ class StudentGradeController extends Controller
             ->get();
 
         $recentAttempts = StudentAttempt::query()
+            ->current()
             ->where('student_id', $student->id)
             ->where('status', 'submitted')
             ->whereNotNull('final_score')
@@ -86,6 +87,7 @@ class StudentGradeController extends Controller
         ]);
 
         $groupAttempts = StudentAttempt::query()
+            ->current()
             ->where('student_id', $student->id)
             ->where('group_id', $group->id)
             ->where('status', 'submitted')

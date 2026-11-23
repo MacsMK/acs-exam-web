@@ -100,6 +100,12 @@
             </ul>
         </div>
 
+        @if (($reapplicationNumber ?? null) !== null)
+            <div class="rounded-lg border border-acode-tech/30 bg-acode-tech/10 px-4 py-3 text-sm text-slate-700" role="status">
+                <strong>Reaplicación autorizada:</strong> tu docente te dio un intento adicional. Este será tu intento {{ $reapplicationNumber }}; el anterior se conserva y tu calificación será la de este nuevo intento.
+            </div>
+        @endif
+
         <div class="flex flex-col-reverse sm:flex-row items-center justify-between gap-4 border-t border-slate-100 pt-5">
             <x-button :href="route('student.exams.index')" variant="neutral" size="md" class="w-full sm:w-auto">
                 <x-icon name="arrowLeft" class="w-4 h-4" />

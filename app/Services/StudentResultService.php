@@ -141,6 +141,7 @@ class StudentResultService
     public function pendingRowsForStudent(User $student): Collection
     {
         return StudentAttempt::where('student_id', $student->id)
+            ->current()
             ->inCurrentGroupsOfStudent($student->id)
             ->where('status', 'submitted')
             ->where(static function ($query): void {

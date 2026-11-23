@@ -294,6 +294,7 @@ class ExamNotificationService
     private function closedStudentIds(Exam $exam): array
     {
         return StudentAttempt::query()
+            ->current()
             ->where('exam_id', $exam->id)
             ->where('status', '!=', 'in_progress')
             ->pluck('student_id')

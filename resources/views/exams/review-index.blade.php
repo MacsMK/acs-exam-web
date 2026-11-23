@@ -30,7 +30,26 @@
         ];
     @endphp
 
-    <div class="space-y-6">
+    <div
+        class="space-y-6"
+        x-data="{
+            confirmReapplication(formId, studentName) {
+                const text = 'Se conservará el intento actual con sus resultados. ' + studentName + ' podrá presentar el examen de nuevo mientras siga abierto y su calificación será la del nuevo intento.';
+                if (typeof AcodeAlert !== 'undefined') {
+                    AcodeAlert.confirm({
+                        title: '¿Autorizar reaplicación?',
+                        text: text,
+                        confirmButtonText: 'Autorizar',
+                        cancelButtonText: 'Cancelar',
+                        isDanger: false,
+                        onConfirm: () => document.getElementById(formId)?.submit(),
+                    });
+                    return;
+                }
+                if (confirm(text)) document.getElementById(formId)?.submit();
+            }
+        }"
+    >
         {{-- Encabezado y Breadcrumbs --}}
         <x-page-header
             :title="$exam->title"
@@ -92,6 +111,12 @@
             </x-slot:filters>
         </x-search-filter>
 
+        @if ($errors->has('reapplication'))
+            <div class="rounded-xl border border-acode-danger/30 bg-acode-danger/10 px-4 py-3 text-sm text-acode-danger" role="alert">
+                {{ $errors->first('reapplication') }}
+            </div>
+        @endif
+
         {{-- Tabla de Intentos --}}
         @if ($attempts->isEmpty())
             <x-empty-state
@@ -120,11 +145,21 @@
                                 fn ($ans): bool => in_array($ans->examQuestion?->question?->question_type, ['open', 'code'], true)
                                     && $ans->teacher_recoteje_score === null
                             );
+                        $isReplaced = (int) $attempt->attempt_number < (int) ($latestAttemptNumbers[$attempt->student_id] ?? $attempt->attempt_number);
+                        $canReapply = ! $isReplaced
+                            && $reapplicationOpen
+                            && $attempt->status !== 'in_progress'
+                            && $attempt->reapplication_authorized_at === null;
                     @endphp
                     <tr>
                         <x-table.td class="font-medium text-slate-900">
                             <div class="font-bold text-acode-primary">{{ $attempt->student?->full_name ?? 'Estudiante' }}</div>
                             <div class="text-xs text-slate-500">{{ $attempt->student?->email ?? '—' }}</div>
+                            @if ((int) $attempt->attempt_number > 1 || $isReplaced)
+                                <div class="mt-1 text-xs text-slate-600">
+                                    Intento {{ $attempt->attempt_number }}{{ $isReplaced ? ' (reemplazado)' : '' }}
+                                </div>
+                            @endif
                         </x-table.td>
 
                         <x-table.td>
@@ -141,6 +176,10 @@
 
                                 @if ($hasPendingAi)
                                     <x-badge variant="warning">Requiere Recoteje</x-badge>
+                                @endif
+
+                                @if ($attempt->reapplication_authorized_at !== null && ! $isReplaced)
+                                    <x-badge variant="neutral">Reaplicación autorizada</x-badge>
                                 @endif
                             </div>
                         </x-table.td>
@@ -162,9 +201,26 @@
                         </x-table.td>
 
                         <x-table.td align="center" class="whitespace-nowrap">
-                            <x-button :href="route('exams.revision.show', [$exam, $attempt])" variant="neutral" size="sm">
-                                Abrir recoteje
-                            </x-button>
+                            <div class="flex items-center justify-center gap-2">
+                                <x-button :href="route('exams.revision.show', [$exam, $attempt])" variant="neutral" size="sm">
+                                    Abrir recoteje
+                                </x-button>
+
+                                @if ($canReapply)
+                                    <form id="reapply-form-{{ $attempt->id }}" method="POST" action="{{ route('exams.revision.reapply', [$exam, $attempt]) }}">
+                                        @csrf
+                                        <x-button
+                                            type="button"
+                                            variant="secondary"
+                                            size="sm"
+                                            data-student-name="{{ $attempt->student?->full_name ?? 'El alumno' }}"
+                                            @click="confirmReapplication('reapply-form-{{ $attempt->id }}', $el.dataset.studentName)"
+                                        >
+                                            Autorizar reaplicación
+                                        </x-button>
+                                    </form>
+                                @endif
+                            </div>
                         </x-table.td>
                     </tr>
                 @empty

@@ -120,7 +120,8 @@ class EvaluationPeriodController extends Controller
 
         // Promedio de exámenes reales aplicados en este grupo para pre-llenado sugerido
         $examIds = $group->exams()->pluck('acs_exams.id');
-        $examAverages = StudentAttempt::whereIn('exam_id', $examIds)
+        $examAverages = StudentAttempt::current()
+            ->whereIn('exam_id', $examIds)
             ->where('group_id', $group->id)
             ->whereNotNull('final_score')
             ->groupBy('student_id')

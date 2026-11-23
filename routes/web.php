@@ -215,6 +215,9 @@ Route::middleware('auth')->group(function (): void {
         Route::post('exams/{exam}/revision/{attempt}', [TeacherReviewController::class, 'update'])
             ->whereNumber(['exam', 'attempt'])
             ->name('exams.revision.update');
+        Route::post('exams/{exam}/revision/{attempt}/reaplicacion', [TeacherReviewController::class, 'authorizeReapplication'])
+            ->whereNumber(['exam', 'attempt'])
+            ->name('exams.revision.reapply');
         Route::post('exams/{exam}/revision/{attempt}/respuestas/{answer}/evaluar-ia', [TeacherReviewController::class, 'evaluateWithAi'])
             ->whereNumber(['exam', 'attempt', 'answer'])
             ->middleware('throttle:30,1')

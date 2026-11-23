@@ -22,6 +22,7 @@ namespace App\Services;
 use App\Events\ExamAttemptIncidentReported;
 use App\Events\ExamAttemptStarted;
 use App\Events\ExamAttemptSubmitted;
+use App\Models\AuditLog;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
 use App\Models\QuestionParaphrase;
@@ -58,6 +59,94 @@ class AttemptService
     }
 
     /**
+     * Intento vigente (el más reciente) del alumno en el examen, o null si no
+     * lo ha iniciado (RF-EXA-052).
+     */
+    public function latestAttemptFor(Exam $exam, User $student): ?StudentAttempt
+    {
+        return StudentAttempt::where('exam_id', $exam->id)
+            ->where('student_id', $student->id)
+            ->orderByDesc('attempt_number')
+            ->first();
+    }
+
+    /**
+     * Indica si el docente puede autorizar un intento adicional a partir de
+     * este intento: debe ser el vigente, estar terminado, no tener ya una
+     * autorización y el examen seguir abierto (decisión del 22/11/2026: la
+     * reaplicación solo se presenta dentro de la ventana de acceso).
+     */
+    public function canAuthorizeReapplication(StudentAttempt $attempt): bool
+    {
+        return $this->reapplicationBlocker($attempt) === null;
+    }
+
+    /**
+     * Autoriza un intento adicional individual (RF-EXA-052). El intento
+     * actual se conserva con sus resultados; el alumno presenta el siguiente
+     * al volver a iniciar el examen y la calificación vigente pasa a ser la
+     * del nuevo intento.
+     *
+     * @throws DomainException Si el intento no admite reaplicación.
+     */
+    public function authorizeReapplication(StudentAttempt $attempt, User $teacher): StudentAttempt
+    {
+        return DB::transaction(function () use ($attempt, $teacher): StudentAttempt {
+            $locked = StudentAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            $locked->setRelation('exam', $attempt->exam ?? $locked->exam()->firstOrFail());
+
+            $blocker = $this->reapplicationBlocker($locked);
+            if ($blocker !== null) {
+                throw new DomainException($blocker);
+            }
+
+            $locked->update(['reapplication_authorized_at' => now()]);
+
+            AuditLog::query()->create([
+                'user_id' => $teacher->id,
+                'action' => StudentAttempt::ACTION_REAPPLICATION_AUTHORIZED,
+                'auditable_type' => StudentAttempt::class,
+                'auditable_id' => $locked->id,
+                'new_values' => [
+                    'student_id' => (int) $locked->student_id,
+                    'attempt_number' => (int) $locked->attempt_number,
+                    'next_attempt_number' => (int) $locked->attempt_number + 1,
+                ],
+            ]);
+
+            return $locked;
+        });
+    }
+
+    private function reapplicationBlocker(StudentAttempt $attempt): ?string
+    {
+        $exam = $attempt->exam;
+
+        if ($attempt->reapplication_authorized_at !== null) {
+            return 'Este alumno ya tiene una reaplicación autorizada.';
+        }
+
+        if ($attempt->status === 'in_progress') {
+            return 'El alumno aún está presentando este intento.';
+        }
+
+        $isLatest = ! StudentAttempt::where('exam_id', $attempt->exam_id)
+            ->where('student_id', $attempt->student_id)
+            ->where('attempt_number', '>', $attempt->attempt_number)
+            ->exists();
+
+        if (! $isLatest) {
+            return 'Solo se puede autorizar la reaplicación desde el intento más reciente.';
+        }
+
+        if (! $exam->is_published || ($exam->ends_at !== null && now()->gte($exam->ends_at))) {
+            return 'La reaplicación solo se autoriza mientras el examen sigue abierto.';
+        }
+
+        return null;
+    }
+
+    /**
      * Inicia o recupera el intento activo del alumno validando publicación,
      * ventana horaria (starts_at / ends_at) y pertenencia a grupo asignado.
      *
@@ -84,17 +173,23 @@ class AttemptService
         $attempt = DB::transaction(function () use ($exam, $student, $group): StudentAttempt {
             $existing = StudentAttempt::where('exam_id', $exam->id)
                 ->where('student_id', $student->id)
+                ->orderByDesc('attempt_number')
+                ->lockForUpdate()
                 ->first();
 
-            if ($existing !== null) {
+            // RF-EXA-051: un intento por alumno; RF-EXA-052: solo una reaplicación
+            // autorizada por el docente abre el siguiente, conservando el anterior.
+            if ($existing !== null && ($existing->reapplication_authorized_at === null || $existing->status === 'in_progress')) {
                 return $existing;
             }
+
+            $attemptNumber = $existing === null ? 1 : (int) $existing->attempt_number + 1;
 
             $sequence = $this->assemblyService->buildQuestionSequence($exam);
             $paraphraseSnapshot = $this->buildParaphraseSnapshot($sequence, (int) $student->id);
 
             return StudentAttempt::firstOrCreate(
-                ['exam_id' => $exam->id, 'student_id' => $student->id],
+                ['exam_id' => $exam->id, 'student_id' => $student->id, 'attempt_number' => $attemptNumber],
                 [
                     'group_id' => $group->id,
                     'question_sequence_payload' => $sequence,

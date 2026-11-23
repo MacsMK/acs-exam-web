@@ -32,12 +32,14 @@ use App\Models\StudentAttempt;
 use App\Models\User;
 use App\Repositories\Contracts\ExamRepositoryInterface;
 use App\Services\AiEvaluationService;
+use App\Services\AttemptService;
 use App\Services\GradeCalculatorService;
 use App\Services\SubscriptionLimitService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use DomainException;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -102,11 +104,56 @@ class TeacherReviewController extends Controller
         $filters = $request->only(['search', 'status']);
         $attempts = $this->examRepository->paginateAttemptsForReview($exam, $filters, 15);
 
+        // RF-EXA-052: número del intento más reciente de cada alumno para marcar
+        // los reemplazados y ofrecer la reaplicación solo en el vigente.
+        $latestAttemptNumbers = StudentAttempt::where('exam_id', $exam->id)
+            ->groupBy('student_id')
+            ->selectRaw('student_id, MAX(attempt_number) as latest_number')
+            ->pluck('latest_number', 'student_id')
+            ->map(static fn ($number): int => (int) $number);
+
         return view('exams.review-index', [
             'exam' => $exam,
             'attempts' => $attempts,
             'filters' => $filters,
+            'latestAttemptNumbers' => $latestAttemptNumbers,
+            'reapplicationOpen' => $exam->is_published && ($exam->ends_at === null || now()->lt($exam->ends_at)),
         ]);
+    }
+
+    /**
+     * Autoriza un intento adicional individual para el alumno (RF-EXA-052),
+     * conservando el intento anterior y sus resultados.
+     *
+     * @param Request $request Solicitud HTTP del docente autenticado.
+     * @param Exam $exam Examen del intento.
+     * @param StudentAttempt $attempt Intento vigente del alumno.
+     * @param AttemptService $attemptService Servicio de intentos.
+     * @return RedirectResponse
+     */
+    public function authorizeReapplication(
+        Request $request,
+        Exam $exam,
+        StudentAttempt $attempt,
+        AttemptService $attemptService,
+    ): RedirectResponse {
+        /** @var User $teacher */
+        $teacher = $request->user();
+
+        abort_unless((int) $exam->teacher_id === (int) $teacher->id, 403);
+        abort_unless((int) $attempt->exam_id === (int) $exam->id, 404);
+
+        $attempt->setRelation('exam', $exam);
+
+        try {
+            $attemptService->authorizeReapplication($attempt, $teacher);
+        } catch (DomainException $e) {
+            return back()->withErrors(['reapplication' => $e->getMessage()]);
+        }
+
+        $studentName = $attempt->student?->full_name ?? 'el alumno';
+
+        return back()->with('status', 'Reaplicación autorizada para ' . $studentName . '. Podrá presentar el examen de nuevo mientras siga abierto.');
     }
 
     /**

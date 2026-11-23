@@ -63,6 +63,7 @@ class TeacherGradingService
     private function studentListRows(User $student): Collection
     {
         $published = StudentAttempt::where('student_id', $student->id)
+            ->current()
             ->inCurrentGroupsOfStudent($student->id)
             ->whereNotNull('final_score')
             ->whereHas('exam', static fn ($query) => $query->where('result_visibility_mode', '!=', 'hidden'))
@@ -98,6 +99,7 @@ class TeacherGradingService
         }
 
         return StudentAttempt::where('student_id', $user->id)
+            ->current()
             ->inCurrentGroupsOfStudent($user->id)
             ->whereNotNull('final_score')
             ->whereHas('exam', static fn ($query) => $query->where('result_visibility_mode', '!=', 'hidden'))
@@ -122,9 +124,9 @@ class TeacherGradingService
     {
         return Exam::where('teacher_id', $teacher->id)
             ->where('is_published', true)
-            ->whereHas('studentAttempts', static fn ($q) => $q->whereNotNull('final_score'))
+            ->whereHas('studentAttempts', static fn ($q) => $q->current()->whereNotNull('final_score'))
             ->withAvg(
-                ['studentAttempts as average_final_score' => static fn ($q) => $q->whereNotNull('final_score')],
+                ['studentAttempts as average_final_score' => static fn ($q) => $q->current()->whereNotNull('final_score')],
                 'final_score',
             )
             ->get()

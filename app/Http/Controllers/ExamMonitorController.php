@@ -50,7 +50,8 @@ class ExamMonitorController extends Controller
             ->unique('id')
             ->values();
 
-        $attempts = $loadedExam->studentAttempts->keyBy('student_id');
+        // RF-EXA-052: con reaplicaciones, el monitoreo muestra el intento vigente.
+        $attempts = $loadedExam->studentAttempts->sortBy('attempt_number')->keyBy('student_id');
 
         $totalEnrolled = $enrolledStudents->count();
         $inProgressCount = $attempts->where('status', 'in_progress')->count();

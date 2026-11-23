@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Models/StudentAttempt.php
  * Requerimiento:  RF-EXA / RF-EVA (Intento de Examen y Snapshot Anti-Copia)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.2.0
+ * Versión:        1.3.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_student_attempts con secuencia de
  *                 preguntas y snapshot inmutable de paráfrasis asignadas.
@@ -37,6 +37,12 @@ class StudentAttempt extends Model
      * detuvo el examen (RF-EXA-024).
      */
     public const ACTION_STOPPED_BY_TEACHER = 'attempt.stopped_by_teacher';
+
+    /**
+     * Acción de bitácora de la autorización de un intento adicional
+     * (RF-EXA-052); registra qué docente la otorgó.
+     */
+    public const ACTION_REAPPLICATION_AUTHORIZED = 'attempt.reapplication_authorized';
 
     /**
      * Indica si el intento terminó porque el docente detuvo el examen.
@@ -77,6 +83,8 @@ class StudentAttempt extends Model
         'final_score',
         'pending_ai_count',
         'incidents_count',
+        'attempt_number',
+        'reapplication_authorized_at',
     ];
 
     /**
@@ -137,6 +145,26 @@ class StudentAttempt extends Model
     }
 
     /**
+     * Limita la consulta al intento vigente de cada alumno en cada examen: el
+     * de mayor attempt_number (RF-EXA-052). Los intentos reemplazados por una
+     * reaplicación se conservan, pero no cuentan para calificaciones,
+     * promedios ni estadísticas.
+     *
+     * @param Builder<StudentAttempt> $query Constructor de la consulta Eloquent.
+     * @return Builder<StudentAttempt>
+     */
+    public function scopeCurrent(Builder $query): Builder
+    {
+        return $query->whereNotExists(static function ($sub): void {
+            $sub->selectRaw('1')
+                ->from('acs_student_attempts as newer_attempt')
+                ->whereColumn('newer_attempt.exam_id', 'acs_student_attempts.exam_id')
+                ->whereColumn('newer_attempt.student_id', 'acs_student_attempts.student_id')
+                ->whereColumn('newer_attempt.attempt_number', '>', 'acs_student_attempts.attempt_number');
+        });
+    }
+
+    /**
      * Conversión de atributos (MPW-V3 Tabla 6 Bloque 16).
      *
      * @return array<string, string>
@@ -148,6 +176,8 @@ class StudentAttempt extends Model
             'paraphrase_snapshot_payload' => 'array',
             'started_at' => 'datetime',
             'submitted_at' => 'datetime',
+            'reapplication_authorized_at' => 'datetime',
+            'attempt_number' => 'integer',
             'objective_score' => 'decimal:2',
             'ai_estimated_score' => 'decimal:2',
             'final_score' => 'decimal:2',
