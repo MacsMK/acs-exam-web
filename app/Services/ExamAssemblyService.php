@@ -28,6 +28,7 @@ use App\Models\ExamSection;
 use App\Models\Group;
 use App\Models\Question;
 use App\Models\Scopes\TenantTeacherScope;
+use App\Models\StudentAttempt;
 use App\Models\Subject;
 use App\Models\User;
 use App\Repositories\Contracts\ExamRepositoryInterface;
@@ -349,7 +350,16 @@ class ExamAssemblyService
                 ]);
             }
 
-            return $this->examRepository->closeEarly($lockedExam);
+            $closed = $this->examRepository->closeEarly($lockedExam);
+
+            // RF-EXA-024: detener la aplicación finaliza los intentos en curso conservando
+            // sus respuestas; sin esto seguirían abiertos por la regla de RF-EXA-050.
+            StudentAttempt::query()
+                ->where('exam_id', $closed->id)
+                ->where('status', 'in_progress')
+                ->update(['status' => 'expired', 'submitted_at' => now()]);
+
+            return $closed;
         });
     }
 

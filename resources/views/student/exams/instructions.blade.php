@@ -61,17 +61,17 @@
         />
 
         <x-kpi-card
-            label="Duración total"
-            :value="($exam->total_duration_minutes ?? $exam->duration_minutes ?? 60) . ' min'"
-            meta="Control por temporizador"
+            label="Tiempo máximo"
+            :value="$exam->maxDurationMinutes() . ' min'"
+            meta="Suma de los tiempos por pregunta"
             icon="clock"
             tone="warning"
             :mono="true"
         />
 
         <x-kpi-card
-            label="Modalidad"
-            :value="$exam->randomize_question_order ? 'Aleatoria' : 'Secuencial'"
+            label="Orden de preguntas"
+            :value="$exam->randomize_question_order ? 'Aleatorio' : 'Fijo'"
             meta="1 intento por alumno"
             icon="shield"
             tone="primary"

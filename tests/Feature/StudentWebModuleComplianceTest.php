@@ -197,6 +197,10 @@ class StudentWebModuleComplianceTest extends TestCase
         $response->assertSee('Condiciones obligatorias para presentar esta evaluación');
         $response->assertSee('El tiempo corre en el servidor');
         $response->assertSee('Confirmar e iniciar examen');
+        // RF-EXA-028: tiempo máximo real (suma de tiempos por pregunta) y orden de preguntas
+        $response->assertSee('Tiempo máximo');
+        $response->assertSee('Orden de preguntas');
+        $response->assertDontSee('Duración total');
     }
 
     /**

@@ -299,8 +299,16 @@ class StudentResultService
             return false;
         }
 
-        return $exam->ends_at === null
+        $accessClosed = $exam->ends_at === null
             || now()->gt($exam->ends_at->copy()->addSeconds(self::ACCESS_CLOSE_TOLERANCE_SECONDS));
+
+        // RF-EXA-050: los intentos iniciados antes del cierre siguen hasta agotar su
+        // tiempo, así que las soluciones no se muestran mientras alguno siga en curso.
+        return $accessClosed && ! StudentAttempt::query()
+            ->where('exam_id', $exam->id)
+            ->where('status', 'in_progress')
+            ->get()
+            ->contains(fn (StudentAttempt $other): bool => $this->attemptService->isInProgress($other));
     }
 
     private function abortUnlessPublished(StudentAttempt $attempt): void

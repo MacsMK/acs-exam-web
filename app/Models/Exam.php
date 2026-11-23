@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Models/Exam.php
  * Requerimiento:  RF-EXA (Armado y Aplicación de Exámenes, RW-12 a RW-24)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.2.0
+ * Versión:        1.3.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_exams con relaciones, scopes de
  *                 aislamiento multi-docente, filtros de tablero y métodos de
@@ -268,6 +268,15 @@ class Exam extends Model
     public function hasStartedWindow(): bool
     {
         return $this->starts_at !== null && $this->starts_at->lte(now());
+    }
+
+    /**
+     * Tiempo máximo del examen para el alumno, en minutos: suma de los tiempos
+     * por pregunta (RF-EXA-013). El sistema no tiene tiempo total (RF-EXA-014).
+     */
+    public function maxDurationMinutes(): int
+    {
+        return (int) ceil(((int) $this->examQuestions()->sum('time_limit_seconds')) / 60);
     }
 
     /**

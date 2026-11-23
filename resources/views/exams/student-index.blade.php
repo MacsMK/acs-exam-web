@@ -131,9 +131,9 @@
                         </div>
 
                         <div class="flex items-center justify-between">
-                            <span class="text-slate-500">Tiempo límite:</span>
+                            <span class="text-slate-500">Tiempo máximo:</span>
                             <span class="font-mono font-medium text-slate-700">
-                                {{ $exam->total_duration_minutes ?? $exam->duration_minutes ?? 60 }} minutos
+                                {{ $exam->maxDurationMinutes() }} minutos
                             </span>
                         </div>
 

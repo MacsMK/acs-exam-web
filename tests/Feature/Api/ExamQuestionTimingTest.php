@@ -103,6 +103,15 @@ class ExamQuestionTimingTest extends TestCase
         }
     }
 
+    /**
+     * RF-EXA-026 y RF-EXA-028: el tiempo máximo mostrado al alumno es la suma de
+     * los tiempos por pregunta (2 × 60 s = 2 min), no un valor fijo.
+     */
+    public function test_the_max_duration_is_the_sum_of_the_question_limits(): void
+    {
+        $this->assertSame(2, $this->exam->maxDurationMinutes());
+    }
+
     public function test_the_tolerance_is_three_seconds_as_the_manuals_define(): void
     {
         $this->assertSame(3, AttemptService::QUESTION_TIME_TOLERANCE_SECONDS);
@@ -197,6 +206,36 @@ class ExamQuestionTimingTest extends TestCase
     // ------------------------------------------------------------------
     // Utilidades
     // ------------------------------------------------------------------
+
+    /**
+     * RF-EXA-050: la hora límite solo impide nuevos inicios; un intento iniciado
+     * antes sigue recibiendo respuestas dentro del tiempo de sus preguntas.
+     */
+    public function test_an_attempt_started_before_the_close_continues_after_it(): void
+    {
+        $this->take()->assertOk();
+        $this->travel(10)->seconds();
+        $this->answer($this->questions[0], 0)->assertOk();
+
+        $this->exam->update(['ends_at' => now()->subMinutes(5)]);
+        $this->travel(10)->seconds();
+
+        $this->answer($this->questions[1], 0)->assertOk();
+    }
+
+    /**
+     * RF-EXA-024: si el docente detiene el examen, los intentos en curso terminan
+     * y ya no aceptan respuestas.
+     */
+    public function test_stopping_the_exam_finalizes_attempts_in_progress(): void
+    {
+        $this->take()->assertOk();
+
+        app(\App\Services\ExamAssemblyService::class)->closeExamEarly($this->exam);
+
+        $this->assertDatabaseHas('acs_student_attempts', ['exam_id' => $this->exam->id, 'status' => 'expired']);
+        $this->assertSame(409, $this->answer($this->questions[0], 0)->status());
+    }
 
     private function take(): TestResponse
     {

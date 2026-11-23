@@ -418,20 +418,37 @@ class AttemptService
     }
 
     /**
-     * Venció la duración del intento o la ventana del examen (tolerancia de
-     * red de 60 segundos en ambos casos).
+     * Venció el tiempo propio del intento (RF-EXA-050): la hora límite del
+     * examen solo impide nuevos inicios, y un intento iniciado continúa hasta
+     * agotar los tiempos de sus preguntas. Si el docente detiene el examen, los
+     * intentos en curso se finalizan en ExamAssemblyService::closeExamEarly
+     * (RF-EXA-024).
      */
     private function deadlineHasPassed(StudentAttempt $attempt, Exam $exam): bool
     {
-        $durationMinutes = (int) ($exam->duration_minutes ?? 0);
-        if ($durationMinutes > 0 && $attempt->started_at !== null) {
-            $deadline = $attempt->started_at->copy()->addMinutes($durationMinutes)->addSeconds(60);
-            if (now()->gt($deadline)) {
-                return true;
-            }
+        $deadline = $this->attemptDeadline($attempt);
+
+        return $deadline !== null && now()->gt($deadline);
+    }
+
+    /**
+     * Momento máximo en que un intento puede seguir recibiendo respuestas: su
+     * inicio más la suma de los tiempos de sus preguntas, la tolerancia de tres
+     * segundos por pregunta y la tolerancia de red de 60 segundos.
+     */
+    public function attemptDeadline(StudentAttempt $attempt): ?CarbonInterface
+    {
+        if ($attempt->started_at === null) {
+            return null;
         }
 
-        return $exam->ends_at !== null && now()->gt($exam->ends_at->copy()->addSeconds(60));
+        $sequence = array_map('intval', $attempt->question_sequence_payload ?? []);
+        $totalSeconds = $sequence === []
+            ? 0
+            : (int) ExamQuestion::query()->whereIn('id', $sequence)->sum('time_limit_seconds');
+
+        return $attempt->started_at->copy()
+            ->addSeconds($totalSeconds + count($sequence) * self::QUESTION_TIME_TOLERANCE_SECONDS + 60);
     }
 
     /**

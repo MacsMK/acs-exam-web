@@ -145,7 +145,7 @@
                         <x-badge variant="neutral">{{ $exam->exam_questions_count }} reactivos</x-badge>
                     </x-table.td>
                     <x-table.td align="center">
-                        <span class="text-xs font-mono text-slate-600">{{ $exam->total_duration_minutes ?? $exam->duration_minutes ?? 60 }} min</span>
+                        <span class="text-xs font-mono text-slate-600">{{ $exam->maxDurationMinutes() }} min</span>
                     </x-table.td>
                     <x-table.td align="right">
                         <x-button :href="route('student.exams.instructions', $exam)" variant="primary" size="sm">
