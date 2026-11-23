@@ -148,18 +148,11 @@
 
                 {{-- Acciones de la tarjeta --}}
                 <div class="flex items-center gap-2 border-t border-slate-100 pt-4">
-                    <x-button :href="route('student.exams.instructions', $exam)" variant="neutral" size="md" class="shrink-0" title="Ver instrucciones previas">
-                        <x-icon name="view" class="w-4 h-4" />
-                        Detalles
+                    {{-- RF-EXA-028: el intento se inicia desde las instrucciones, nunca directamente desde la lista --}}
+                    <x-button :href="route('student.exams.instructions', $exam)" variant="primary" size="md" class="w-full">
+                        <x-icon name="clock" class="w-4 h-4" />
+                        Iniciar examen
                     </x-button>
-
-                    <form method="POST" action="{{ route('attempts.start', $exam) }}" class="flex-1">
-                        @csrf
-                        <x-button type="submit" variant="primary" size="md" class="w-full">
-                            <x-icon name="clock" class="w-4 h-4" />
-                            Iniciar examen
-                        </x-button>
-                    </form>
                 </div>
             </article>
         @empty

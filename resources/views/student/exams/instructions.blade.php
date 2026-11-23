@@ -93,7 +93,7 @@
                 @if ($exam->require_webcam)
                     <li><strong>Supervisión por cámara web:</strong> Este examen requiere mantener la cámara activa durante toda la sesión.</li>
                 @endif
-                <li><strong>Auto-guardado permanente:</strong> Tus respuestas se registran de inmediato en el servidor de manera segura.</li>
+                <li><strong>Guardado de respuestas:</strong> Cada respuesta se registra en el servidor al pulsar «Enviar respuesta» o al agotarse el tiempo de la pregunta.</li>
             </ul>
         </div>
 

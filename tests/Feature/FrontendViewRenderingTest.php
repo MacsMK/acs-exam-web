@@ -481,6 +481,9 @@ class FrontendViewRenderingTest extends TestCase
         // RF-EXA-026: tiempo máximo calculado en lugar del valor fijo de 60 minutos
         $examsIndexWithExam->assertSee('Tiempo máximo:');
         $examsIndexWithExam->assertSee($exam->maxDurationMinutes() . ' minutos');
+        // RF-EXA-028: «Iniciar examen» lleva a las instrucciones, no inicia el intento directamente
+        $examsIndexWithExam->assertSee(route('student.exams.instructions', $exam), false);
+        $examsIndexWithExam->assertDontSee(route('attempts.start', $exam), false);
 
         // 3. take-exam (intento en curso)
         $attemptService = app(AttemptService::class);
