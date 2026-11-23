@@ -27,6 +27,7 @@ use App\Http\Controllers\ExamMonitorController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\QuestionController;
+use App\Http\Controllers\QuestionFileController;
 use App\Http\Controllers\StudentExamController;
 use App\Http\Controllers\StudentGradeController;
 use App\Http\Controllers\StudentGroupController;
@@ -61,6 +62,12 @@ Route::middleware('auth')->group(function (): void {
     Route::post('logout', [LoginController::class, 'logout'])->name('auth.logout');
 
     Route::get('dashboard', DashboardController::class)->name('dashboard');
+
+    // Imagen y PDF de las preguntas en almacenamiento privado (RF-BAN-012, RF-BAN-013, ACT-WEB-026)
+    Route::get('preguntas/{question}/archivo/{kind}', QuestionFileController::class)
+        ->whereNumber('question')
+        ->whereIn('kind', ['imagen', 'pdf'])
+        ->name('questions.file');
 
     // Fotografía de perfil en almacenamiento privado (RF-AUT-008, ACT-WEB-038)
     Route::get('usuarios/{user}/foto', ProfilePhotoController::class)

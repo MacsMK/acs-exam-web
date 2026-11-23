@@ -617,6 +617,9 @@ class AttemptService
             'title' => $question->title,
             'stem' => $stem,
             'question_type' => $question->question_type,
+            // Imagen y PDF de la pregunta (RF-BAN-012, RF-BAN-013)
+            'has_image' => $question->image_path !== null,
+            'has_pdf' => $question->pdf_path !== null,
         ];
 
         if ($resolved['paraphrase_id'] !== null) {

@@ -30,6 +30,7 @@
             </h2>
             {{-- whitespace-pre-wrap conserva espacios y sangrías del código en el enunciado (RF-BAN-014) --}}
             <div class="text-sm text-slate-700 mb-6 whitespace-pre-wrap break-words leading-relaxed">{{ $current['question']['stem'] }}</div>
+            <x-question.files class="mb-6" :question-id="$current['question']['id']" :has-image="$current['question']['has_image'] ?? false" :has-pdf="$current['question']['has_pdf'] ?? false" />
 
             {{-- Formulario de Respuesta por Tipo de Reactivo --}}
             <form

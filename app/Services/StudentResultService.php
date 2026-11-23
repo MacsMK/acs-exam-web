@@ -248,6 +248,8 @@ class StudentResultService
                         'title' => $question->title,
                         'stem' => $answer?->served_stem_snapshot ?? $this->attemptService->visibleStem($examQuestion, $attempt),
                         'question_type' => $question->question_type,
+                        'has_image' => $question->image_path !== null,
+                        'has_pdf' => $question->pdf_path !== null,
                         'student_answer' => $answer === null
                             ? null
                             : $this->formatStudentAnswer($question->question_type, $item, $answer->answer_payload),

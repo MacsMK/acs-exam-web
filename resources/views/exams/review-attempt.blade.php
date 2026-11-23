@@ -240,6 +240,9 @@
                             @endif
                         </div>
                         <p class="whitespace-pre-wrap break-words leading-relaxed">{{ $answer->served_stem_snapshot ?: ($question?->stem ?? 'Sin enunciado') }}</p>
+                        @if ($question)
+                            <x-question.files class="mt-3" :question-id="$question->id" :has-image="$question->image_path !== null" :has-pdf="$question->pdf_path !== null" />
+                        @endif
                     </div>
 
                     {{-- Respuesta del Alumno (Renderizado seguro ante arrays o escalares) --}}

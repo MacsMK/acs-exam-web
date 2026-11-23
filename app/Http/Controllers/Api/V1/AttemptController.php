@@ -212,6 +212,14 @@ class AttemptController extends Controller
             $base['paraphrased_text'] = $question['paraphrased_text'] ?? $question['stem'];
         }
 
+        // Imagen y PDF protegidos de la pregunta (RF-BAN-012, RF-BAN-013, RNF-SEG-008)
+        $base['image_url'] = ! empty($question['has_image'])
+            ? route('api.v1.questions.file', ['question' => $question['id'], 'kind' => 'image'])
+            : null;
+        $base['pdf_url'] = ! empty($question['has_pdf'])
+            ? route('api.v1.questions.file', ['question' => $question['id'], 'kind' => 'pdf'])
+            : null;
+
         return match ($question['question_type']) {
             'multiple_choice' => $base + [
                 'options' => collect($question['options'])

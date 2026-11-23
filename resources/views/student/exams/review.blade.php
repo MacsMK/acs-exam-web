@@ -94,6 +94,7 @@
                     <div class="font-sans text-sm leading-relaxed text-slate-800">
                         {!! nl2br(e($q['stem'])) !!}
                     </div>
+                    <x-question.files class="mt-3" :question-id="$q['id']" :has-image="$q['has_image'] ?? false" :has-pdf="$q['has_pdf'] ?? false" />
                 </div>
 
                 {{-- Respuesta del estudiante vs Solución de referencia --}}

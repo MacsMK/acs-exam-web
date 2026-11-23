@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\V1\ExamController;
 use App\Http\Controllers\Api\V1\GradeController;
 use App\Http\Controllers\Api\V1\GroupController;
 use App\Http\Controllers\Api\V1\PrivacyController;
+use App\Http\Controllers\QuestionFileController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
@@ -62,6 +63,11 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('exams/take', [AttemptController::class, 'take'])->name('exams.take');
             Route::post('exams/{exam}/answers', [AttemptController::class, 'answers'])->name('exams.answers');
             Route::post('exams/{exam}/incidents', [AttemptController::class, 'incidents'])->name('exams.incidents');
+            // Imagen y PDF de la pregunta (RF-BAN-012, RF-BAN-013, ACT-WEB-026)
+            Route::get('questions/{question}/files/{kind}', QuestionFileController::class)
+                ->whereNumber('question')
+                ->whereIn('kind', ['image', 'pdf'])
+                ->name('questions.file');
 
             Route::get('grades', [GradeController::class, 'index'])->name('grades.index');
             Route::get('grades/statistics', [GradeController::class, 'statistics'])->name('grades.statistics');

@@ -121,6 +121,7 @@
                 </span>
                 {{-- whitespace-pre-wrap conserva espacios y sangrías del código en el enunciado (RF-BAN-014) --}}
                 <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm leading-6 whitespace-pre-wrap break-words">{{ $question->stem }}</div>
+                <x-question.files :question-id="$question->id" :has-image="$question->image_path !== null" :has-pdf="$question->pdf_path !== null" />
             </div>
         </x-card>
 

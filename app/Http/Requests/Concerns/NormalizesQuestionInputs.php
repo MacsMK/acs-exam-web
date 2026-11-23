@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Http/Requests/Concerns/NormalizesQuestionInputs.php
  * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §6.3, Tabla 18)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.1.0
+ * Versión:        1.2.0
  * Fecha Creación: 12/11/2026
  * Descripción:    Trait compartido para saneamiento Unicode de entradas de
  *                 reactivos, reglas polimórficas unificadas, validación de
@@ -407,4 +407,36 @@ trait NormalizesQuestionInputs
 
         return $value;
     }
+
+    /**
+     * Imagen (JPG/PNG) y PDF opcionales de la pregunta, uno de cada tipo y de hasta
+     * 5 MB, validados en el servidor (RF-BAN-012, RF-BAN-013, RNF-SEG-007).
+     *
+     * @return array<string, array<int, string>>
+     */
+    protected function questionFileRules(): array
+    {
+        return [
+            'image' => ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:5120'],
+            'pdf' => ['nullable', 'file', 'mimes:pdf', 'max:5120'],
+            'remove_image' => ['nullable', 'boolean'],
+            'remove_pdf' => ['nullable', 'boolean'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function questionFileMessages(): array
+    {
+        return [
+            'image.file' => 'La imagen no tiene un formato válido',
+            'image.mimes' => 'La imagen debe ser un archivo JPG o PNG',
+            'image.max' => 'La imagen no debe pesar más de 5 MB',
+            'pdf.file' => 'El PDF no tiene un formato válido',
+            'pdf.mimes' => 'El archivo adjunto debe ser un PDF',
+            'pdf.max' => 'El PDF no debe pesar más de 5 MB',
+        ];
+    }
+
 }

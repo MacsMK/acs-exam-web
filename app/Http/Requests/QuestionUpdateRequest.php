@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Http/Requests/QuestionUpdateRequest.php
  * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §6.3, Tabla 18)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        2.0.0
+ * Versión:        2.1.0
  * Fecha Creación: 28/10/2026
  * Descripción:    Validación tipada de actualización de reactivos polimórficos
  *                 con blindaje de inmutabilidad de tipo [MEDIA-01], saneamiento
@@ -56,7 +56,10 @@ class QuestionUpdateRequest extends FormRequest
             ? [$question->question_type]
             : Question::VALID_TYPES;
 
-        return $this->polymorphicQuestionRules('', $allowedTypes);
+        return array_merge(
+            $this->polymorphicQuestionRules('', $allowedTypes),
+            $this->questionFileRules(),
+        );
     }
 
     public function withValidator(Validator $validator): void
@@ -71,7 +74,7 @@ class QuestionUpdateRequest extends FormRequest
      */
     public function messages(): array
     {
-        return $this->polymorphicQuestionMessages();
+        return array_merge($this->polymorphicQuestionMessages(), $this->questionFileMessages());
     }
 
     protected function prepareForValidation(): void

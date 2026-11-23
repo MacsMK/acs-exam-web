@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Models/Question.php
  * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, Módulo 5)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        2.0.0
+ * Versión:        2.1.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_questions (tabla raíz polimórfica
  *                 del banco de preguntas, Módulo 5) con aislamiento por
@@ -78,6 +78,8 @@ class Question extends Model
         'questionable_type',
         'questionable_id',
         'parent_question_id',
+        'image_path',
+        'pdf_path',
     ];
 
     /**

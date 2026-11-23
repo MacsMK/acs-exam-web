@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Services/QuestionBankService.php
  * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §6.4.1)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        2.2.0
+ * Versión:        2.3.0
  * Descripción:    Servicio transaccional del Banco de Reactivos: gestión de las
  *                 4 variantes polimórficas con IDs opacos en matching [CRÍTICA-02],
  *                 Copy-On-Write bajo bloqueo pesimista [ALTA-08], cuotas SaaS
@@ -92,6 +92,7 @@ class QuestionBankService
     public function __construct(
         private readonly QuestionRepositoryInterface $questionRepository,
         private readonly SubscriptionLimitService $subscriptionLimitService,
+        private readonly QuestionFileService $questionFiles,
     ) {
     }
 
@@ -376,7 +377,13 @@ class QuestionBankService
 
             // 1. Edición in-situ si NO está vinculado a ningún examen
             if (! $isLinked) {
+                // Imagen y PDF (RF-BAN-012, RF-BAN-013): se reemplazan o quitan y el archivo
+                // anterior se borra del disco solo si ninguna otra pregunta lo usa.
+                $previousFiles = [$lockedQuestion->image_path, $lockedQuestion->pdf_path];
+                $files = $this->questionFiles->resolvePaths($teacher->id, $data, $lockedQuestion);
+
                 $lockedQuestion->update([
+                    ...$files,
                     'title' => (string) $data['title'],
                     'stem' => (string) $data['stem'],
                     'subject_id' => $subject?->id,
@@ -414,6 +421,8 @@ class QuestionBankService
                     default => null,
                 };
 
+                $this->questionFiles->deleteUnused(array_diff($previousFiles, array_values($files)));
+
                 $fresh = $lockedQuestion->fresh(['questionable', 'paraphrases', 'subject']);
                 $lineageCount = max(1, count($this->questionRepository->getLineageQuestionIds($lockedQuestion->id)));
 
@@ -440,6 +449,8 @@ class QuestionBankService
                     'default_points' => $data['default_points'],
                     'default_time_seconds' => (int) $data['default_time_seconds'],
                     'parent_question_id' => $lockedQuestion->id,
+                    // La nueva versión comparte los archivos de la anterior salvo los que se reemplacen
+                    ...$this->questionFiles->resolvePaths($teacher->id, $data, $lockedQuestion),
                 ],
                 $newQuestionable
             );
@@ -820,6 +831,8 @@ class QuestionBankService
                 'subject_tag' => $subject?->name,
                 'default_points' => $data['default_points'],
                 'default_time_seconds' => (int) $data['default_time_seconds'],
+                // Imagen y PDF opcionales (RF-BAN-012, RF-BAN-013)
+                ...$this->questionFiles->resolvePaths($teacher->id, $data),
             ],
             $questionable
         );

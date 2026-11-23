@@ -99,6 +99,7 @@
         <form
             id="create-question-form"
             method="POST"
+            enctype="multipart/form-data"
             action="{{ route('questions.store') }}"
             @keydown.enter="if ($event.target.tagName === 'INPUT' && !['submit', 'button'].includes($event.target.type)) { $event.preventDefault(); }"
             class="space-y-6"

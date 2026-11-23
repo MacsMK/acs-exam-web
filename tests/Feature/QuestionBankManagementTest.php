@@ -33,6 +33,7 @@ use App\Models\StudentAttempt;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class QuestionBankManagementTest extends TestCase
@@ -686,6 +687,96 @@ class QuestionBankManagementTest extends TestCase
     // =========================================================================
     // Métodos Auxiliares de Soporte para la Suite de Certificación
     // =========================================================================
+
+    /**
+     * RF-BAN-012 y RF-BAN-013: imagen y PDF opcionales en disco privado, validados en el
+     * servidor, visibles solo para el docente dueño y los alumnos con intento, y
+     * compartidos por las versiones sin borrarse mientras alguna los use.
+     */
+    public function test_question_image_and_pdf_are_private_validated_and_versioned(): void
+    {
+        Storage::fake('local');
+        $teacher = $this->createTeacher();
+        $otherTeacher = $this->createTeacher();
+        $student = User::create([
+            'role' => 'student',
+            'first_name' => 'Alumno',
+            'last_name' => 'Archivos',
+            'email' => uniqid('student-', true) . '@acode.test',
+            'password' => 'Alumno123!',
+            'is_active' => true,
+        ]);
+
+        $payload = [
+            'title' => 'Pregunta con archivos',
+            'stem' => 'Observa la imagen y responde.',
+            'question_type' => 'multiple_choice',
+            'default_points' => 5,
+            'default_time_seconds' => 60,
+            'options' => ['Alfa', 'Beta'],
+            'correct_option_index' => 0,
+        ];
+
+        // Formatos no permitidos se rechazan en el servidor (RNF-SEG-007)
+        $this->actingAs($teacher)->post(route('questions.store'), $payload + [
+            'image' => UploadedFile::fake()->create('diagrama.gif', 100, 'image/gif'),
+            'pdf' => UploadedFile::fake()->create('apoyo.docx', 100, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+        ])->assertSessionHasErrors(['image', 'pdf']);
+
+        $this->actingAs($teacher)->post(route('questions.store'), $payload + [
+            'image' => UploadedFile::fake()->image('diagrama.png', 200, 120),
+            'pdf' => UploadedFile::fake()->create('apoyo.pdf', 200, 'application/pdf'),
+        ])->assertSessionHasNoErrors();
+
+        $question = Question::query()->where('title', 'Pregunta con archivos')->firstOrFail();
+        $this->assertNotNull($question->image_path);
+        $this->assertNotNull($question->pdf_path);
+        Storage::disk('local')->assertExists([$question->image_path, $question->pdf_path]);
+
+        $this->actingAs($teacher)->get(route('questions.show', $question))->assertOk()->assertSee('Ver PDF de apoyo');
+        $this->actingAs($teacher)->get(route('questions.file', [$question->id, 'imagen']))->assertOk();
+        $this->actingAs($otherTeacher)->get(route('questions.file', [$question->id, 'pdf']))->assertForbidden();
+        $this->actingAs($student)->get(route('questions.file', [$question->id, 'imagen']))->assertForbidden();
+
+        // Con un intento en un examen que incluye la pregunta, el alumno sí puede verla
+        $examQuestion = $this->linkQuestionToExam($teacher, $question, true);
+        $group = Group::create(['teacher_id' => $teacher->id, 'name' => 'Grupo Archivos', 'access_folio' => 'FILE001', 'is_closed' => false]);
+        StudentAttempt::create([
+            'exam_id' => $examQuestion->exam_id,
+            'student_id' => $student->id,
+            'group_id' => $group->id,
+            'question_sequence_payload' => [$examQuestion->id],
+            'current_question_index' => 0,
+            'started_at' => now(),
+            'status' => 'submitted',
+        ]);
+        $this->actingAs($student)->get(route('questions.file', [$question->id, 'pdf']))->assertOk();
+
+        // Nueva versión (pregunta en examen) quitando la imagen: la versión anterior la conserva
+        $oldImage = $question->image_path;
+        $this->actingAs($teacher)->put(route('questions.update', $question), $payload + ['remove_image' => '1'])
+            ->assertSessionHasNoErrors();
+        $version = Question::query()->where('parent_question_id', $question->id)->firstOrFail();
+        $this->assertNull($version->image_path);
+        $this->assertSame($question->pdf_path, $version->pdf_path);
+        Storage::disk('local')->assertExists($oldImage);
+
+        // Edición en sitio de la versión (sin examen) quitando el PDF compartido: no se borra del disco
+        $this->actingAs($teacher)->put(route('questions.update', $version), $payload + ['remove_pdf' => '1'])
+            ->assertSessionHasNoErrors();
+        $this->assertNull($version->fresh()->pdf_path);
+        Storage::disk('local')->assertExists($question->pdf_path);
+
+        // Archivo que nadie más usa: al reemplazarlo se borra del disco
+        $this->actingAs($teacher)->put(route('questions.update', $version), $payload + [
+            'image' => UploadedFile::fake()->image('nueva.jpg', 100, 100),
+        ])->assertSessionHasNoErrors();
+        $firstVersionImage = $version->fresh()->image_path;
+        $this->actingAs($teacher)->put(route('questions.update', $version), $payload + [
+            'image' => UploadedFile::fake()->image('otra.png', 100, 100),
+        ])->assertSessionHasNoErrors();
+        Storage::disk('local')->assertMissing($firstVersionImage);
+    }
 
     private function createTeacher(): User
     {
