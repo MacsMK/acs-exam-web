@@ -229,6 +229,31 @@
 @endsection
 
 @push('scripts')
+    {{-- RF-EXA-049: señal de presencia; si otra sesión tiene el intento, se sale del examen --}}
+    <script>
+        (() => {
+            const endpoint = @js(route('attempts.heartbeat', $attempt));
+            const ping = async () => {
+                try {
+                    const token = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || '';
+                    const response = await fetch(endpoint, { method: 'POST', headers: { 'X-CSRF-TOKEN': token, 'Accept': 'application/json' } });
+                    if (response.status === 409) {
+                        const data = await response.json().catch(() => ({}));
+                        const go = () => { window.location.href = data.redirect_url || '/'; };
+                        if (data.message && typeof AcodeAlert !== 'undefined') {
+                            AcodeAlert.warning('Intento abierto en otra sesión', data.message).then(go);
+                        } else {
+                            go();
+                        }
+                    }
+                } catch (error) {
+                    // Sin conexión: se reintenta en la siguiente señal
+                }
+            };
+            ping();
+            setInterval(ping, 15000);
+        })();
+    </script>
     @if (\Illuminate\Support\Facades\Route::has('attempts.incident'))
         <script>
             window.acodeIncidentEndpoint = @js(route('attempts.incident', $attempt));

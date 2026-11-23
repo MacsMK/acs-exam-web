@@ -308,6 +308,46 @@ class AttemptService
         return Cache::get($this->draftKey($attempt, $examQuestionId));
     }
 
+    /**
+     * Segundos sin señal de presencia tras los cuales otra sesión puede tomar el
+     * intento (por ejemplo, si se cerró el navegador o se cambió de dispositivo).
+     */
+    public const SESSION_IDLE_SECONDS = 45;
+
+    /**
+     * Registra la sesión que presenta el intento (RF-EXA-049). Rechaza si otra
+     * sesión o dispositivo dio señal de presencia en los últimos
+     * SESSION_IDLE_SECONDS segundos.
+     */
+    public function acquireSession(StudentAttempt $attempt, string $holder): bool
+    {
+        if (! $this->sessionAvailable($attempt, $holder)) {
+            return false;
+        }
+
+        $deadline = $this->attemptDeadline($attempt) ?? now()->addHours(6);
+        Cache::put($this->sessionKey($attempt), ['holder' => $holder, 'seen' => now()->getTimestamp()], $deadline);
+
+        return true;
+    }
+
+    /**
+     * Indica si la sesión puede usar el intento: no hay otra sesión activa.
+     */
+    public function sessionAvailable(StudentAttempt $attempt, string $holder): bool
+    {
+        $lock = Cache::get($this->sessionKey($attempt));
+
+        return ! is_array($lock)
+            || ($lock['holder'] ?? null) === $holder
+            || now()->getTimestamp() - (int) ($lock['seen'] ?? 0) >= self::SESSION_IDLE_SECONDS;
+    }
+
+    private function sessionKey(StudentAttempt $attempt): string
+    {
+        return sprintf('attempt-session:%d', $attempt->id);
+    }
+
     private function draftKey(StudentAttempt $attempt, int $examQuestionId): string
     {
         return sprintf('attempt-draft:%d:%d', $attempt->id, $examQuestionId);
@@ -498,9 +538,15 @@ class AttemptService
         }
 
         $sequence = array_map('intval', $attempt->question_sequence_payload ?? []);
-        $totalSeconds = $sequence === []
-            ? 0
-            : (int) ExamQuestion::query()->whereIn('id', $sequence)->sum('time_limit_seconds');
+
+        // Sin preguntas no hay tiempos que sumar: el límite es el cierre del examen
+        if ($sequence === []) {
+            $exam = $attempt->relationLoaded('exam') ? $attempt->exam : $attempt->exam()->first();
+
+            return $exam?->ends_at?->copy()->addSeconds(60);
+        }
+
+        $totalSeconds = (int) ExamQuestion::query()->whereIn('id', $sequence)->sum('time_limit_seconds');
 
         return $attempt->started_at->copy()
             ->addSeconds($totalSeconds + count($sequence) * self::QUESTION_TIME_TOLERANCE_SECONDS + 60);

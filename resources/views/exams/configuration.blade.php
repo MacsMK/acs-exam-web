@@ -325,11 +325,11 @@
                             </x-form.group>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                                <x-form.group name="starts_at" label="Fecha y hora de inicio" :required="true">
+                                <x-form.group name="starts_at" label="Fecha y hora de inicio" :required="true" :help-text="\App\Models\Exam::timezoneLabel()">
                                     <x-form.input type="datetime-local" name="starts_at" x-model="startsAt" :disabled="$isReadOnly" required />
                                 </x-form.group>
 
-                                <x-form.group name="ends_at" label="Fecha y hora de cierre" :required="true">
+                                <x-form.group name="ends_at" label="Fecha y hora de cierre" :required="true" :help-text="\App\Models\Exam::timezoneLabel()">
                                     <x-form.input type="datetime-local" name="ends_at" x-model="endsAt" :disabled="$isReadOnly" required />
                                 </x-form.group>
                             </div>

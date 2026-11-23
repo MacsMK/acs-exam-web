@@ -223,7 +223,7 @@
                     <x-card title="3. Ventana de aplicación" subtitle="Define el horario en el que los alumnos podrán ingresar y entregar su examen.">
                         <div class="space-y-4">
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <x-form.group name="starts_at" label="Fecha y hora de inicio" :required="true">
+                                <x-form.group name="starts_at" label="Fecha y hora de inicio" :required="true" :help-text="\App\Models\Exam::timezoneLabel()">
                                     <x-form.input
                                         type="datetime-local"
                                         name="starts_at"
@@ -232,7 +232,7 @@
                                     />
                                 </x-form.group>
 
-                                <x-form.group name="ends_at" label="Fecha y hora de cierre" :required="true">
+                                <x-form.group name="ends_at" label="Fecha y hora de cierre" :required="true" :help-text="\App\Models\Exam::timezoneLabel()">
                                     <x-form.input
                                         type="datetime-local"
                                         name="ends_at"

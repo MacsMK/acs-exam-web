@@ -140,8 +140,8 @@ class ExamQuestionTimingTest extends TestCase
      */
     public function test_the_draft_of_the_active_question_is_saved_recovered_and_cleared(): void
     {
-        $this->take()->assertOk();
         $student = User::query()->where('role', 'student')->firstOrFail();
+        $this->actingAs($student)->post(route('attempts.start', $this->exam))->assertRedirect();
         $attempt = \App\Models\StudentAttempt::query()->where('exam_id', $this->exam->id)->firstOrFail();
         $sequence = $attempt->question_sequence_payload;
 
@@ -157,8 +157,30 @@ class ExamQuestionTimingTest extends TestCase
             ->postJson(route('attempts.draft', $attempt), ['exam_question_id' => $sequence[1], 'selected_option_index' => 0])
             ->assertStatus(409);
 
-        $this->answer($this->questions[0], 1)->assertOk();
+        $this->actingAs($student)
+            ->post(route('attempts.answer', $attempt), ['exam_question_id' => $sequence[0], 'selected_option_index' => 1])
+            ->assertRedirect();
         $this->assertNull(app(AttemptService::class)->draftFor($attempt, (int) $sequence[0]));
+    }
+
+    /**
+     * RF-EXA-049: una sola sesión activa por intento. Mientras una sesión da señal
+     * de presencia, otra sesión o dispositivo no puede abrir ni responder el
+     * intento; pasado el tiempo sin señal, sí puede retomarlo.
+     */
+    public function test_only_one_session_can_use_an_attempt_at_a_time(): void
+    {
+        $this->take()->assertOk();
+        $attempt = \App\Models\StudentAttempt::query()->where('exam_id', $this->exam->id)->firstOrFail();
+        $service = app(AttemptService::class);
+
+        $this->assertFalse($service->acquireSession($attempt, 'web:otra-sesion'));
+        $this->assertFalse($service->sessionAvailable($attempt, 'web:otra-sesion'));
+
+        $this->travel(AttemptService::SESSION_IDLE_SECONDS)->seconds();
+        $this->assertTrue($service->acquireSession($attempt, 'web:otra-sesion'));
+
+        $this->assertSame(409, $this->take()->status());
     }
 
     /**

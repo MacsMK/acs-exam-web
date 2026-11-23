@@ -232,11 +232,24 @@ class ExamPushNotificationsTest extends TestCase
         return $this->actingAs($this->teacher)->post(route('exams.publish', $exam));
     }
 
+    /**
+     * Un token por alumno, como un dispositivo: RF-EXA-049 rechaza el mismo
+     * intento desde otro token (otro dispositivo) mientras el primero está activo.
+     *
+     * @var array<int, string>
+     */
+    private array $tokens = [];
+
+    private function tokenFor(User $student): string
+    {
+        return $this->tokens[$student->id] ??= $student->createToken('test')->plainTextToken;
+    }
+
     private function take(Exam $exam, User $student): TestResponse
     {
         $this->app['auth']->forgetGuards();
 
-        return $this->withToken($student->createToken('test')->plainTextToken)
+        return $this->withToken($this->tokenFor($student))
             ->postJson('/api/v1/exams/take', ['exam_id' => $exam->id]);
     }
 
@@ -244,7 +257,7 @@ class ExamPushNotificationsTest extends TestCase
     {
         $this->app['auth']->forgetGuards();
 
-        $this->withToken($student->createToken('test')->plainTextToken)
+        $this->withToken($this->tokenFor($student))
             ->postJson("/api/v1/exams/{$exam->id}/answers", [
                 'question_id' => (string) $question->id,
                 'selected_option_ids' => ['1'],

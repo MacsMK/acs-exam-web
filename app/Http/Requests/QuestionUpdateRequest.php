@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Http/Requests/QuestionUpdateRequest.php
  * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §6.3, Tabla 18)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        2.1.0
+ * Versión:        2.2.0
  * Fecha Creación: 28/10/2026
  * Descripción:    Validación tipada de actualización de reactivos polimórficos
  *                 con blindaje de inmutabilidad de tipo [MEDIA-01], saneamiento
@@ -51,7 +51,7 @@ class QuestionUpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-        $question = $this->route('question');
+        $question = $this->routeQuestion();
         $allowedTypes = $question instanceof Question
             ? [$question->question_type]
             : Question::VALID_TYPES;
@@ -82,11 +82,27 @@ class QuestionUpdateRequest extends FormRequest
         $sanitized = $this->sanitizeQuestionPayload($this->all());
 
         // [MEDIA-01] Blindaje de inmutabilidad: jamás permitir mutar question_type vía formulario.
-        $question = $this->route('question');
+        $question = $this->routeQuestion();
         if ($question instanceof Question) {
             $sanitized['question_type'] = $question->question_type;
         }
 
         $this->replace($sanitized);
+    }
+
+    /**
+     * Pregunta que se edita: desde el banco (questions.update) o desde un
+     * examen (exams.questions.update, RF-EXA-005).
+     */
+    private function routeQuestion(): ?Question
+    {
+        $question = $this->route('question');
+        if ($question instanceof Question) {
+            return $question;
+        }
+
+        $examQuestion = $this->route('examQuestion');
+
+        return $examQuestion instanceof \App\Models\ExamQuestion ? $examQuestion->question : null;
     }
 }

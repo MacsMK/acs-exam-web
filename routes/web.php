@@ -172,6 +172,13 @@ Route::middleware('auth')->group(function (): void {
         Route::post('exams/{exam}/reactivos/{examQuestion}/nuevo-sorteo', [ExamController::class, 'reshuffleQuestion'])
             ->whereNumber(['exam', 'examQuestion'])
             ->name('exams.questions.reshuffle');
+        // Modificar una pregunta solo para este examen (RF-EXA-005)
+        Route::get('exams/{exam}/reactivos/{examQuestion}/editar', [ExamController::class, 'editQuestion'])
+            ->whereNumber(['exam', 'examQuestion'])
+            ->name('exams.questions.edit');
+        Route::put('exams/{exam}/reactivos/{examQuestion}', [ExamController::class, 'updateQuestion'])
+            ->whereNumber(['exam', 'examQuestion'])
+            ->name('exams.questions.update');
         Route::delete('exams/{exam}/reactivos/{examQuestion}', [ExamController::class, 'destroyQuestion'])
             ->whereNumber(['exam', 'examQuestion'])
             ->name('exams.questions.destroy');
@@ -274,6 +281,11 @@ Route::middleware('auth')->group(function (): void {
     Route::get('intentos/{attempt}', [AttemptController::class, 'show'])->name('attempts.show');
     Route::post('intentos/{attempt}/responder', [AttemptController::class, 'answer'])->name('attempts.answer');
     // Guardado automático del borrador de la pregunta activa (RF-EXA-040, RF-EXA-041)
+    // Señal de presencia: una sola sesión activa por intento (RF-EXA-049)
+    Route::post('intentos/{attempt}/presencia', [AttemptController::class, 'heartbeat'])
+        ->whereNumber('attempt')
+        ->middleware('throttle:60,1')
+        ->name('attempts.heartbeat');
     Route::post('intentos/{attempt}/borrador', [AttemptController::class, 'draft'])
         ->whereNumber('attempt')
         ->middleware('throttle:120,1')

@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Http/Controllers/ExamController.php
  * Requerimiento:  RF-EXA (Armado, Configuración y Publicación, RW-12 a RW-27)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        2.0.0
+ * Versión:        2.1.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Controlador delgado (Skinny Controller) de exámenes docentes:
  *                 tablero con KPIs y filtros SQL, CRUD seguro de borradores,
@@ -33,6 +33,7 @@ use App\Http\Requests\ExamSectionStoreRequest;
 use App\Http\Requests\ExamSectionUpdateRequest;
 use App\Http\Requests\ExamStoreRequest;
 use App\Http\Requests\ExamUpdateRequest;
+use App\Http\Requests\QuestionUpdateRequest;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
 use App\Models\ExamSection;
@@ -523,6 +524,58 @@ class ExamController extends Controller
     /**
      * Verifica aislamiento multi-docente sobre la instancia del examen (RNF-SEG-004).
      */
+    /**
+     * Formulario para modificar una pregunta solo dentro de este examen (RF-EXA-005).
+     */
+    public function editQuestion(Request $request, Exam $exam, ExamQuestion $examQuestion): View
+    {
+        $this->authorizeExam($exam);
+        abort_if((int) $examQuestion->exam_id !== (int) $exam->id, 404);
+        $question = $examQuestion->question;
+        abort_if($question === null || $question->trashed(), 404);
+
+        $this->examAssemblyService->ensureStructureMutable($exam);
+
+        $state = $this->questionBankService->buildEditFormState($question, $request->old());
+
+        return view('questions.edit', [
+            'question' => $question,
+            'subjects' => $this->questionBankService->getDistinctSubjectsForTeacher($request->user()),
+            'initialOptions' => $state['initialOptions'],
+            'initialCorrectOption' => $state['initialCorrectOption'],
+            'initialPairs' => $state['initialPairs'],
+            'initialIsFindError' => $state['initialIsFindError'],
+            'nextVersionNumber' => $state['nextVersionNumber'],
+            'isLinkedToExam' => true,
+            'isLinkedToExams' => true,
+            'examContext' => $exam,
+            'formAction' => route('exams.questions.update', [$exam, $examQuestion]),
+            'cancelUrl' => route('exams.assemble', $exam),
+        ]);
+    }
+
+    /**
+     * Guarda la pregunta modificada como nueva versión usada por este examen;
+     * la del banco no cambia (RF-EXA-005).
+     */
+    public function updateQuestion(QuestionUpdateRequest $request, Exam $exam, ExamQuestion $examQuestion): RedirectResponse
+    {
+        $this->authorizeExam($exam);
+        abort_if((int) $examQuestion->exam_id !== (int) $exam->id, 404);
+
+        $this->examAssemblyService->editExamQuestion(
+            $exam,
+            $examQuestion,
+            $request->user(),
+            $request->validated(),
+            $this->questionBankService,
+        );
+
+        return redirect()
+            ->route('exams.assemble', $exam)
+            ->with('status', 'Reactivo actualizado solo para este examen; la versión del banco no cambió.');
+    }
+
     private function authorizeExam(Exam $exam): void
     {
         abort_unless((int) $exam->teacher_id === (int) request()->user()->id, 403);

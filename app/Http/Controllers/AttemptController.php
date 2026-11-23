@@ -30,6 +30,8 @@ use Illuminate\Http\RedirectResponse;
 
 class AttemptController extends Controller
 {
+    private const OTHER_SESSION_MESSAGE = 'Este intento está abierto en otra sesión o dispositivo. Ciérralo ahí o espera un minuto e inténtalo de nuevo.';
+
     public function __construct(
         private readonly AttemptService $attemptService,
         private readonly StudentResultService $studentResultService,
@@ -53,6 +55,10 @@ class AttemptController extends Controller
 
         if ($attempt->status !== 'in_progress') {
             return redirect()->route('attempts.result', $attempt);
+        }
+
+        if (! $this->attemptService->sessionAvailable($attempt, $this->sessionHolder())) {
+            return redirect()->route('student.exams.index')->withErrors(['attempt' => self::OTHER_SESSION_MESSAGE]);
         }
 
         $attempt->loadMissing('exam');
@@ -79,6 +85,10 @@ class AttemptController extends Controller
         if ($attempt->status !== 'in_progress') {
             return redirect()->route('attempts.result', $attempt)
                 ->withErrors(['attempt' => 'El intento ya no se encuentra activo.']);
+        }
+
+        if (! $this->attemptService->sessionAvailable($attempt, $this->sessionHolder())) {
+            return redirect()->route('student.exams.index')->withErrors(['attempt' => self::OTHER_SESSION_MESSAGE]);
         }
 
         $data = $request->validated();
@@ -191,6 +201,10 @@ class AttemptController extends Controller
     {
         $this->authorizeOwnership($attempt);
 
+        if (! $this->attemptService->sessionAvailable($attempt, $this->sessionHolder())) {
+            return response()->json(['saved' => false, 'message' => self::OTHER_SESSION_MESSAGE], 409);
+        }
+
         try {
             $this->attemptService->saveDraft(
                 $attempt,
@@ -215,6 +229,33 @@ class AttemptController extends Controller
             $request->has('given_answer') => $request->input('given_answer'),
             default => (string) ($request->input('answer_text') ?? ''),
         };
+    }
+
+    /**
+     * Señal de presencia de la pestaña que presenta el intento (RF-EXA-049).
+     */
+    public function heartbeat(StudentAttempt $attempt): JsonResponse
+    {
+        $this->authorizeOwnership($attempt);
+
+        if ($attempt->status !== 'in_progress') {
+            return response()->json(['active' => false, 'redirect_url' => route('attempts.result', $attempt)], 409);
+        }
+
+        if (! $this->attemptService->acquireSession($attempt, $this->sessionHolder())) {
+            return response()->json([
+                'active' => false,
+                'message' => self::OTHER_SESSION_MESSAGE,
+                'redirect_url' => route('student.exams.index'),
+            ], 409);
+        }
+
+        return response()->json(['active' => true]);
+    }
+
+    private function sessionHolder(): string
+    {
+        return 'web:' . request()->session()->getId();
     }
 
     private function authorizeOwnership(StudentAttempt $attempt): void

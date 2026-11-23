@@ -31,6 +31,8 @@ use Illuminate\Http\JsonResponse;
 
 class AttemptController extends Controller
 {
+    private const OTHER_SESSION_MESSAGE = 'Este intento está abierto en otra sesión o dispositivo. Ciérralo ahí o espera un minuto e inténtalo de nuevo.';
+
     public function __construct(private readonly AttemptService $attemptService)
     {
     }
@@ -50,6 +52,11 @@ class AttemptController extends Controller
             return ApiResponse::error($e->getMessage(), 409);
         }
 
+        // RF-EXA-049: una sola sesión activa por intento
+        if (! $this->attemptService->acquireSession($attempt, $this->sessionHolder($request))) {
+            return ApiResponse::error(self::OTHER_SESSION_MESSAGE, 409);
+        }
+
         return ApiResponse::success($this->questionResponse($attempt));
     }
 
@@ -61,6 +68,10 @@ class AttemptController extends Controller
     {
         $attempt = $this->attemptForUser($exam, $request->user());
         $data = $request->validated();
+
+        if (! $this->attemptService->acquireSession($attempt, $this->sessionHolder($request))) {
+            return ApiResponse::error(self::OTHER_SESSION_MESSAGE, 409);
+        }
 
         $examQuestion = $this->currentExamQuestionOrFail($attempt);
 
@@ -237,5 +248,10 @@ class AttemptController extends Controller
             ],
             default => $base,
         };
+    }
+
+    private function sessionHolder(\Illuminate\Http\Request $request): string
+    {
+        return 'api:' . ($request->user()?->currentAccessToken()?->id ?? 'token');
     }
 }

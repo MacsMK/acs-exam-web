@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Models/Exam.php
  * Requerimiento:  RF-EXA (Armado y Aplicación de Exámenes, RW-12 a RW-24)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.3.0
+ * Versión:        1.4.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_exams con relaciones, scopes de
  *                 aislamiento multi-docente, filtros de tablero y métodos de
@@ -268,6 +268,18 @@ class Exam extends Model
     public function hasStartedWindow(): bool
     {
         return $this->starts_at !== null && $this->starts_at->lte(now());
+    }
+
+    /**
+     * Zona horaria con la que se interpretan las fechas y horas de los exámenes,
+     * para mostrarla a docentes y estudiantes (RF-EXA-018).
+     */
+    public static function timezoneLabel(): string
+    {
+        $timezone = (string) config('app.timezone');
+        $name = $timezone === 'America/Mexico_City' ? 'Hora del centro de México' : $timezone;
+
+        return sprintf('%s (UTC%s)', $name, now()->format('P'));
     }
 
     /**

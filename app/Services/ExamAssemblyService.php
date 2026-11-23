@@ -200,17 +200,20 @@ class ExamAssemblyService
      */
     public function evaluatePublishReadiness(Exam $exam): array
     {
-        $exam->loadMissing(['groups', 'sections.examQuestions']);
+        $exam->loadMissing(['groups', 'sections.examQuestions.question.questionable']);
 
         $sectionsCount = $exam->sections->count();
         $emptySections = $exam->sections->filter(static fn (ExamSection $section): bool => $section->examQuestions->isEmpty());
+        // RF-EXA-019: cada pregunta necesita tiempo y respuesta de referencia válidos
+        $incompleteQuestions = $exam->sections->flatMap->examQuestions
+            ->reject(fn (ExamQuestion $examQuestion): bool => $this->examQuestionIsComplete($examQuestion));
         $totalWeight = round((float) $exam->sections->flatMap->examQuestions->sum('points_weight'), 2);
         $openGroupsCount = $exam->groups->where('is_closed', false)->count();
         $hasFutureWindow = $exam->ends_at !== null && $exam->ends_at->gt(now());
 
         $checks = [
             'has_sections' => $sectionsCount >= 1,
-            'no_empty_sections' => $sectionsCount >= 1 && $emptySections->isEmpty(),
+            'no_empty_sections' => $sectionsCount >= 1 && $emptySections->isEmpty() && $incompleteQuestions->isEmpty(),
             'exact_weight' => abs($totalWeight - 100.0) <= 0.01,
             'has_open_group' => $openGroupsCount >= 1,
             'has_future_window' => $hasFutureWindow,
@@ -222,6 +225,13 @@ class ExamAssemblyService
         } elseif (! $checks['no_empty_sections']) {
             $emptyTitles = $emptySections->pluck('title')->implode(', ');
             $messages[] = "Elimina o asigna reactivos a los apartados vacíos ({$emptyTitles})";
+        }
+
+        if ($incompleteQuestions->isNotEmpty()) {
+            $incompleteTitles = $incompleteQuestions
+                ->map(static fn (ExamQuestion $examQuestion): string => (string) ($examQuestion->question?->title ?? 'Reactivo no disponible'))
+                ->implode(', ');
+            $messages[] = "Revisa el tiempo y la respuesta de referencia de: {$incompleteTitles}";
         }
 
         if (! $checks['exact_weight']) {
@@ -398,6 +408,90 @@ class ExamAssemblyService
     }
 
     /**
+     * Una pregunta del examen está completa si tiene tiempo positivo y su
+     * respuesta de referencia según el tipo (RF-EXA-019).
+     */
+    private function examQuestionIsComplete(ExamQuestion $examQuestion): bool
+    {
+        $question = $examQuestion->question;
+        $item = $question?->questionable;
+
+        if ($item === null || (int) $examQuestion->time_limit_seconds <= 0) {
+            return false;
+        }
+
+        return match ($question->question_type) {
+            'multiple_choice' => $item->correct_option_index !== null && ! empty($item->options_payload),
+            'matching' => ! empty($item->pairs_payload),
+            'open' => trim((string) $item->reference_answer) !== '',
+            'code' => trim((string) $item->reference_solution) !== '',
+            default => false,
+        };
+    }
+
+    /**
+     * Modifica una pregunta del examen sin cambiar la del banco (RF-EXA-005):
+     * se guarda como nueva versión (RF-BAN-010) y este examen pasa a usarla.
+     * Solo mientras la estructura sea editable (antes de iniciar la aplicación
+     * y sin intentos) y conservando la validez si ya está programado.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function editExamQuestion(
+        Exam $exam,
+        ExamQuestion $examQuestion,
+        User $teacher,
+        array $data,
+        QuestionBankService $questionBank,
+    ): ExamQuestion {
+        return DB::transaction(function () use ($exam, $examQuestion, $teacher, $data, $questionBank): ExamQuestion {
+            $lockedExam = Exam::query()
+                ->withoutGlobalScope(TenantTeacherScope::class)
+                ->whereKey($exam->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $this->ensureStructureMutable($lockedExam);
+
+            $result = $questionBank->updateQuestion($teacher, $examQuestion->question, $data);
+
+            if ($result['version_created']) {
+                $examQuestion->update(['question_id' => $result['question']->id]);
+            }
+
+            $this->ensureStillPublishable($lockedExam);
+
+            return $examQuestion->fresh(['question']);
+        });
+    }
+
+    /**
+     * Si el examen ya está programado, comprueba de nuevo que siga cumpliendo
+     * las condiciones de publicación antes de guardar un cambio; si no, el
+     * cambio se revierte (RF-EXA-020).
+     *
+     * @throws ValidationException
+     */
+    private function ensureStillPublishable(Exam $exam): void
+    {
+        $fresh = Exam::query()->withoutGlobalScope(TenantTeacherScope::class)->find($exam->id);
+
+        if ($fresh === null || ! $fresh->is_published) {
+            return;
+        }
+
+        $readiness = $this->evaluatePublishReadiness($fresh);
+
+        if (! $readiness['can_publish']) {
+            throw ValidationException::withMessages([
+                'exam' => ['El examen ya está programado y este cambio lo dejaría incompleto: '
+                    . implode('; ', $readiness['messages'])
+                    . '. Despublícalo para reorganizarlo o ajusta el cambio.'],
+            ]);
+        }
+    }
+
+    /**
      * Verifica que la estructura del examen (apartados y reactivos) admita edición.
      *
      * @throws ValidationException
@@ -450,6 +544,8 @@ class ExamAssemblyService
 
             $section->setRelation('exam', $lockedExam);
             $this->drawQuestionsForSection($section);
+
+            $this->ensureStillPublishable($lockedExam);
 
             return $section;
         });
@@ -599,6 +695,8 @@ class ExamAssemblyService
                 ]);
             }
 
+            $this->ensureStillPublishable($lockedExam);
+
             return $section->fresh(['examQuestions.question']);
         });
     }
@@ -733,6 +831,8 @@ class ExamAssemblyService
                 ]);
             }
 
+            $this->ensureStillPublishable($lockedExam);
+
             return $section->fresh(['examQuestions.question']);
         });
     }
@@ -782,6 +882,7 @@ class ExamAssemblyService
             $this->ensureStructureMutable($lockedExam);
 
             $this->examRepository->deleteSection($section);
+            $this->ensureStillPublishable($lockedExam);
         });
     }
 
@@ -808,6 +909,8 @@ class ExamAssemblyService
                     'requested_quantity' => $section->examQuestions()->count(),
                 ]);
             }
+
+            $this->ensureStillPublishable($lockedExam);
         });
     }
 
@@ -999,6 +1102,8 @@ class ExamAssemblyService
                     'time_limit_seconds' => (int) $values['time_limit_seconds'],
                 ]);
             }
+
+            $this->ensureStillPublishable($updatedExam);
 
             return $updatedExam->fresh(['groups', 'sections.examQuestions']);
         });

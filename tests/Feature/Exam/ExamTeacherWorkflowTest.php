@@ -1465,4 +1465,69 @@ class ExamTeacherWorkflowTest extends TestCase
             'open_answer' => $openAnswer,
         ];
     }
+
+    /**
+     * RF-EXA-005, RF-EXA-019 y RF-EXA-020: una pregunta se modifica solo para el
+     * examen (nueva versión, el banco no cambia) y, si el examen está programado,
+     * no se aceptan cambios que lo dejen inválido.
+     */
+    public function test_exam_question_is_edited_only_for_the_exam_and_scheduled_exams_are_revalidated(): void
+    {
+        $teacher = $this->createTeacherWithProSubscription();
+        $exam = $this->createExamRecord($teacher, ['title' => 'Examen editable']);
+        $section = ExamSection::create([
+            'exam_id' => $exam->id,
+            'title' => 'Única',
+            'question_type' => 'multiple_choice',
+            'requested_quantity' => 2,
+            'sort_order' => 0,
+        ]);
+        $original = $this->createMultipleChoiceQuestion($teacher, 'Original');
+        $other = $this->createMultipleChoiceQuestion($teacher, 'Otra');
+        $editable = ExamQuestion::create([
+            'exam_id' => $exam->id, 'exam_section_id' => $section->id, 'question_id' => $original->id,
+            'time_limit_seconds' => 60, 'points_weight' => 50, 'sort_order' => 0,
+        ]);
+        $second = ExamQuestion::create([
+            'exam_id' => $exam->id, 'exam_section_id' => $section->id, 'question_id' => $other->id,
+            'time_limit_seconds' => 60, 'points_weight' => 50, 'sort_order' => 1,
+        ]);
+
+        $this->actingAs($teacher)->get(route('exams.questions.edit', [$exam, $editable]))
+            ->assertOk()->assertSee('solo para el examen');
+
+        $this->actingAs($teacher)->put(route('exams.questions.update', [$exam, $editable]), [
+            'title' => 'Original (examen)',
+            'stem' => 'Enunciado ajustado para este examen',
+            'default_points' => 5,
+            'default_time_seconds' => 60,
+            'options' => ['Uno', 'Dos'],
+            'correct_option_index' => 1,
+        ])->assertRedirect(route('exams.assemble', $exam))->assertSessionHasNoErrors();
+
+        $editable->refresh();
+        $this->assertNotSame($original->id, $editable->question_id);
+        $this->assertSame('Original (examen)', $editable->question->title);
+        $this->assertNotSame('Original (examen)', $original->fresh()->title);
+
+        // RF-EXA-019: sin tiempo válido no se puede programar
+        $second->update(['time_limit_seconds' => 0]);
+        $readiness = app(ExamAssemblyService::class)->evaluatePublishReadiness($exam->fresh());
+        $this->assertFalse($readiness['checks']['no_empty_sections']);
+        $second->update(['time_limit_seconds' => 60]);
+
+        // RF-EXA-020: programado, quitar una pregunta deja la suma en 50 y se rechaza
+        $exam->update([
+            'is_published' => true,
+            'starts_at' => now()->addDay(),
+            'ends_at' => now()->addDays(2),
+        ]);
+        $exam->groups()->sync([Group::create([
+            'teacher_id' => $teacher->id, 'name' => 'Grupo programado', 'access_folio' => 'PROG0001', 'is_closed' => false,
+        ])->id]);
+
+        $this->actingAs($teacher)->deleteJson(route('exams.questions.destroy', [$exam, $second]))
+            ->assertStatus(422)->assertJsonValidationErrors(['exam']);
+        $this->assertDatabaseHas('acs_exam_question', ['id' => $second->id]);
+    }
 }

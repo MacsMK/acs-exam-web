@@ -143,6 +143,12 @@
                                 {{ $exam->ends_at?->format('d/m/Y H:i') ?? 'Sin vencimiento' }}
                             </span>
                         </div>
+
+                        {{-- RF-EXA-018: zona horaria de las fechas --}}
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-500">Zona horaria:</span>
+                            <span class="text-xs text-slate-600">{{ \App\Models\Exam::timezoneLabel() }}</span>
+                        </div>
                     </div>
                 </div>
 

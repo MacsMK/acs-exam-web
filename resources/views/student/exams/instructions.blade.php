@@ -39,6 +39,9 @@
             <span>·</span>
             <span>
                 Escala: <strong class="text-slate-700">{{ $exam->grading_scale === '0-100' ? '0 a 100 puntos' : '0 a 10 con decimales' }}</strong>
+                ·
+                Cierre: <strong class="text-slate-700">{{ $exam->ends_at?->format('d/m/Y H:i') ?? 'Sin vencimiento' }}</strong>
+                ({{ \App\Models\Exam::timezoneLabel() }})
             </span>
         </x-slot:meta>
 
