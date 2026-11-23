@@ -1158,11 +1158,11 @@
 
                     confirmDelete(formId, title, linkedCount) {
                         const warningSuffix = linkedCount > 0
-                            ? ' Nota: este reactivo está en ' + linkedCount + ' examen(es); si alguno está publicado o tiene intentos, no podrá eliminarse.'
+                            ? ' Está en ' + linkedCount + ' examen(es); esos exámenes lo conservarán.'
                             : '';
                         AcodeAlert.confirm({
                             title: '¿Eliminar reactivo?',
-                            text: 'El reactivo "' + title + '" será retirado de tu catálogo activo.' + warningSuffix,
+                            text: 'El reactivo "' + title + '" será retirado de tu banco.' + warningSuffix,
                             confirmButtonText: 'Eliminar',
                             cancelButtonText: 'Cancelar',
                             isDanger: true,

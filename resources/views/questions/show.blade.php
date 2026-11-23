@@ -635,7 +635,7 @@
             function confirmDeleteBottom() {
                 AcodeAlert.confirm({
                     title: '¿Eliminar reactivo?',
-                    text: 'El reactivo "' + questionTitleLabel + '" será retirado de tu catálogo activo.',
+                    text: 'El reactivo "' + questionTitleLabel + '" será retirado de tu banco. Los exámenes donde ya se usó lo conservarán.',
                     confirmButtonText: 'Eliminar',
                     cancelButtonText: 'Cancelar',
                     isDanger: true,

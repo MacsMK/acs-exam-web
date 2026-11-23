@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Services/QuestionBankService.php
  * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §6.4.1)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        2.1.0
+ * Versión:        2.2.0
  * Descripción:    Servicio transaccional del Banco de Reactivos: gestión de las
  *                 4 variantes polimórficas con IDs opacos en matching [CRÍTICA-02],
  *                 Copy-On-Write bajo bloqueo pesimista [ALTA-08], cuotas SaaS
@@ -491,12 +491,8 @@ class QuestionBankService
             abort(403, 'No tiene autorización para eliminar este reactivo.');
         }
 
-        if ($this->questionRepository->hasActiveOrPublishedExamLinks($question)) {
-            throw new DomainException(
-                'No es posible eliminar este reactivo porque forma parte de un examen publicado o con intentos de alumnos. Puedes duplicarlo o editarlo para crear una nueva versión.'
-            );
-        }
-
+        // RF-BAN-011: borrado lógico permitido aunque la pregunta esté en exámenes publicados
+        // o con intentos; los exámenes la siguen resolviendo con withTrashed() (ExamQuestion::question).
         return $this->questionRepository->destroySafely($question);
     }
 

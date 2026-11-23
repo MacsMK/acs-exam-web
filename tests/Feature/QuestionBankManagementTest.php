@@ -475,9 +475,9 @@ class QuestionBankManagementTest extends TestCase
 
     /**
      * 7. Certifica ambas garantías de [ALTA-02] y la resolución 404 de [ALTA-01]:
-     *    (a) Un reactivo vinculado a un examen publicado o con intentos bloquea DELETE con error 'question'
-     *        y mantiene deleted_at === null.
-     *    (b) Un reactivo vinculado únicamente a un examen borrador sin intentos permite SoftDelete,
+     *    (a) RF-BAN-011: un reactivo vinculado a un examen publicado o con intentos también se
+     *        elimina (SoftDelete) y el examen conserva su contenido.
+     *    (b) Un reactivo vinculado a un examen borrador sin intentos permite SoftDelete,
      *        $examQuestion->fresh()->question sigue resolviendo vía withTrashed() sin lanzar null/500,
      *        y acceder por URL a show/edit del reactivo eliminado devuelve 404.
      */
@@ -493,22 +493,23 @@ class QuestionBankManagementTest extends TestCase
             'is_active' => true,
         ]);
 
-        // (a.1) Bloqueo ante examen publicado
+        // (a.1) RF-BAN-011: se elimina aunque esté en un examen publicado; el examen la conserva
         $publishedQuestion = $this->createMultipleChoiceQuestion($teacher, [
             'title' => 'Reactivo En Examen Publicado',
         ]);
-        $this->linkQuestionToExam($teacher, $publishedQuestion, true);
+        $publishedExamQuestion = $this->linkQuestionToExam($teacher, $publishedQuestion, true);
 
-        $blockedPublishedResponse = $this->actingAs($teacher)
-            ->from(route('questions.index'))
-            ->delete(route('questions.destroy', $publishedQuestion));
+        $this->actingAs($teacher)
+            ->delete(route('questions.destroy', $publishedQuestion))
+            ->assertRedirect(route('questions.index'))
+            ->assertSessionHas('status', 'Reactivo eliminado del banco exitosamente.');
 
-        $blockedPublishedResponse->assertRedirect(route('questions.index'));
-        $blockedPublishedResponse->assertSessionHasErrors('question');
-        $this->assertNull($publishedQuestion->fresh()->deleted_at);
-        $this->assertNotSoftDeleted('acs_questions', ['id' => $publishedQuestion->id]);
+        $this->assertSoftDeleted('acs_questions', ['id' => $publishedQuestion->id]);
+        $resolvedPublished = $publishedExamQuestion->fresh()->question;
+        $this->assertNotNull($resolvedPublished);
+        $this->assertNotNull($resolvedPublished->questionable);
 
-        // (a.2) Bloqueo ante examen no publicado pero con intentos de alumnos
+        // (a.2) RF-BAN-011: se elimina aunque el examen tenga intentos; el intento conserva la pregunta
         $attemptedQuestion = $this->createMultipleChoiceQuestion($teacher, [
             'title' => 'Reactivo En Examen Con Intento',
         ]);
@@ -529,13 +530,12 @@ class QuestionBankManagementTest extends TestCase
             'status' => 'submitted',
         ]);
 
-        $blockedAttemptResponse = $this->actingAs($teacher)
-            ->from(route('questions.index'))
-            ->delete(route('questions.destroy', $attemptedQuestion));
+        $this->actingAs($teacher)
+            ->delete(route('questions.destroy', $attemptedQuestion))
+            ->assertRedirect(route('questions.index'));
 
-        $blockedAttemptResponse->assertRedirect(route('questions.index'));
-        $blockedAttemptResponse->assertSessionHasErrors('question');
-        $this->assertNull($attemptedQuestion->fresh()->deleted_at);
+        $this->assertSoftDeleted('acs_questions', ['id' => $attemptedQuestion->id]);
+        $this->assertSame($attemptedQuestion->stem, $attemptedExamQuestion->fresh()->question->stem);
 
         // (b) Examen borrador sin intentos permite SoftDelete preservando FK y withTrashed()
         $draftQuestion = $this->createMultipleChoiceQuestion($teacher, [
