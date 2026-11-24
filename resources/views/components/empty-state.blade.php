@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-empty-state (MPW-V2 §5.2.2, §7.3, §8.1.1) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-empty-state (MPW-V3 §5.2.2, §7.3, §8.1.1) --}}
 @props([
     'icon' => 'search',
     'title' => null,

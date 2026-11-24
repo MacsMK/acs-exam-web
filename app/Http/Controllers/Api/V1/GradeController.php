@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     GradeController.php
  * Ubicación:   app/Http/Controllers/Api/V1/GradeController.php
  * Descripción: api.v1.grades.index, .statistics, .show y .review (MPM-V3
- *              Tabla 12, MPW-V2 §6.1). Delega las consultas agregadas sin
+ *              Tabla 12, MPW-V3 §6.1). Delega las consultas agregadas sin
  *              N+1 a TeacherGradingService y las consultas del estudiante
  *              sobre su propio resultado a StudentResultService (ADR-037).
  *              El listado del alumno incluye el grupo de cada intento y se

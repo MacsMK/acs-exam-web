@@ -7,8 +7,8 @@
     Descripción: Catálogo operativo de grupos escolares del docente con arquitectura
                  espacial homologada: encabezado institucional, 4 KPIs canónicos,
                  barra de búsqueda y filtrado con alternancia cuadrícula/lista,
-                 tarjetas con folio copiable y modal QR (MPW-V2 §7.3, §7.4.2,
-                 §7.8.2, §8.1–§8.12; MC-V2 §2.4).
+                 tarjetas con folio copiable y modal QR (MPW-V3 §7.3, §7.4.2,
+                 §7.8.2, §8.1–§8.12; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')

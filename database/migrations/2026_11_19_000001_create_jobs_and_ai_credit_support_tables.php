@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        2026_11_19_000001_create_jobs_and_ai_credit_support_tables.php
  * Ubicación:      database/migrations/
- * Requerimiento:  RF-IAR-011 / RF-IAR-014 / MC-V2 (Cola de evaluación IA y
+ * Requerimiento:  RF-IAR-011 / RF-IAR-014 / MC-V3 (Cola de evaluación IA y
  *                 control de créditos de IA por suscripción)
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0

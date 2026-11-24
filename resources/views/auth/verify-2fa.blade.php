@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: auth/verify-2fa.blade.php (MPW-V2 §7.3, §7.8.2, §8.5, Tabla 20, Tabla 28) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: auth/verify-2fa.blade.php (MPW-V3 §7.3, §7.8.2, §8.5, Tabla 10, Tabla 18) --}}
 @extends('layouts.guest')
 
 @section('title', 'Verificación en Dos Pasos (2FA)')
@@ -10,7 +10,7 @@
         </div>
         <h1 class="text-xl font-bold text-acode-primary tracking-tight">Verificación en Dos Pasos</h1>
         <p class="text-xs text-slate-500 mt-1">
-            Hemos generado un código de 6 dígitos para tu cuenta <strong class="text-slate-700">{{ $user->email }}</strong>.
+            Hemos generado un código de 6 dígitos para tu cuenta <strong class="text-slate-700">{{ $user->email }}</strong>
         </p>
     </div>
 
@@ -29,15 +29,14 @@
 
     <div
         x-data="{
-            remaining: 600, // 10 minutos normativos
+            remaining: {{ (int) ($expiresIn ?? 600) }}, // vigencia real del código (10 minutos normativos)
+            resendIn: {{ (int) ($resendIn ?? 0) }}, // espera para solicitar un nuevo código (RF-AUT-006)
             timerId: null,
             init() {
                 this.timerId = setInterval(() => {
-                    if (this.remaining > 0) {
-                        this.remaining--;
-                    } else {
-                        clearInterval(this.timerId);
-                    }
+                    if (this.remaining > 0) this.remaining--;
+                    if (this.resendIn > 0) this.resendIn--;
+                    if (this.remaining <= 0 && this.resendIn <= 0) clearInterval(this.timerId);
                 }, 1000);
             },
             formattedTime() {
@@ -87,6 +86,21 @@
                     Continuar
                 </x-button>
             </div>
+        </form>
+
+        {{-- Reenvío del código tras 60 segundos; el nuevo código invalida el anterior (RF-AUT-006) --}}
+        <form method="POST" action="{{ route('auth.verify-2fa.resend') }}" class="text-center">
+            @csrf
+            <p class="text-xs text-slate-500 mb-2">¿No recibiste el código?</p>
+            <x-button
+                type="submit"
+                variant="neutral"
+                size="sm"
+                x-bind:disabled="resendIn > 0"
+            >
+                <span x-show="resendIn <= 0">Reenviar código</span>
+                <span x-show="resendIn > 0" x-cloak x-text="'Reenviar código en ' + resendIn + ' s'"></span>
+            </x-button>
         </form>
 
         <div class="text-center pt-2">

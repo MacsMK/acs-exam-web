@@ -7,7 +7,7 @@
     Descripción: Gestión operativa y configuración de periodos de evaluación
                  (parciales) y ponderaciones porcentuales por grupo escolar con
                  validación aritmética al 100% en tiempo real y tokens acode-*
-                 (RF-CAL-001..005, RW-28..31, MPW-V2 §7.3, §7.4.2, §8.1–§8.12).
+                 (RF-CAL-001..005, RW-28..31, MPW-V3 §7.3, §7.4.2, §8.1–§8.12).
     ============================================================================
 --}}
 @extends('layouts.app')

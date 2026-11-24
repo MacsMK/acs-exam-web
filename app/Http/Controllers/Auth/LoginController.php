@@ -25,6 +25,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 class LoginController extends Controller
 {
@@ -58,7 +59,40 @@ class LoginController extends Controller
             403
         );
 
-        return view('auth.verify-2fa', ['user' => $user]);
+        return view('auth.verify-2fa', [
+            'user' => $user,
+            'expiresIn' => $user->two_factor_expires_at !== null
+                ? max(0, $user->two_factor_expires_at->getTimestamp() - now()->getTimestamp())
+                : 0,
+            'resendIn' => $this->authService->secondsUntilResendAvailable($user),
+        ]);
+    }
+
+    /**
+     * Reenvía el código del segundo paso a la cuenta con verificación pendiente
+     * en la sesión (RF-AUT-006). Respeta la espera de 60 segundos e invalida
+     * el código anterior.
+     *
+     * @param Request $request Solicitud con la sesión de verificación pendiente.
+     * @return RedirectResponse
+     */
+    public function resendTwoFactor(Request $request): RedirectResponse
+    {
+        $user = User::find((int) $request->session()->get('pending_2fa_user_id'));
+
+        abort_if($user === null, 403);
+
+        try {
+            $this->authService->resendTwoFactorCodeForUser($user);
+        } catch (TooManyRequestsHttpException $exception) {
+            return redirect()
+                ->route('auth.verify-2fa.show', ['user' => $user->id])
+                ->withErrors(['code' => $exception->getMessage()]);
+        }
+
+        return redirect()
+            ->route('auth.verify-2fa.show', ['user' => $user->id])
+            ->with('status', 'Te enviamos un nuevo código de verificación. El anterior ya no es válido.');
     }
 
     public function verifyTwoFactor(VerifyTwoFactorRequest $request): RedirectResponse

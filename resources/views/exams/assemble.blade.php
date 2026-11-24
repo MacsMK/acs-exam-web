@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/assemble.blade.php (MPW-V2 §4.1.2, §7, §8, RW-12..14, ADR-027) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/assemble.blade.php (MPW-V3 §4.1.2, §7, §8, RW-12..14, ADR-027) --}}
 @extends('layouts.app')
 
 @section('title', 'Armar reactivos: ' . $exam->title)
@@ -728,6 +728,12 @@
 
                                         @if ($canEditStructure)
                                             <div class="flex items-center gap-1.5 shrink-0">
+                                                {{-- RF-EXA-005: editar solo para este examen --}}
+                                                @if ($q && ! $q->trashed())
+                                                    <x-button :href="route('exams.questions.edit', [$exam, $examQuestion])" variant="neutral" size="sm" title="Modificar este reactivo solo para este examen">
+                                                        Editar
+                                                    </x-button>
+                                                @endif
                                                 <form method="POST" action="{{ route('exams.questions.reshuffle', [$exam, $examQuestion]) }}" class="inline">
                                                     @csrf
                                                     <x-button type="submit" variant="neutral" size="sm" title="Sustituir por otro reactivo conservando peso y tiempo (RW-14)">

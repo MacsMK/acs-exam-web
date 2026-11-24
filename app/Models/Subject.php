@@ -15,7 +15,7 @@ declare(strict_types=1);
  * Fecha Creación: 12/11/2026
  * Descripción:    Modelo Eloquent de acs_subjects: catálogo normalizado de
  *                 materias por docente con aislamiento multi-tenant
- *                 (MPW-V2 §2.3.4, §6.6) y utilidades puras de limpieza y
+ *                 (MPW-V3 §2.3.4, §6.6) y utilidades puras de limpieza y
  *                 normalización canónica Unicode/ASCII.
  * ============================================================================
  */
@@ -40,14 +40,14 @@ use App\Models\Scopes\TenantTeacherScope;
 class Subject extends Model
 {
     /**
-     * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4).
+     * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3).
      *
      * @var string
      */
     protected $table = 'acs_subjects';
 
     /**
-     * Columnas asignables en masa (MPW-V2 §2.3.1).
+     * Columnas asignables en masa (MPW-V3 §2.3.1).
      *
      * @var list<string>
      */
@@ -103,7 +103,7 @@ class Subject extends Model
     }
 
     /**
-     * Scope local de aislamiento multi-docente (MPW-V2 §2.3.4, §6.6).
+     * Scope local de aislamiento multi-docente (MPW-V3 §2.3.4, §6.6).
      *
      * @param Builder<Subject> $query     Constructor de la consulta Eloquent.
      * @param int              $teacherId Identificador del docente propietario.
@@ -157,7 +157,7 @@ class Subject extends Model
     }
 
     /**
-     * Conversión de atributos (MPW-V2 Tabla 6 Bloque 16).
+     * Conversión de atributos (MPW-V3 Tabla 6 Bloque 16).
      *
      * @return array<string, string>
      */

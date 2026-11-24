@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        TenantTeacherScope.php
  * Ubicación:      app/Models/Scopes/TenantTeacherScope.php
- * Requerimiento:  RF-AUT / Aislamiento Multi-Docente (MPW-V2 §2.3.4, §6.6)
+ * Requerimiento:  RF-AUT / Aislamiento Multi-Docente (MPW-V3 §2.3.4, §6.6)
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 28/10/2026

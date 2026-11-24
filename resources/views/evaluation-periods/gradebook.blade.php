@@ -8,7 +8,7 @@
                  calificaciones por periodo escolar con exportación Excel (.xlsx),
                  protección ante cambios sin guardar y tokens oficiales acode-*
                  (RF-CAL-009, RF-CAL-012, RF-CAL-017, RF-CAL-021, RF-CAL-027,
-                 RW-28..31, MPW-V2 §7.3, §7.4.2, §8.1–§8.12).
+                 RW-28..31, MPW-V3 §7.3, §7.4.2, §8.1–§8.12).
     ============================================================================
 --}}
 @extends('layouts.app')

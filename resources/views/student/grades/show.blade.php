@@ -6,7 +6,7 @@
     Ubicación:   resources/views/student/grades/show.blade.php
     Descripción: Vista detallada de calificaciones por asignatura y periodos,
                  homologada al UI Kit A-Code (RF-REP-007, RF-REP-008, RF-REP-012;
-                 MPW-V2 §7 y §8; MC-V2 §2.4).
+                 MPW-V3 §7 y §8; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')

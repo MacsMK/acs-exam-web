@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Layout: guest.blade.php (MPW-V2 §7.2, §8.1, §8.2, §8.10.3) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Layout: guest.blade.php (MPW-V3 §7.2, §8.1, §8.2, §8.10.3) --}}
 <!DOCTYPE html>
 <html lang="es" class="h-full">
 <head>
@@ -166,7 +166,7 @@
                 </x-card>
 
                 <div class="mt-6 text-center text-xs text-slate-400 select-none">
-                    <p>&copy; 2026 A-Code Solutions · Cumplimiento Normativo MPW-V2</p>
+                    <p>&copy; 2026 A-Code Solutions · Cumplimiento Normativo MPW-V3</p>
                 </div>
             </div>
         </section>

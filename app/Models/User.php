@@ -14,10 +14,10 @@ declare(strict_types=1);
  * Autor:          Equipo de Base de Datos (A-Code Solutions)
  * Versión:        2.3.0
  * Fecha Creación: 26/10/2026
- * Descripción:    Modelo Eloquent de acs_users (MBD-V4 Tabla 20). Sirve
+ * Descripción:    Modelo Eloquent de acs_users (ficha BD-02 de acs_users). Sirve
  *                 indistintamente a super_admin, teacher y student
- *                 (MBD-V4 §6.2). Autenticable por Fortify (web) y portador
- *                 de tokens Sanctum (móvil, MPW-V2 §1.3.1 / MPM-V2 §6.6.1).
+ *                 (MBD-V3 §3.3; ficha BD-02 de acs_users). Autenticable por Fortify (web) y portador
+ *                 de tokens Sanctum (móvil, MPW-V3 §1.3.1 / MPM-V3 §6.6.1).
  *
  *                 CAMBIOS v2.0.0: refleja la migración 001 v2.0.0 (acuerdo
  *                 de equipo con Balam, 26/10/2026) — two_factor_enabled se
@@ -58,7 +58,7 @@ class User extends Authenticatable
     use Notifiable;
 
     /**
-     * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4): Eloquent no
+     * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3): Eloquent no
      * infiere "acs_users" a partir del nombre de la clase, debe declararse
      * explícitamente en todo modelo del proyecto.
      *
@@ -67,7 +67,7 @@ class User extends Authenticatable
     protected $table = 'acs_users';
 
     /**
-     * Columnas asignables en masa (MPW-V2 §2.3.1: $guarded = [] prohibido).
+     * Columnas asignables en masa (MPW-V3 §2.3.1: $guarded = [] prohibido).
      *
      * @var list<string>
      */
@@ -313,7 +313,7 @@ class User extends Authenticatable
     }
 
     /**
-     * Conversión de atributos (MPW-V2 §2.3.2 y Tabla 6 Bloque 16: método
+     * Conversión de atributos (MPW-V3 §2.3.2 y Tabla 6 Bloque 16: método
      * casts(), no la propiedad estática $casts, conforme al estándar Laravel 11).
      *
      * @return array<string, string>
@@ -333,8 +333,8 @@ class User extends Authenticatable
 
     /**
      * Nombre completo (first_name + last_name), uso en vistas y recibos
-     * (DE-07) donde MBD-V4/MPM-V2 piden un único nombre para mostrar.
-     * Ubicado en el bloque 16 (Accesores / Mutadores) conforme a MPW-V2 §3.8.1.
+     * (DE-07) donde MBD-V3/MPM-V3 piden un único nombre para mostrar.
+     * Ubicado en el bloque 16 (Accesores / Mutadores) conforme a MPW-V3 §3.8.1.
      *
      * @return string
      */

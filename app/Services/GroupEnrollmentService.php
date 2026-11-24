@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Ubicación:   app/Services/GroupEnrollmentService.php
  * Descripción: Servicio de dominio para gestión de grupos, inscripción por
  *              folio/QR, verificación de pertenencia, listado de exámenes
- *              disponibles y cierre semestral seguro (RF-GRU-018, MPW-V2 §5.2.1).
+ *              disponibles y cierre semestral seguro (RF-GRU-018, MPW-V3 §5.2.1).
  * ============================================================================
  */
 
@@ -38,7 +38,7 @@ class GroupEnrollmentService
 
     /**
      * Crea un grupo para el docente con un folio único garantizado mediante
-     * ciclo finito (MPW-V2 §5.2.1) validando cuotas de suscripción (RF-SUS-007, RF-SUS-010).
+     * ciclo finito (MPW-V3 §5.2.1) validando cuotas de suscripción (RF-SUS-007, RF-SUS-010).
      *
      * @param array<string, mixed> $data
      */
@@ -51,6 +51,7 @@ class GroupEnrollmentService
                 'teacher_id' => $teacher->id,
                 'name' => (string) $data['name'],
                 'subject' => ! empty($data['subject']) ? (string) $data['subject'] : null,
+                'description' => ! empty($data['description']) ? (string) $data['description'] : null,
                 'access_folio' => $this->generateUniqueFolio(),
             ]);
         });
@@ -210,6 +211,81 @@ class GroupEnrollmentService
      *
      * @throws DomainException
      */
+    /**
+     * Retiro de un estudiante por el docente (RF-GRU-011, RF-GRU-016,
+     * ACT-WEB-021). Elimina la pertenencia y con ella el acceso del estudiante
+     * a los recursos y resultados del grupo; sus registros académicos se
+     * conservan (CAM-008). No procede si tiene un intento en curso en el grupo.
+     *
+     * @param Group $group Grupo administrado por el docente.
+     * @param User $student Estudiante a retirar.
+     * @param User $teacher Docente que realiza el retiro (bitácora).
+     * @return void
+     *
+     * @throws ValidationException Si el estudiante no pertenece al grupo.
+     * @throws DomainException Si el estudiante tiene un intento en curso.
+     */
+    public function removeStudent(Group $group, User $student, User $teacher): void
+    {
+        $belongs = $group->students()->where('acs_users.id', $student->id)->exists();
+
+        if (! $belongs) {
+            throw ValidationException::withMessages([
+                'student' => ['El estudiante no pertenece a este grupo.'],
+            ]);
+        }
+
+        $hasAttemptInProgress = $group->studentAttempts()
+            ->where('student_id', $student->id)
+            ->where('status', 'in_progress')
+            ->with('exam')
+            ->get()
+            ->contains(fn (StudentAttempt $attempt): bool => $this->attemptService->isInProgress($attempt));
+
+        if ($hasAttemptInProgress) {
+            throw new DomainException(
+                'No es posible retirar al estudiante mientras tenga un examen en curso en este grupo. '
+                .'Podrás hacerlo cuando ese intento haya finalizado.'
+            );
+        }
+
+        DB::transaction(static function () use ($group, $student, $teacher): void {
+            $group->students()->detach($student->id);
+
+            AuditLog::create([
+                'user_id' => $teacher->id,
+                'action' => 'group.student_removed',
+                'auditable_type' => Group::class,
+                'auditable_id' => $group->id,
+                'old_values' => ['student_id' => $student->id, 'group_id' => $group->id],
+                'ip_address' => request()->ip(),
+                'user_agent' => mb_substr((string) request()->userAgent(), 0, 255),
+            ]);
+        });
+    }
+
+    /**
+     * Modifica nombre, materia y descripción de un grupo activo (RF-GRU-003, ACT-WEB-020).
+     *
+     * @param array<string, mixed> $data
+     *
+     * @throws DomainException Si el grupo está cerrado.
+     */
+    public function updateGroup(Group $group, array $data): Group
+    {
+        if ($group->is_closed) {
+            throw new DomainException('Solo puedes modificar grupos activos. Reabre el grupo para editarlo.');
+        }
+
+        $group->update([
+            'name' => (string) $data['name'],
+            'subject' => ! empty($data['subject']) ? (string) $data['subject'] : null,
+            'description' => ! empty($data['description']) ? (string) $data['description'] : null,
+        ]);
+
+        return $group;
+    }
+
     public function closeGroup(Group $group): void
     {
         $hasActiveAttempts = $group->studentAttempts()
@@ -232,7 +308,7 @@ class GroupEnrollmentService
     }
 
     /**
-     * Genera un folio único con límite de reintentos finito (MPW-V2 §5.2.1).
+     * Genera un folio único con límite de reintentos finito (MPW-V3 §5.2.1).
      */
     public function generateUniqueFolio(): string
     {

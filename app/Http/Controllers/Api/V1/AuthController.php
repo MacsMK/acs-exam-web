@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        AuthController.php
  * Ubicación:      app/Http/Controllers/Api/V1/AuthController.php
- * Requerimiento:  RF-AUT-001..011, MPM-V4 §6.6.1, ADR-010, ADR-035, ADR-057
+ * Requerimiento:  RF-AUT-001..011, MPM-V3 §6.6.1, ADR-010, ADR-035, ADR-057
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        2.1.0
  * Fecha Creación: 26/10/2026
@@ -30,6 +30,7 @@ use App\Http\Requests\ResendTwoFactorRequest;
 use App\Http\Requests\VerifyTwoFactorRequest;
 use App\Models\User;
 use App\Services\AuthService;
+use App\Services\ProfilePhotoService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
@@ -82,9 +83,14 @@ class AuthController extends Controller
      * @param RegisterStudentRequest $request Solicitud validada de alta de alumno.
      * @return JsonResponse
      */
-    public function registerStudent(RegisterStudentRequest $request): JsonResponse
+    public function registerStudent(RegisterStudentRequest $request, ProfilePhotoService $profilePhotoService): JsonResponse
     {
-        $user = $this->authService->register($request->validated(), 'student');
+        $user = $this->authService->register(collect($request->validated())->except('photo')->all(), 'student');
+
+        // Fotografía opcional del estudiante enviada como multipart (RF-AUT-008)
+        if ($request->hasFile('photo')) {
+            $profilePhotoService->store($user, $request->file('photo'));
+        }
 
         return ApiResponse::success(
             $this->withDemoCode($user, ['user_id' => $user->id]),
@@ -113,7 +119,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Completa el segundo factor (api.v1.auth.two-factor, MPM-V4 Tabla 12,
+     * Completa el segundo factor (api.v1.auth.two-factor, MPM-V3 Tabla 12,
      * ADR-010) y emite un token personal Sanctum para la app móvil.
      *
      * @param VerifyTwoFactorRequest $request Solicitud validada con código 2FA.
@@ -136,6 +142,23 @@ class AuthController extends Controller
         $user = $query->latest('two_factor_expires_at')->first();
 
         if ($user === null) {
+            // Con el correo se identifica la cuenta y el intento fallido cuenta
+            // contra su código vigente (RF-AUT-007). Sin correo solo aplica el
+            // límite de peticiones de la ruta.
+            if ($request->filled('email')) {
+                $pending = User::where('email', $request->string('email')->toString())
+                    ->whereIn('role', ['teacher', 'student'])
+                    ->first();
+
+                if ($pending !== null) {
+                    $this->authService->registerFailedTwoFactorAttempt($pending);
+
+                    if ($this->authService->twoFactorAttemptsExhausted($pending)) {
+                        throw ValidationException::withMessages(['code' => [AuthService::TWO_FACTOR_LOCKED_MESSAGE]]);
+                    }
+                }
+            }
+
             throw ValidationException::withMessages(['code' => ['El código es inválido o expiró. Solicita uno nuevo.']]);
         }
 

@@ -13,6 +13,8 @@ declare(strict_types=1);
  * ============================================================================
  */
 
+use App\Http\Controllers\AccountProfileController;
+use App\Http\Controllers\ProfilePhotoController;
 use App\Http\Controllers\AdminInvitationCodeController;
 use App\Http\Controllers\AdminTeacherController;
 use App\Http\Controllers\AttemptController;
@@ -25,6 +27,7 @@ use App\Http\Controllers\ExamMonitorController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\QuestionController;
+use App\Http\Controllers\QuestionFileController;
 use App\Http\Controllers\StudentExamController;
 use App\Http\Controllers\StudentGradeController;
 use App\Http\Controllers\StudentGroupController;
@@ -52,12 +55,32 @@ Route::middleware('guest')->group(function (): void {
 
     Route::get('verificar-codigo/{user}', [LoginController::class, 'showTwoFactorForm'])->name('auth.verify-2fa.show');
     Route::post('verificar-codigo', [LoginController::class, 'verifyTwoFactor'])->middleware('throttle:10,1')->name('auth.verify-2fa.store');
+    Route::post('verificar-codigo/reenviar', [LoginController::class, 'resendTwoFactor'])->middleware('throttle:10,1')->name('auth.verify-2fa.resend');
 });
 
 Route::middleware('auth')->group(function (): void {
     Route::post('logout', [LoginController::class, 'logout'])->name('auth.logout');
 
     Route::get('dashboard', DashboardController::class)->name('dashboard');
+
+    // Imagen y PDF de las preguntas en almacenamiento privado (RF-BAN-012, RF-BAN-013, ACT-WEB-026)
+    Route::get('preguntas/{question}/archivo/{kind}', QuestionFileController::class)
+        ->whereNumber('question')
+        ->whereIn('kind', ['imagen', 'pdf'])
+        ->name('questions.file');
+
+    // Fotografía de perfil en almacenamiento privado (RF-AUT-008, ACT-WEB-038)
+    Route::get('usuarios/{user}/foto', ProfilePhotoController::class)
+        ->whereNumber('user')
+        ->name('users.photo');
+
+    // Perfil del alumno y del superadministrador (RF-AUT-013, ACT-WEB-050)
+    Route::get('mi-perfil', AccountProfileController::class)
+        ->middleware('role:student,super_admin')
+        ->name('account.profile');
+    Route::post('mi-perfil/foto', [AccountProfileController::class, 'updatePhoto'])
+        ->middleware('role:student')
+        ->name('account.profile.photo');
 
     Route::middleware('role:teacher')->group(function (): void {
         Route::get('docente/verificacion', [TeacherVerificationController::class, 'show'])
@@ -80,14 +103,24 @@ Route::middleware('auth')->group(function (): void {
             ->whereNumber('package')
             ->middleware('throttle:15,1')
             ->name('teacher.subscription.pay');
+        Route::post('docente/suscripcion/actualizar/{package}', [TeacherSubscriptionController::class, 'upgrade'])
+            ->whereNumber('package')
+            ->middleware('throttle:15,1')
+            ->name('teacher.subscription.upgrade');
+        Route::post('docente/suscripcion/cancelar-renovacion', [TeacherSubscriptionController::class, 'cancelRenewal'])
+            ->middleware('throttle:15,1')
+            ->name('teacher.subscription.cancel-renewal');
         Route::post('docente/suscripcion/prueba-gratuita', [TeacherSubscriptionController::class, 'startFreeTrial'])
             ->middleware('throttle:15,1')
             ->name('teacher.subscription.free-trial');
 
         Route::middleware('teacher.plan_onboarded')->group(function (): void {
-            Route::resource('groups', GroupController::class)->only(['index', 'create', 'store', 'show']);
+            Route::resource('groups', GroupController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update']);
         Route::post('groups/{group}/cerrar', [GroupController::class, 'close'])->name('groups.close');
         Route::post('groups/{group}/reabrir', [GroupController::class, 'reopen'])->name('groups.reopen');
+        Route::delete('groups/{group}/alumnos/{student}', [GroupController::class, 'removeStudent'])
+            ->whereNumber('student')
+            ->name('groups.students.remove');
         Route::get('groups/{group}/periodos', [EvaluationPeriodController::class, 'index'])->name('groups.periods.index');
         Route::post('groups/{group}/periodos', [EvaluationPeriodController::class, 'store'])->name('groups.periods.store');
         Route::get('groups/{group}/periodos/{period}/sabana', [EvaluationPeriodController::class, 'gradebook'])->name('groups.periods.gradebook');
@@ -139,6 +172,13 @@ Route::middleware('auth')->group(function (): void {
         Route::post('exams/{exam}/reactivos/{examQuestion}/nuevo-sorteo', [ExamController::class, 'reshuffleQuestion'])
             ->whereNumber(['exam', 'examQuestion'])
             ->name('exams.questions.reshuffle');
+        // Modificar una pregunta solo para este examen (RF-EXA-005)
+        Route::get('exams/{exam}/reactivos/{examQuestion}/editar', [ExamController::class, 'editQuestion'])
+            ->whereNumber(['exam', 'examQuestion'])
+            ->name('exams.questions.edit');
+        Route::put('exams/{exam}/reactivos/{examQuestion}', [ExamController::class, 'updateQuestion'])
+            ->whereNumber(['exam', 'examQuestion'])
+            ->name('exams.questions.update');
         Route::delete('exams/{exam}/reactivos/{examQuestion}', [ExamController::class, 'destroyQuestion'])
             ->whereNumber(['exam', 'examQuestion'])
             ->name('exams.questions.destroy');
@@ -175,6 +215,9 @@ Route::middleware('auth')->group(function (): void {
         Route::post('exams/{exam}/revision/{attempt}', [TeacherReviewController::class, 'update'])
             ->whereNumber(['exam', 'attempt'])
             ->name('exams.revision.update');
+        Route::post('exams/{exam}/revision/{attempt}/reaplicacion', [TeacherReviewController::class, 'authorizeReapplication'])
+            ->whereNumber(['exam', 'attempt'])
+            ->name('exams.revision.reapply');
         Route::post('exams/{exam}/revision/{attempt}/respuestas/{answer}/evaluar-ia', [TeacherReviewController::class, 'evaluateWithAi'])
             ->whereNumber(['exam', 'attempt', 'answer'])
             ->middleware('throttle:30,1')
@@ -240,6 +283,16 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('intentos/{attempt}', [AttemptController::class, 'show'])->name('attempts.show');
     Route::post('intentos/{attempt}/responder', [AttemptController::class, 'answer'])->name('attempts.answer');
+    // Guardado automático del borrador de la pregunta activa (RF-EXA-040, RF-EXA-041)
+    // Señal de presencia: una sola sesión activa por intento (RF-EXA-049)
+    Route::post('intentos/{attempt}/presencia', [AttemptController::class, 'heartbeat'])
+        ->whereNumber('attempt')
+        ->middleware('throttle:60,1')
+        ->name('attempts.heartbeat');
+    Route::post('intentos/{attempt}/borrador', [AttemptController::class, 'draft'])
+        ->whereNumber('attempt')
+        ->middleware('throttle:120,1')
+        ->name('attempts.draft');
     Route::post('intentos/{attempt}/incidente', [AttemptController::class, 'incident'])
         ->whereNumber('attempt')
         ->middleware('throttle:30,1')

@@ -38,7 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         // Toda excepción no capturada bajo api/* respeta la envoltura
-        // uniforme de la API v1 (MPM-V4 §6.5.2), no el formato nativo de
+        // uniforme de la API v1 (MPM-V3 §6.5.2), no el formato nativo de
         // Laravel para 422/401/403/404/500 — ver App\Support\ApiResponse.
         $exceptions->render(function (Throwable $e, Request $request) {
             if (! $request->is('api/*')) {

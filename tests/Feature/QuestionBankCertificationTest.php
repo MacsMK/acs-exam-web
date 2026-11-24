@@ -759,6 +759,9 @@ class QuestionBankCertificationTest extends TestCase
 
         // Cerrar ventana del examen para habilitar revisión estudiantil
         $exam->update(['ends_at' => now()->subMinutes(5)]);
+        // RF-EXA-050: los otros 19 intentos iniciados siguen hasta agotar su tiempo
+        // (120 s + tolerancias); la revisión se abre cuando ya no hay intentos en curso.
+        $this->travel(4)->minutes();
 
         $reviewData = app(StudentResultService::class)->review($finishedAttempt->fresh());
         $this->assertSame($frozenStem, $reviewData['questions'][0]['stem']);

@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-toggle-group (MPW-V2 §7.3, §7.5, §8.3.2, §8.8) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-toggle-group (MPW-V3 §7.3, §7.5, §8.3.2, §8.8) --}}
 {{-- Grupo de opciones excluyentes enlazado a una variable de Alpine.js (filtros por estado o cambio de vista). --}}
 @props([
     'model',                 // nombre de la variable de Alpine.js que guarda la opción seleccionada

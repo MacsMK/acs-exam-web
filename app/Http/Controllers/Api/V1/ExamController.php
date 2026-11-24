@@ -98,6 +98,7 @@ class ExamController extends Controller
 
         $totalCount = (int) $exam->groups()->withCount('students')->get()->sum('students_count');
         $answeredCount = $exam->studentAttempts()
+            ->current()
             ->whereIn('status', ['submitted', 'expired', 'cancelled_by_incident'])
             ->count();
 

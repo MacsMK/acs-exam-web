@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     AttemptTakeRequest.php
  * Ubicación:   app/Http/Requests/AttemptTakeRequest.php
  * Descripción: Validación para iniciar o reanudar un intento de examen
- *              (api.v1.exams.take y attempts.start, MPW-V2 §6.3).
+ *              (api.v1.exams.take y attempts.start, MPW-V3 §6.3).
  * ============================================================================
  */
 

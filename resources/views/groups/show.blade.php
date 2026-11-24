@@ -7,7 +7,7 @@
     Descripción: Vista operativa detallada de grupo escolar y sus 4 apartados
                  (Estudiantes, Exámenes, Calificaciones y Periodos de Evaluación)
                  homologada con componentes canónicos A-Code Solutions, cero N+1
-                 y tokens oficiales acode-* (MPW-V2 §7.3, §7.4.2, §7.8.2, §8.1–§8.12).
+                 y tokens oficiales acode-* (MPW-V3 §7.3, §7.4.2, §7.8.2, §8.1–§8.12).
     ============================================================================
 --}}
 @extends('layouts.app')
@@ -122,9 +122,10 @@
     {{-- Nivel 1: Encabezado Institucional con Breadcrumbs, Folio Copiable y Acciones --}}
     <x-page-header
         :title="$group->name"
-        :subtitle="$group->subject
-            ? 'Gestiona matrícula, exámenes asignados, calificaciones y periodos de evaluación de ' . $group->subject . '.'
-            : 'Gestiona matrícula, exámenes asignados, calificaciones y periodos de evaluación de este grupo escolar.'"
+        :subtitle="$group->description
+            ?: ($group->subject
+                ? 'Gestiona matrícula, exámenes asignados, calificaciones y periodos de evaluación de ' . $group->subject . '.'
+                : 'Gestiona matrícula, exámenes asignados, calificaciones y periodos de evaluación de este grupo escolar.')"
         :breadcrumbs="[
             ['label' => 'Grupos', 'href' => route('groups.index')],
             ['label' => $group->name],
@@ -184,6 +185,13 @@
                 Abrir periodos
             </x-button>
 
+            @unless ($group->is_closed)
+                <x-button :href="route('groups.edit', $group)" variant="neutral" size="md">
+                    <x-icon name="edit" class="w-4 h-4" />
+                    Editar grupo
+                </x-button>
+            @endunless
+
             @if ($group->is_closed)
                 <x-button
                     type="button"
@@ -201,12 +209,22 @@
                     variant="danger"
                     size="md"
                 >
-                    <x-icon name="lock" class="w-4 h-4" />
                     Cerrar grupo
                 </x-button>
             @endif
         </x-slot:actions>
     </x-page-header>
+
+    {{-- Aviso de eliminación automática del grupo cerrado (RF-GRU-015, CAM-009) --}}
+    @if ($deletionDate)
+        <div class="flex items-start gap-3 rounded-xl border border-acode-warning/40 bg-acode-warning/10 px-4 py-3.5 text-acode-primary" role="status">
+            <x-icon name="warning" class="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+            <p class="text-sm leading-relaxed">
+                Este grupo está cerrado y se eliminará automáticamente el <strong>{{ $deletionDate->format('d/m/Y') }}</strong>.
+                Antes de esa fecha puedes exportar sus calificaciones desde <strong>Abrir periodos</strong> o reabrirlo para conservarlo.
+            </p>
+        </div>
+    @endif
 
     {{-- Formularios POST ocultos para cierre y reapertura semestral --}}
     <form id="group-close-form" method="POST" action="{{ route('groups.close', $group) }}" class="hidden">
@@ -343,6 +361,9 @@
                         <x-table.th>Correo electrónico</x-table.th>
                         <x-table.th>Fecha de incorporación</x-table.th>
                         <x-table.th align="center">Estado</x-table.th>
+                        @unless ($group->is_closed)
+                            <x-table.th align="right">Acciones</x-table.th>
+                        @endunless
                     </x-slot:header>
 
                     @forelse ($group->students as $student)
@@ -351,9 +372,7 @@
                         >
                             <x-table.td>
                                 <div class="flex items-center gap-3">
-                                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-acode-primary text-sm font-bold text-white shadow-sm">
-                                        {{ strtoupper(substr($student->first_name ?? $student->full_name, 0, 1)) }}
-                                    </div>
+                                    <x-avatar :user="$student" />
                                     <div>
                                         <p class="font-bold text-acode-primary leading-tight">
                                             {{ $student->full_name }}
@@ -382,6 +401,30 @@
                                     Inscrito
                                 </x-badge>
                             </x-table.td>
+
+                            @unless ($group->is_closed)
+                                {{-- Retiro del estudiante con confirmación (RF-GRU-011, RF-GRU-016, CAM-008) --}}
+                                <x-table.td align="right">
+                                    <form
+                                        method="POST"
+                                        action="{{ route('groups.students.remove', [$group, $student]) }}"
+                                        x-on:submit.prevent="window.AcodeAlert.confirm({
+                                            title: '¿Retirar a este estudiante?',
+                                            text: @js($student->full_name . ' perderá su pertenencia al grupo y el acceso a sus recursos y resultados. Sus registros académicos se conservarán. No se puede retirar si tiene un examen en curso.'),
+                                            confirmButtonText: 'Retirar estudiante',
+                                            cancelButtonText: 'Cancelar',
+                                            isDanger: true,
+                                            onConfirm: () => $el.submit(),
+                                        })"
+                                    >
+                                        @csrf
+                                        @method('DELETE')
+                                        <x-button type="submit" variant="danger" size="sm" class="whitespace-nowrap">
+                                            Retirar
+                                        </x-button>
+                                    </form>
+                                </x-table.td>
+                            @endunless
                         </tr>
                     @empty
                         <tr>

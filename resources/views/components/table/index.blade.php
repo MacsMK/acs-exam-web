@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-table (MPW-V2 §7.3, §8.4, Tabla 29) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-table (MPW-V3 §7.3, §8.4) --}}
 @props([
     'header' => null,
     'footer' => null,

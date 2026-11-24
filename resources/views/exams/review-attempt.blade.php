@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/review-attempt.blade.php (MPW-V2 §4.1.2, §7, §8, RF-IAR-001..014, RF-EVA-004..009, RW-11, ADR-059) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/review-attempt.blade.php (MPW-V3 §4.1.2, §7, §8, RF-IAR-001..014, RF-EVA-004..009, RW-11, ADR-059) --}}
 @extends('layouts.app')
 
 @section('title', 'Recoteje de Intento: ' . ($attempt->student?->full_name ?? 'Estudiante'))
@@ -44,7 +44,9 @@
             'cancelled_by_incident' => 'Cancelado por incidencia',
             'graded' => 'Calificado',
         ];
-        $attemptStatusLabel = $attemptStatusLabels[$attempt->status] ?? 'En curso';
+        $attemptStatusLabel = $attempt->wasStoppedByTeacher()
+            ? 'Finalizado por detención del examen'
+            : ($attemptStatusLabels[$attempt->status] ?? 'En curso');
     @endphp
 
     <div class="space-y-6">
@@ -239,7 +241,10 @@
                                 <x-badge variant="info">Enunciado con paráfrasis anti-copia</x-badge>
                             @endif
                         </div>
-                        <p class="whitespace-pre-line leading-relaxed">{{ $answer->served_stem_snapshot ?: ($question?->stem ?? 'Sin enunciado') }}</p>
+                        <p class="whitespace-pre-wrap break-words leading-relaxed">{{ $answer->served_stem_snapshot ?: ($question?->stem ?? 'Sin enunciado') }}</p>
+                        @if ($question)
+                            <x-question.files class="mt-3" :question-id="$question->id" :has-image="$question->image_path !== null" :has-pdf="$question->pdf_path !== null" />
+                        @endif
                     </div>
 
                     {{-- Respuesta del Alumno (Renderizado seguro ante arrays o escalares) --}}

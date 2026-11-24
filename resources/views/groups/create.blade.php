@@ -6,7 +6,7 @@
     Ubicación:   resources/views/groups/create.blade.php
     Descripción: Formulario institucional para crear un nuevo grupo escolar
                  con generación automática de código QR y folio alfanumérico
-                 (MPW-V2 §7.3, §7.4.2, §8.1–§8.12; MC-V2 §2.4).
+                 (MPW-V3 §7.3, §7.4.2, §8.1–§8.12; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')
@@ -36,7 +36,7 @@
     {{-- Formulario en tarjeta institucional --}}
     <x-card
         title="Información del grupo"
-        subtitle="Define el nombre y la asignatura para habilitar el aula y generar automáticamente su folio de acceso."
+        subtitle="Define el nombre, la asignatura y, si quieres, una descripción para habilitar el aula y generar automáticamente su folio de acceso."
     >
         <form
             id="create-group-form"
@@ -72,6 +72,17 @@
                     />
                 </x-form.group>
             </div>
+
+            {{-- Descripción opcional (RF-GRU-001) --}}
+            <x-form.group name="description" label="Descripción (opcional)" help-text="Hasta 500 caracteres.">
+                <x-form.textarea
+                    name="description"
+                    rows="3"
+                    maxlength="500"
+                    placeholder="Ej. Grupo del turno matutino, semestre agosto–diciembre"
+                    aria-invalid="{{ $errors->has('description') ? 'true' : 'false' }}"
+                >{{ old('description') }}</x-form.textarea>
+            </x-form.group>
 
             {{-- Aviso informativo de generación automática de QR/Folio --}}
             <div class="flex items-start gap-3 rounded-xl border border-acode-accent/30 bg-acode-accent/10 px-4 py-3.5 text-acode-primary">

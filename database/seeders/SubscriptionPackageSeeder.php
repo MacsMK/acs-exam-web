@@ -14,7 +14,7 @@ declare(strict_types=1);
  * Versión:        1.1.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Puebla el catálogo oficial de paquetes de suscripción
- *                 (basic/advanced/pro, MPW-V2 Tabla 8) y garantiza los cupos
+ *                 (basic/advanced/pro, MPW-V3 Tabla 8) y garantiza los cupos
  *                 oficiales de peticiones de IA (200 / 600 / ilimitado).
  * ============================================================================
  */
@@ -25,7 +25,7 @@ use App\Models\SubscriptionPackage;
 use Illuminate\Database\Seeder;
 
 /**
- * Catálogo de paquetes (MPW-V2 Tabla 8): basic/advanced/pro.
+ * Catálogo de paquetes (MPW-V3 Tabla 8): basic/advanced/pro.
  *
  * @package Database\Seeders
  */

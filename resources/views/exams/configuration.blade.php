@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/configuration.blade.php (MPW-V2 §4.1.2, §7, §8, ADR-043, ADR-056) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/configuration.blade.php (MPW-V3 §4.1.2, §7, §8, ADR-043, ADR-056) --}}
 @extends('layouts.app')
 
 @section('title', 'Configuración: ' . $exam->title)
@@ -218,7 +218,7 @@
                                         x-text="`${totalWeight.toFixed(2)} / 100.00 pts`"
                                     ></span>
                                 </div>
-                                {{-- Ancho en 12 pasos (w-N/12, Tailwind 3.4), sin style inline (MPW-V2 §7.4.2) --}}
+                                {{-- Ancho en 12 pasos (w-N/12, Tailwind 3.4), sin style inline (MPW-V3 §7.4.2) --}}
                                 <div class="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden" role="progressbar" aria-label="Suma de ponderaciones" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(progressPercent)">
                                     <div
                                         class="h-full rounded-full transition-all duration-200"
@@ -325,11 +325,11 @@
                             </x-form.group>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                                <x-form.group name="starts_at" label="Fecha y hora de inicio" :required="true">
+                                <x-form.group name="starts_at" label="Fecha y hora de inicio" :required="true" :help-text="\App\Models\Exam::timezoneLabel()">
                                     <x-form.input type="datetime-local" name="starts_at" x-model="startsAt" :disabled="$isReadOnly" required />
                                 </x-form.group>
 
-                                <x-form.group name="ends_at" label="Fecha y hora de cierre" :required="true">
+                                <x-form.group name="ends_at" label="Fecha y hora de cierre" :required="true" :help-text="\App\Models\Exam::timezoneLabel()">
                                     <x-form.input type="datetime-local" name="ends_at" x-model="endsAt" :disabled="$isReadOnly" required />
                                 </x-form.group>
                             </div>

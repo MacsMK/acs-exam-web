@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     EvaluationPeriodStoreRequest.php
  * Ubicación:   app/Http/Requests/EvaluationPeriodStoreRequest.php
  * Descripción: Validación de creación de periodos de evaluación y ponderaciones
- *              (RF-CAL-001, RF-CAL-004, RF-CAL-005, MPW-V2 Tabla 17).
+ *              (RF-CAL-001, RF-CAL-004, RF-CAL-005, MPW-V3 Tabla 18).
  * ============================================================================
  */
 

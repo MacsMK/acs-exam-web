@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        QuestionParaphraseStoreRequest.php
  * Ubicación:      app/Http/Requests/QuestionParaphraseStoreRequest.php
- * Requerimiento:  RF-BAN-010 (Paráfrasis Anti-Copia, MPW-V2 §6.3, Tabla 17)
+ * Requerimiento:  RF-BAN-010 (Paráfrasis Anti-Copia, MPW-V3 §6.3, Tabla 18)
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        2.0.0
  * Fecha Creación: 08/11/2026

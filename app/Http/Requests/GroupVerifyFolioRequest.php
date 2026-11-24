@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     GroupVerifyFolioRequest.php
  * Ubicación:   app/Http/Requests/GroupVerifyFolioRequest.php
  * Descripción: Validación de verificación de pertenencia a un grupo mediante
- *              escaneo QR o folio (api.v1.groups.verify, MPW-V2 §6.3).
+ *              escaneo QR o folio (api.v1.groups.verify, MPW-V3 §6.3).
  * ============================================================================
  */
 

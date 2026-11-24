@@ -12,13 +12,13 @@ declare(strict_types=1);
  * Requerimiento:  RF-GRU (confirmar código específico en DE-01 con Eli;
  *                 ver Formato BD-01 folio BD01-2026-006)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.1.0
+ * Versión:        1.3.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_groups: grupo de alumnos
  *                 administrado por un docente, identificable por un folio
  *                 de acceso corto (access_folio), con aislamiento por
- *                 docente (MPW-V2 §6.6) y generador acotado de folio
- *                 único (MPW-V2 §5.2.1).
+ *                 docente (MPW-V3 §6.6) y generador acotado de folio
+ *                 único (MPW-V3 §5.2.1).
  * ============================================================================
  */
 
@@ -33,6 +33,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 /**
@@ -43,9 +44,13 @@ use Illuminate\Support\Str;
 #[ScopedBy([TenantTeacherScope::class])]
 class Group extends Model
 {
+    // Borrado lógico de grupos vencidos (RF-GRU-015, CAM-009, BD01-2026-033)
+    use SoftDeletes;
+
     /**
-     * Resuelve el enlace de ruta sin scopes globales para permitir que la capa de
-     * políticas/controlador emita 403 Forbidden ante intentos de IDOR (MPW-V2 §6.6).
+     * Resuelve el enlace de ruta sin el ámbito por docente para permitir que la capa de
+     * políticas/controlador emita 403 Forbidden ante intentos de IDOR (MPW-V3 §6.6).
+     * Conserva el ámbito de borrado lógico: un grupo eliminado responde 404.
      *
      * @param mixed $value
      * @param string|null $field
@@ -53,11 +58,11 @@ class Group extends Model
      */
     public function resolveRouteBinding($value, $field = null): ?Model
     {
-        return $this->withoutGlobalScopes()->where($field ?? $this->getRouteKeyName(), $value)->first();
+        return $this->withoutGlobalScope(TenantTeacherScope::class)->where($field ?? $this->getRouteKeyName(), $value)->first();
     }
 
     /**
-     * Cota máxima de intentos para generar un folio aleatorio sin colisión (MPW-V2 §5.2.1).
+     * Cota máxima de intentos para generar un folio aleatorio sin colisión (MPW-V3 §5.2.1).
      */
     public const MAX_FOLIO_ATTEMPTS = 100;
 
@@ -67,7 +72,7 @@ class Group extends Model
     public const FOLIO_LENGTH = 8;
 
     /**
-     * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4).
+     * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3).
      *
      * @var string
      */
@@ -82,6 +87,7 @@ class Group extends Model
         'teacher_id',
         'name',
         'subject',
+        'description',
         'access_folio',
         'is_closed',
         'closed_at',
@@ -153,7 +159,7 @@ class Group extends Model
     }
 
     /**
-     * Scope local de aislamiento multi-docente (MPW-V2 §2.3.4, §6.6).
+     * Scope local de aislamiento multi-docente (MPW-V3 §2.3.4, §6.6).
      *
      * @param Builder<Group> $query     Constructor de la consulta Eloquent.
      * @param int            $teacherId Identificador del docente propietario.
@@ -177,7 +183,7 @@ class Group extends Model
 
     /**
      * Genera un folio de acceso único en base de datos con guarda de seguridad
-     * máxima obligatoria para prevenir ciclos infinitos (MPW-V2 §5.2.1).
+     * máxima obligatoria para prevenir ciclos infinitos (MPW-V3 §5.2.1).
      *
      * @return string Folio único en mayúsculas de 8 caracteres.
      * @throws RuntimeException Si se excede el límite máximo de intentos sin hallar folio libre.

@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Http/Requests/GroupStoreRequest.php
  * Requerimiento:  RW-32 a RW-36
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Fecha Creación: 26/10/2026
  * Descripción:    FormRequest de alta de grupo. Solo el docente dueño lo crea
  *                 (ADR-017).
@@ -40,6 +40,7 @@ class GroupStoreRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:120'],
             'subject' => ['nullable', 'string', 'max:120'],
+            'description' => ['nullable', 'string', 'max:500'],
         ];
     }
 
@@ -52,6 +53,7 @@ class GroupStoreRequest extends FormRequest
             'name.required' => 'El campo nombre del grupo es obligatorio',
             'name.max' => 'El nombre del grupo no debe exceder los 120 caracteres',
             'subject.max' => 'La materia no debe exceder los 120 caracteres',
+            'description.max' => 'La descripción no debe exceder los 500 caracteres',
         ];
     }
 }

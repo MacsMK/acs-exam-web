@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     FrontendViewRenderingTest.php
  * Ubicación:   tests/Feature/FrontendViewRenderingTest.php
  * Descripción: Suite de certificación del Frontend Web y UI Kit institucional
- *              A-Code Solutions (§7 y §8 de MPW-V2): renderizado 100% íntegro de
+ *              A-Code Solutions (§7 y §8 de MPW-V3): renderizado 100% íntegro de
  *              rutas públicas de autenticación (login, registros, 2FA), dashboards
  *              operativos (docente y alumno), vistas de gestión académica docente
  *              y runner/dictamen de evaluación para alumnos.
@@ -478,6 +478,12 @@ class FrontendViewRenderingTest extends TestCase
         $examsIndexWithExam->assertOk();
         $examsIndexWithExam->assertSee($exam->title);
         $examsIndexWithExam->assertSee('Iniciar examen');
+        // RF-EXA-026: tiempo máximo calculado en lugar del valor fijo de 60 minutos
+        $examsIndexWithExam->assertSee('Tiempo máximo:');
+        $examsIndexWithExam->assertSee($exam->maxDurationMinutes() . ' minutos');
+        // RF-EXA-028: «Iniciar examen» lleva a las instrucciones, no inicia el intento directamente
+        $examsIndexWithExam->assertSee(route('student.exams.instructions', $exam), false);
+        $examsIndexWithExam->assertDontSee(route('attempts.start', $exam), false);
 
         // 3. take-exam (intento en curso)
         $attemptService = app(AttemptService::class);

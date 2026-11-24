@@ -36,6 +36,8 @@ class RegisterStudentRequest extends FormRequest
             'phone' => ['nullable', 'regex:/^[0-9]{10}$/'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'accepts_privacy_notice' => ['accepted'],
+            // Fotografía opcional del estudiante: JPG o PNG de hasta 5 MB (RF-AUT-008)
+            'photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:5120'],
         ];
     }
 
@@ -68,6 +70,12 @@ class RegisterStudentRequest extends FormRequest
             'password.confirmed' => 'Los campos contraseña y confirmar contraseña deben coincidir',
 
             'accepts_privacy_notice.accepted' => 'Debes aceptar el aviso de privacidad para continuar',
+
+            'photo.file' => 'La fotografía no tiene un formato válido',
+            'photo.mimes' => 'La fotografía debe ser una imagen JPG o PNG',
+            'photo.max' => 'La fotografía no debe exceder los 5 MB',
+            // El archivo no llegó completo: casi siempre excede upload_max_filesize del servidor.
+            'photo.uploaded' => 'La fotografía no debe exceder los 5 MB',
         ];
     }
 }

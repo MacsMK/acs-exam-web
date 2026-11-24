@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: questions/edit.blade.php (MPW-V2 §7, §8, Tabla 20, RF-BAN-007) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: questions/edit.blade.php (MPW-V3 §7, §8, Tabla 10, RF-BAN-007) --}}
 @extends('layouts.app')
 
 @section('title', 'Editar Reactivo · ' . $question->title)
@@ -80,7 +80,18 @@
         </x-page-header>
 
         {{-- Banner dinámico de Versionado Copy-on-Write --}}
-        @if ($isLinked)
+        @if (isset($examContext))
+            {{-- RF-EXA-005: edición solo para este examen --}}
+            <div class="rounded-xl border border-acode-tech/40 bg-acode-tech/10 p-4 text-slate-800 flex items-start gap-3">
+                <span class="w-9 h-9 rounded-lg bg-acode-tech/20 text-acode-primary flex items-center justify-center shrink-0">
+                    <x-icon name="edit" class="w-5 h-5" />
+                </span>
+                <div class="space-y-1 text-xs">
+                    <p class="font-semibold text-acode-primary text-sm">Estás editando este reactivo solo para el examen «{{ $examContext->title }}»</p>
+                    <p class="text-slate-700 leading-relaxed">Al guardar se creará la versión v{{ $nextVersionNumber }} y este examen la usará. El reactivo original del banco (#{{ $question->id }}) no cambia.</p>
+                </div>
+            </div>
+        @elseif ($isLinked)
             <div class="rounded-xl border border-acode-warning/60 bg-acode-warning/15 p-4 text-slate-800 flex items-start gap-3">
                 <span class="w-9 h-9 rounded-lg bg-acode-warning/30 text-acode-primary flex items-center justify-center shrink-0">
                     <x-icon name="warning" class="w-5 h-5" />
@@ -116,7 +127,8 @@
         <form
             id="edit-question-form"
             method="POST"
-            action="{{ route('questions.update', $question) }}"
+            enctype="multipart/form-data"
+            action="{{ $formAction ?? route('questions.update', $question) }}"
             @keydown.enter="if ($event.target.tagName === 'INPUT' && !['submit', 'button'].includes($event.target.type)) { $event.preventDefault(); }"
             class="space-y-6"
         >
@@ -138,7 +150,7 @@
 
             {{-- Barra inferior de acciones normativas --}}
             <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                <x-unsaved-changes form-id="edit-question-form" :cancel-url="route('questions.show', $question)" />
+                <x-unsaved-changes form-id="edit-question-form" :cancel-url="$cancelUrl ?? route('questions.show', $question)" />
 
                 <div class="flex items-center justify-end gap-2.5">
                     <x-button type="submit" variant="primary" size="md">

@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-form.group (MPW-V2 §7.3, §8.5, §8.11) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-form.group (MPW-V3 §7.3, §8.5, §8.11) --}}
 @props([
     'name' => null,
     'label' => null,

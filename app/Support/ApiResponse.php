@@ -8,7 +8,7 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     ApiResponse.php
  * Ubicación:   app/Support/ApiResponse.php
- * Descripción: Envoltura uniforme de toda respuesta de la API v1 (MPM-V4
+ * Descripción: Envoltura uniforme de toda respuesta de la API v1 (MPM-V3
  *              §6.5.2): {status, code, message, data, errors}. Todo
  *              controlador de app/Http/Controllers/Api/V1 construye su
  *              respuesta con esta clase, nunca con response()->json()

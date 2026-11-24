@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-section-header (MPW-V2 §7.3, §8.1, §8.10) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-section-header (MPW-V3 §7.3, §8.1, §8.10) --}}
 @props([
     'title',
     'subtitle' => null,

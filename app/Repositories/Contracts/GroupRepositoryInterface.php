@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        GroupRepositoryInterface.php
  * Ubicación:      app/Repositories/Contracts/GroupRepositoryInterface.php
- * Requerimiento:  RF-GRU (Gestión de Grupos y Folios QR, MPW-V2 §2.4 y §6.7)
+ * Requerimiento:  RF-GRU (Gestión de Grupos y Folios QR, MPW-V3 §2.4 y §6.7)
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 28/10/2026

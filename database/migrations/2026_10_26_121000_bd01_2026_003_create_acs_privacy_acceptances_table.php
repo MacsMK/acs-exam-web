@@ -15,22 +15,22 @@ declare(strict_types=1);
  * Versión:        1.0.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Crea acs_privacy_acceptances conforme al Manual de Base
- *                 de Datos (MBD-V4, Tabla 29, sección 5.5.7): registra la
+ *                 de Datos (MBD-V3 cap. 6; ficha BD-02 de la tabla): registra la
  *                 aceptación de un usuario a una versión específica del
- *                 aviso de privacidad (api.v1.privacy.accept, MPM-V2
+ *                 aviso de privacidad (api.v1.privacy.accept, MPM-V3
  *                 §6.6.3). Relación N:M entre acs_users y
  *                 acs_privacy_notices, modelada como tabla de hechos con
  *                 su propio id (no como pivote simple), porque conserva la
  *                 marca de tiempo de cada aceptación individual.
- *                 Decisión de diseño NO normada explícitamente por el
- *                 MBD-V4 (debe confirmarse por BD-01): user_id usa
+ *                 Decisión de diseño conforme a la Tabla 12 del MBD-V3 y
+ *                 registrada en BD-01: user_id usa
  *                 onDelete('cascade') porque una aceptación no tiene
  *                 sentido sin su usuario; privacy_notice_id usa
  *                 onDelete('restrict') para no permitir borrar una versión
  *                 del aviso mientras existan aceptaciones registradas
  *                 contra ella, dado que la trazabilidad de quién aceptó
  *                 qué versión es evidencia relevante para la auditoría
- *                 (MBD-V4 §6.4).
+ *                 (MBD-V3 §7.4).
  *                 CAMBIO v1.1.0 (acuerdo de equipo con Balam, 26/10/2026):
  *                 se agrega ip_address para reforzar la evidencia de
  *                 auditoría de cada aceptación (de dónde se aceptó), idea

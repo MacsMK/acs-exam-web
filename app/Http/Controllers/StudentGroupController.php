@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Ubicación:   app/Http/Controllers/StudentGroupController.php
  * Descripción: Gestión web de asignaturas del estudiante: consulta de grupos
  *              matriculados (RF-GRU-010 / P-21) y abandono voluntario seguro
- *              (RF-GRU-012 / P-23, MPW-V2 §6.1).
+ *              (RF-GRU-012 / P-23, MPW-V3 §6.1).
  * ============================================================================
  */
 

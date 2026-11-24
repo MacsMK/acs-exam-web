@@ -15,7 +15,7 @@ declare(strict_types=1);
  * Versión:        1.0.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_subscription_packages: catálogo de
- *                 paquetes (basic/advanced/pro, MPW-V2 Tabla 8) que un
+ *                 paquetes (basic/advanced/pro, MPW-V3 Tabla 8) que un
  *                 docente puede contratar.
  * ============================================================================
  */
@@ -33,7 +33,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class SubscriptionPackage extends Model
 {
     /**
-     * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4).
+     * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3).
      *
      * @var string
      */

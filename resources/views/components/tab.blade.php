@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-tab (MPW-V2 §7.3, §7.5, §8.3.2) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-tab (MPW-V3 §7.3, §7.5, §8.3.2) --}}
 {{-- Pestaña de un tablist enlazada a una variable de Alpine.js, con ícono y contador opcionales. --}}
 @props([
     'name',                    // identificador de la pestaña

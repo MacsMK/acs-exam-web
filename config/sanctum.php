@@ -13,7 +13,7 @@ return [
     |
     | No se usa autenticación "stateful" por cookie desde SPA en este
     | proyecto: la app móvil (acs-exam-mobile) se autentica siempre con
-    | token Bearer (MPM-V2 §6.6.1), y el panel web usa sesión normal
+    | token Bearer (MPM-V3 §6.6.1), y el panel web usa sesión normal
     | (config/auth.php, guard "web"). Se deja vacío a propósito.
     |
     */

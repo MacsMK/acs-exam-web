@@ -9,9 +9,9 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        EloquentQuestionRepository.php
  * Ubicación:      app/Repositories/Eloquent/EloquentQuestionRepository.php
- * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V2 §2.4 y §6.7)
+ * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §2.4 y §6.7)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        2.0.0
+ * Versión:        2.1.0
  * Fecha Creación: 28/10/2026
  * Descripción:    Implementación Eloquent del repositorio del banco de
  *                 preguntas polimórfico con Eager Loading (with, withCount),
@@ -47,7 +47,7 @@ use App\Repositories\Contracts\QuestionRepositoryInterface;
 class EloquentQuestionRepository implements QuestionRepositoryInterface
 {
     /**
-     * Cota máxima de profundidad/pasos para recorridos de grafos (MPW-V2 §5.2.1).
+     * Cota máxima de profundidad/pasos para recorridos de grafos (MPW-V3 §5.2.1).
      */
     private const MAX_GRAPH_STEPS = 50;
 
@@ -508,6 +508,8 @@ class EloquentQuestionRepository implements QuestionRepositoryInterface
                 'questionable_type' => $questionable::class,
                 'questionable_id' => $questionable->getKey(),
                 'parent_question_id' => $questionData['parent_question_id'] ?? null,
+                'image_path' => $questionData['image_path'] ?? null,
+                'pdf_path' => $questionData['pdf_path'] ?? null,
             ]);
 
             return $question->load(['questionable', 'paraphrases', 'subject']);

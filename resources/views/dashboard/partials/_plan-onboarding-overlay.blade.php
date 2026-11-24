@@ -7,7 +7,7 @@
     Descripción: Capa bloqueante post-verificación docente sobre el Dashboard
                  con flujo Alpine.js en 2 pasos (selección de paquete o prueba
                  gratuita + pago simulado con tarjeta Luhn o SPEI) sin cierre
-                 por Escape, clic fuera ni botón X (ADR-060, MPW-V2 §7 y §8).
+                 por Escape, clic fuera ni botón X (ADR-060, MPW-V3 §7 y §8).
     ============================================================================
 --}}
 <div
@@ -226,7 +226,6 @@
                                             class="w-full"
                                             @click="selectPackage({{ $pkg->id }})"
                                         >
-                                            <x-icon name="lock" class="w-4 h-4" />
                                             Seleccionar paquete
                                         </x-button>
                                     </div>
@@ -496,6 +495,22 @@
                                             </div>
                                         </div>
 
+                                        {{-- Autorización de cobro mensual domiciliado (RF-SUS-003) --}}
+                                        <label class="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3.5 text-xs text-slate-700">
+                                            <input type="hidden" name="authorize_recurring" value="0" x-bind:disabled="paymentMethod !== 'card'">
+                                            <input
+                                                type="checkbox"
+                                                name="authorize_recurring"
+                                                value="1"
+                                                class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-acode-tech focus:ring-acode-tech"
+                                                x-bind:disabled="paymentMethod !== 'card'"
+                                                @checked(old('authorize_recurring', '1') === '1')
+                                            >
+                                            <span>
+                                                Autorizo que esta tarjeta se use para el <strong>cobro mensual automático</strong> del paquete. Puedo cancelar la renovación en cualquier momento desde Suscripción.
+                                            </span>
+                                        </label>
+
                                         <div class="flex items-start gap-2.5 rounded-xl border border-acode-accent/30 bg-acode-accent/10 p-3.5 text-xs text-acode-primary">
                                             <x-icon name="shield" class="w-4 h-4 text-acode-accent shrink-0 mt-0.5" />
                                             <p>
@@ -589,7 +604,6 @@
                                             x-bind:disabled="isSubmitting || !selectedPackage"
                                         >
                                             <span x-show="!isSubmitting" class="inline-flex items-center gap-2">
-                                                <x-icon name="lock" class="w-4 h-4" />
                                                 Confirmar y activar plan
                                             </span>
                                             <span x-show="isSubmitting" x-cloak>

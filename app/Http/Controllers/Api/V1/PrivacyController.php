@@ -8,7 +8,7 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     PrivacyController.php
  * Ubicación:   app/Http/Controllers/Api/V1/PrivacyController.php
- * Descripción: api.v1.privacy-notice.* (MPM-V4 §6.6.3) para la app móvil:
+ * Descripción: api.v1.privacy-notice.* (MPM-V3 §6.6.3) para la app móvil:
  *              consultar el aviso vigente y si el usuario ya lo aceptó, y
  *              registrar la aceptación. acs_privacy_notices no tiene
  *              columna `title` (BD01-2026-002): se deriva de `version`

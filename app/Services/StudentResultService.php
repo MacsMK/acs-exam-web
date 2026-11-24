@@ -47,7 +47,7 @@ class StudentResultService
 
     /**
      * Construye el resumen normalizado para la vista web de resultado de intento
-     * (MPW-V2 §5.2.2, ADR-050, ADR-056, ADR-059), evitando lógica de escala en Blade.
+     * (MPW-V3 §5.2.2, ADR-050, ADR-056, ADR-059), evitando lógica de escala en Blade.
      *
      * @param StudentAttempt $attempt Intento del alumno con relación exam disponible.
      * @return array{
@@ -143,6 +143,7 @@ class StudentResultService
     public function pendingRowsForStudent(User $student, ?int $groupId = null): Collection
     {
         return StudentAttempt::where('student_id', $student->id)
+            ->current()
             ->inCurrentGroupsOfStudent($student->id)
             ->when($groupId !== null, static fn ($query) => $query->where('group_id', $groupId))
             ->where('status', 'submitted')
@@ -270,6 +271,8 @@ class StudentResultService
                         'title' => $question->title,
                         'stem' => $answer?->served_stem_snapshot ?? $this->attemptService->visibleStem($examQuestion, $attempt),
                         'question_type' => $question->question_type,
+                        'has_image' => $question->image_path !== null,
+                        'has_pdf' => $question->pdf_path !== null,
                         'student_answer' => $answer === null
                             ? null
                             : $this->formatStudentAnswer($question->question_type, $item, $answer->answer_payload),
@@ -319,8 +322,16 @@ class StudentResultService
             return false;
         }
 
-        return $exam->ends_at === null
+        $accessClosed = $exam->ends_at === null
             || now()->gt($exam->ends_at->copy()->addSeconds(self::ACCESS_CLOSE_TOLERANCE_SECONDS));
+
+        // RF-EXA-050: los intentos iniciados antes del cierre siguen hasta agotar su
+        // tiempo, así que las soluciones no se muestran mientras alguno siga en curso.
+        return $accessClosed && ! StudentAttempt::query()
+            ->where('exam_id', $exam->id)
+            ->where('status', 'in_progress')
+            ->get()
+            ->contains(fn (StudentAttempt $other): bool => $this->attemptService->isInProgress($other));
     }
 
     private function abortUnlessPublished(StudentAttempt $attempt): void

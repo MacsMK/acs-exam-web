@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Contracts/PaymentGatewayContract.php
  * Requerimiento:  RF-SUS-013, RF-SUS-015, ADR-058 (Pasarela de Pago Simulada)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Fecha Creación: 18/11/2026
  * Descripción:    Contrato desacoplado para el procesamiento de cobros de
  *                 paquetes SaaS docentes, aislando la lógica transaccional del
@@ -51,4 +51,12 @@ interface PaymentGatewayContract
      * }
      */
     public function process(SubscriptionPackage $package, User $teacher, array $paymentData): array;
+
+    /**
+     * Cobra la renovación mensual con el medio de pago domiciliado (RF-SUS-005).
+     * Devuelve la misma estructura que process().
+     *
+     * @return array<string, mixed>
+     */
+    public function chargeStoredCard(SubscriptionPackage $package, User $teacher, string $cardBrand, string $cardLast4, ?string $cardHolderName): array;
 }

@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Models/CodeItem.php
  * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, Variante 4)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.1.0
+ * Versión:        1.3.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Modelo Eloquent de acs_code_items (variante polimórfica de
  *                 programación / código fuente, Módulo 5).
@@ -31,14 +31,39 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
 class CodeItem extends Model
 {
     /**
-     * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4).
+     * Extensión de archivo por lenguaje (clave en minúsculas). Fuente única para
+     * el detalle del reactivo y la vista previa del formulario.
+     *
+     * @var array<string, string>
+     */
+    public const FILE_EXTENSIONS = [
+        'python' => 'py',
+        'py' => 'py',
+        'javascript' => 'js',
+        'js' => 'js',
+        'typescript' => 'ts',
+        'ts' => 'ts',
+        'php' => 'php',
+        'java' => 'java',
+        'sql' => 'sql',
+        'c' => 'c',
+        'c++' => 'cpp',
+        'cpp' => 'cpp',
+        'c#' => 'cs',
+        'csharp' => 'cs',
+        'go' => 'go',
+        'golang' => 'go',
+    ];
+
+    /**
+     * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3).
      *
      * @var string
      */
     protected $table = 'acs_code_items';
 
     /**
-     * Columnas asignables en masa (MPW-V2 §2.3.1).
+     * Columnas asignables en masa (MPW-V3 §2.3.1).
      *
      * @var list<string>
      */
@@ -48,6 +73,7 @@ class CodeItem extends Model
         'starter_code',
         'reference_solution',
         'instructions',
+        'evaluation_rubric',
     ];
 
     /**
@@ -61,7 +87,17 @@ class CodeItem extends Model
     }
 
     /**
-     * Conversión de atributos (MPW-V2 Tabla 6 Bloque 16).
+     * Extensión de archivo del lenguaje configurado; "txt" si no está en el catálogo.
+     */
+    public function fileExtension(): string
+    {
+        $language = mb_strtolower(trim((string) $this->programming_language));
+
+        return self::FILE_EXTENSIONS[$language] ?? 'txt';
+    }
+
+    /**
+     * Conversión de atributos (MPW-V3 Tabla 6 Bloque 16).
      *
      * @return array<string, string>
      */

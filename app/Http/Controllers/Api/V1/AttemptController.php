@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Ubicación:   app/Http/Controllers/Api/V1/AttemptController.php
  * Descripción: Aplicación contrarreloj del examen desde la app móvil
  *              (Módulo 7): api.v1.exams.take, api.v1.exams.answers y
- *              api.v1.exams.incidents (MPM-V4 Tabla 12, MPW-V2 §6.1, §6.3).
+ *              api.v1.exams.incidents (MPM-V3 Tabla 12, MPW-V3 §6.1, §6.3).
  * ============================================================================
  */
 
@@ -31,6 +31,8 @@ use Illuminate\Http\JsonResponse;
 
 class AttemptController extends Controller
 {
+    private const OTHER_SESSION_MESSAGE = 'Este intento está abierto en otra sesión o dispositivo. Ciérralo ahí o espera un minuto e inténtalo de nuevo.';
+
     public function __construct(private readonly AttemptService $attemptService)
     {
     }
@@ -50,6 +52,11 @@ class AttemptController extends Controller
             return ApiResponse::error($e->getMessage(), 409);
         }
 
+        // RF-EXA-049: una sola sesión activa por intento
+        if (! $this->attemptService->acquireSession($attempt, $this->sessionHolder($request))) {
+            return ApiResponse::error(self::OTHER_SESSION_MESSAGE, 409);
+        }
+
         return ApiResponse::success($this->questionResponse($attempt));
     }
 
@@ -61,6 +68,10 @@ class AttemptController extends Controller
     {
         $attempt = $this->attemptForUser($exam, $request->user());
         $data = $request->validated();
+
+        if (! $this->attemptService->acquireSession($attempt, $this->sessionHolder($request))) {
+            return ApiResponse::error(self::OTHER_SESSION_MESSAGE, 409);
+        }
 
         $examQuestion = $this->currentExamQuestionOrFail($attempt);
 
@@ -98,8 +109,8 @@ class AttemptController extends Controller
         }
 
         // late_answer: la respuesta llegó después del límite de la pregunta más
-        // la tolerancia de 3 s (MPW-V2 §5.6.1); se guardó con cero puntos y el
-        // cliente muestra el mensaje oficial de tiempo agotado (MPM-V4 §5.4.1).
+        // la tolerancia de 3 s (MPW-V3 §5.6.1); se guardó con cero puntos y el
+        // cliente muestra el mensaje oficial de tiempo agotado (MPM-V3 §5.4.1).
         return ApiResponse::success(array_merge($this->questionResponse($attempt), ['late_answer' => $isLate]));
     }
 
@@ -124,7 +135,10 @@ class AttemptController extends Controller
 
     private function attemptForUser(Exam $exam, User $user): StudentAttempt
     {
-        $attempt = StudentAttempt::where('exam_id', $exam->id)->where('student_id', $user->id)->first();
+        $attempt = StudentAttempt::where('exam_id', $exam->id)
+            ->where('student_id', $user->id)
+            ->orderByDesc('attempt_number')
+            ->first();
 
         abort_if($attempt === null, 404, 'No has iniciado este examen.');
 
@@ -212,6 +226,14 @@ class AttemptController extends Controller
             $base['paraphrased_text'] = $question['paraphrased_text'] ?? $question['stem'];
         }
 
+        // Imagen y PDF protegidos de la pregunta (RF-BAN-012, RF-BAN-013, RNF-SEG-008)
+        $base['image_url'] = ! empty($question['has_image'])
+            ? route('api.v1.questions.file', ['question' => $question['id'], 'kind' => 'image'])
+            : null;
+        $base['pdf_url'] = ! empty($question['has_pdf'])
+            ? route('api.v1.questions.file', ['question' => $question['id'], 'kind' => 'pdf'])
+            : null;
+
         return match ($question['question_type']) {
             'multiple_choice' => $base + [
                 'options' => collect($question['options'])
@@ -229,5 +251,10 @@ class AttemptController extends Controller
             ],
             default => $base,
         };
+    }
+
+    private function sessionHolder(\Illuminate\Http\Request $request): string
+    {
+        return 'api:' . ($request->user()?->currentAccessToken()?->id ?? 'token');
     }
 }

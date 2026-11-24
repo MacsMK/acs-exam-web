@@ -15,9 +15,9 @@ declare(strict_types=1);
  * Versión:        1.0.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Crea acs_groups: grupo de alumnos que crea y administra
- *                 un docente (MBD-V4 §6.2 / Listado de requerimientos,
+ *                 un docente (ficha BD-02 de acs_groups / Listado de requerimientos,
  *                 gestión de grupos). access_folio es el código corto que
- *                 un alumno captura para unirse al grupo (MPM-V2, pantalla
+ *                 un alumno captura para unirse al grupo (MPM-V3, pantalla
  *                 de unirse a grupo); se indexa único porque debe poder
  *                 buscarse por sí solo, sin conocer el id ni el docente.
  *                 is_closed/closed_at (diseño de Balam, acordado
@@ -28,8 +28,7 @@ declare(strict_types=1);
  *                 docente puede tener varios grupos de materias distintas.
  *                 teacher_id usa onDelete('cascade'): si se elimina el
  *                 docente, sus grupos pierden sentido (decisión razonable,
- *                 no normada explícitamente por el MBD-V4; a confirmar por
- *                 el Revisor técnico en BD-01).
+ *                 conforme a la Tabla 12 del MBD-V3 y registrada en BD-01).
  * ============================================================================
  */
 

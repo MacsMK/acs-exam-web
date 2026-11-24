@@ -12,9 +12,9 @@ declare(strict_types=1);
  * Requerimiento:  RF-EXA-054 (Notificación de programación o publicación
  *                 de exámenes); los avisos exam.opened, exam.started y
  *                 exam.finished aún no tienen código en DE-01
- *                 (MPM-V4 §6.8, Tabla 14)
+ *                 (MPM-V3 §6.8, Tabla 14)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Fecha Creación: 03/11/2026
  * Descripción:    Decide a quién y cuándo avisar sobre el ciclo de vida de un
  *                 examen (Tabla 14): exam.assigned y exam.opened a los
@@ -32,9 +32,11 @@ use App\Contracts\PushNotifierContract;
 use App\Models\AuditLog;
 use App\Models\Exam;
 use App\Models\StudentAttempt;
+use App\Models\User;
 use App\Support\PushMessage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Throwable;
 
 class ExamNotificationService
@@ -98,7 +100,53 @@ class ExamNotificationService
                 'Examen disponible',
                 sprintf('El examen «%s» ya está disponible.', $exam->title),
             );
+
+            // RF-EXA-025: aviso por correo con el enlace de acceso, una sola vez (mismo registro que el push)
+            $this->emailStudents($exam);
         });
+    }
+
+    /**
+     * Envía a cada estudiante de los grupos del examen un correo con el enlace a
+     * las instrucciones. El enlace exige iniciar sesión y pertenecer al grupo,
+     * así que no sustituye las comprobaciones de identidad ni de permisos. Una
+     * falla de correo no interrumpe la publicación ni los demás envíos.
+     */
+    private function emailStudents(Exam $exam): void
+    {
+        $students = User::query()
+            ->whereIn('id', DB::table('acs_exam_group as eg')
+                ->join('acs_group_student as gs', 'gs.group_id', '=', 'eg.group_id')
+                ->where('eg.exam_id', $exam->id)
+                ->select('gs.student_id'))
+            ->get(['id', 'first_name', 'email']);
+
+        $link = route('student.exams.instructions', $exam);
+        $subject = sprintf('Examen disponible: %s', $exam->title);
+
+        foreach ($students as $student) {
+            $body = implode(PHP_EOL, [
+                sprintf('Hola, %s.', $student->first_name),
+                '',
+                sprintf('El examen «%s» ya está disponible para tu grupo.', $exam->title),
+                'Consulta las instrucciones e inicia tu intento desde este enlace (deberás iniciar sesión):',
+                $link,
+                '',
+                'A-Code Solutions',
+            ]);
+
+            try {
+                Mail::raw($body, static function ($message) use ($student, $subject): void {
+                    $message->to($student->email)->subject($subject);
+                });
+            } catch (Throwable $e) {
+                Log::warning('No se pudo enviar el correo de examen disponible.', [
+                    'exam_id' => $exam->id,
+                    'student_id' => $student->id,
+                    'reason' => $e->getMessage(),
+                ]);
+            }
+        }
     }
 
     /**
@@ -246,6 +294,7 @@ class ExamNotificationService
     private function closedStudentIds(Exam $exam): array
     {
         return StudentAttempt::query()
+            ->current()
             ->where('exam_id', $exam->id)
             ->where('status', '!=', 'in_progress')
             ->pluck('student_id')

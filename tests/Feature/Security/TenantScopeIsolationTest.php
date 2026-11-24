@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        TenantScopeIsolationTest.php
  * Ubicación:      tests/Feature/Security/TenantScopeIsolationTest.php
- * Requerimiento:  RF-AUT / MPW-V2 §6.6 / SEC-02 (Aislamiento Multi-Docente)
+ * Requerimiento:  RF-AUT / MPW-V3 §6.6 / SEC-02 (Aislamiento Multi-Docente)
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0
  * Descripción:    Pruebas automatizadas que certifican que TenantTeacherScope

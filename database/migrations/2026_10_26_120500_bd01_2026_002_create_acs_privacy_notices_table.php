@@ -15,15 +15,12 @@ declare(strict_types=1);
  * Versión:        1.0.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Crea acs_privacy_notices conforme al Manual de Base de
- *                 Datos (MBD-V4, Tabla 29, sección 5.5.7): versiones del
- *                 aviso de privacidad, consultado por MPM-V2 §6.6.3
+ *                 Datos (MBD-V3 cap. 6; ficha BD-02 de la tabla): versiones del
+ *                 aviso de privacidad, consultado por MPM-V3 §6.6.3
  *                 (api.v1.privacy.show) para mostrar siempre la versión
- *                 vigente. NOTA: la Tabla 29 del MBD-V4 es un resumen, no
- *                 un diccionario de datos completo (a diferencia de las
- *                 Tablas 20-28); las longitudes de "version" y el tipo
+ *                 vigente. NOTA: las longitudes de "version" y el tipo
  *                 exacto de "content" se proponen aquí de forma razonable
- *                 y deben confirmarse con su propio Formato BD-02 antes de
- *                 darse por definitivas.
+ *                 y se documentan en su ficha BD-02.
  * ============================================================================
  */
 

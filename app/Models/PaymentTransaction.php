@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Ubicación:      app/Models/PaymentTransaction.php
  * Requerimiento:  ADR-058 / Pasarela de Pago Simulada y Onboarding Docente
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Fecha Creación: 18/11/2026
  * Descripción:    Modelo Eloquent de acs_payment_transactions: registro de
  *                 intentos y confirmaciones de pago de suscripción docente
@@ -37,6 +37,20 @@ class PaymentTransaction extends Model
      */
     public const STATUS_PAID = 'paid';
     public const STATUS_FAILED = 'failed';
+    // Actualización de nivel sin cobro inmediato (RF-SUS-012)
+    public const STATUS_NO_CHARGE = 'no_charge';
+
+    /**
+     * Concepto de la operación (RF-SUS-013, BD01-2026-035).
+     */
+    public const CONCEPT_SUBSCRIPTION = 'subscription';
+    public const CONCEPT_RENEWAL = 'renewal';
+    public const CONCEPT_UPGRADE = 'upgrade';
+
+    /**
+     * Operación sin medio de pago (actualización de nivel sin cobro).
+     */
+    public const METHOD_NONE = 'none';
 
     /**
      * Métodos de pago admitidos por la pasarela simulada.
@@ -45,14 +59,14 @@ class PaymentTransaction extends Model
     public const METHOD_SPEI = 'spei';
 
     /**
-     * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4).
+     * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3).
      *
      * @var string
      */
     protected $table = 'acs_payment_transactions';
 
     /**
-     * Columnas asignables en masa (MPW-V2 §2.3.1: sin PAN completo ni CVV).
+     * Columnas asignables en masa (MPW-V3 §2.3.1: sin PAN completo ni CVV).
      *
      * @var list<string>
      */
@@ -64,6 +78,7 @@ class PaymentTransaction extends Model
         'gateway_provider',
         'payment_method',
         'status',
+        'concept',
         'amount',
         'currency',
         'card_brand',
@@ -121,6 +136,18 @@ class PaymentTransaction extends Model
     }
 
     /**
+     * Etiqueta del concepto de la operación (RF-SUS-013).
+     */
+    public function conceptLabel(): string
+    {
+        return match ($this->concept) {
+            self::CONCEPT_RENEWAL => 'Renovación',
+            self::CONCEPT_UPGRADE => 'Actualización de nivel',
+            default => 'Contratación',
+        };
+    }
+
+    /**
      * Devuelve la etiqueta legible del estado de la transacción.
      *
      * @return string
@@ -130,6 +157,7 @@ class PaymentTransaction extends Model
         return match ($this->status) {
             self::STATUS_PAID => 'Pagado',
             self::STATUS_FAILED => 'Fallido',
+            self::STATUS_NO_CHARGE => 'Sin cobro',
             default => (string) ($this->status ?? 'Desconocido'),
         };
     }
@@ -160,11 +188,15 @@ class PaymentTransaction extends Model
             return 'SPEI';
         }
 
+        if ($this->payment_method === self::METHOD_NONE) {
+            return 'Sin cobro';
+        }
+
         return $this->methodLabel();
     }
 
     /**
-     * Conversión de atributos (MPW-V2 Tabla 6 Bloque 16).
+     * Conversión de atributos (MPW-V3 Tabla 6 Bloque 16).
      *
      * @return array<string, string>
      */

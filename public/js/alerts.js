@@ -1,6 +1,6 @@
 /**
  * Proyecto: acs-exam-web | Organización: A-Code Solutions
- * Módulo: alerts.js (MPW-V2 §8.7) - Homologación de SweetAlert2 con paleta A-Code
+ * Módulo: alerts.js (MPW-V3 §8.7) - Homologación de SweetAlert2 con paleta A-Code
  */
 (function (global) {
     'use strict';

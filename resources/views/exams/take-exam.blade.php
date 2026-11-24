@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/take-exam.blade.php (MPW-V2 §5.5, §7.3, §7.5.1, §7.7, §7.8.2, §8.9.1, ADR-020, ADR-042) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/take-exam.blade.php (MPW-V3 §5.5, §7.3, §7.5.1, §7.7, §7.8.2, §8.9.1, ADR-020, ADR-042) --}}
 @extends('layouts.exam-runner')
 
 @section('title', 'Presentando examen · ' . $attempt->exam->title)
@@ -28,15 +28,69 @@
             <h2 class="text-xs font-bold uppercase tracking-wider text-acode-tech mb-3">
                 Reactivo activo
             </h2>
-            <div class="text-sm text-slate-700 mb-6 whitespace-pre-line leading-relaxed">
-                {{ $current['question']['stem'] }}
-            </div>
+            {{-- whitespace-pre-wrap conserva espacios y sangrías del código en el enunciado (RF-BAN-014) --}}
+            <div class="text-sm text-slate-700 mb-6 whitespace-pre-wrap break-words leading-relaxed">{{ $current['question']['stem'] }}</div>
+            <x-question.files class="mb-6" :question-id="$current['question']['id']" :has-image="$current['question']['has_image'] ?? false" :has-pdf="$current['question']['has_pdf'] ?? false" />
 
             {{-- Formulario de Respuesta por Tipo de Reactivo --}}
             <form
                 method="POST"
                 action="{{ route('attempts.answer', $attempt) }}"
                 x-ref="answerForm"
+                {{-- RF-EXA-031: se puede avanzar sin responder, previa confirmación; el auto-envío por tiempo no pregunta --}}
+                x-data="{
+                    confirmedBlank: false,
+                    saveState: @js($draft !== null ? 'saved' : 'idle'),
+                    saveTimer: null,
+                    queueSave() {
+                        this.saveState = 'pending';
+                        clearTimeout(this.saveTimer);
+                        this.saveTimer = setTimeout(() => this.saveDraft(), 800);
+                    },
+                    async saveDraft() {
+                        this.saveState = 'saving';
+                        try {
+                            const token = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || '';
+                            const response = await fetch(@js(route('attempts.draft', $attempt)), {
+                                method: 'POST',
+                                headers: { 'X-CSRF-TOKEN': token, 'Accept': 'application/json' },
+                                body: new FormData(this.$el),
+                            });
+                            const data = await response.json().catch(() => ({}));
+                            this.saveState = response.ok && data.saved === true ? 'saved' : 'error';
+                        } catch (error) {
+                            this.saveState = 'error';
+                        }
+                        if (this.saveState === 'error') {
+                            clearTimeout(this.saveTimer);
+                            this.saveTimer = setTimeout(() => this.saveDraft(), 5000);
+                        }
+                    },
+                    isBlank() {
+                        const f = this.$el;
+                        const radios = f.querySelectorAll('input[name=selected_option_index]');
+                        if (radios.length) { return ! Array.from(radios).some((r) => r.checked); }
+                        const selects = f.querySelectorAll('select[name^=pairs]');
+                        if (selects.length) { return Array.from(selects).every((s) => s.value === ''); }
+                        const text = f.querySelector('textarea[name=answer_text]');
+                        if (text) { const v = text.value.trim(); return v === '' || v === (text.dataset.starter || '').trim(); }
+                        return false;
+                    },
+                    guard(event) {
+                        if (this.confirmedBlank || ! this.isBlank()) { return; }
+                        event.preventDefault();
+                        AcodeAlert.confirm({
+                            title: '¿Continuar sin responder?',
+                            text: 'Esta pregunta obtendrá cero puntos y no podrás regresar a ella.',
+                            confirmButtonText: 'Continuar',
+                            cancelButtonText: 'Cancelar',
+                            onConfirm: () => { this.confirmedBlank = true; this.$el.submit(); },
+                        });
+                    },
+                }"
+                @submit="clearTimeout(saveTimer); guard($event)"
+                @input="queueSave()"
+                @change="queueSave()"
                 class="space-y-4"
             >
                 @csrf
@@ -51,7 +105,7 @@
                                         type="radio"
                                         name="selected_option_index"
                                         value="{{ $option['index'] }}"
-                                        required
+                                        @checked(is_array($draft ?? null) && isset($draft['selected_option_index']) && (int) $draft['selected_option_index'] === (int) $option['index'])
                                         class="h-4 w-4 text-acode-tech focus:ring-acode-tech border-slate-300"
                                     />
                                     <span class="text-slate-800 font-medium">{{ $option['text'] }}</span>
@@ -72,10 +126,10 @@
                                     <span class="flex-1 text-sm font-semibold text-slate-800">{{ $left['text'] }}</span>
                                     <input type="hidden" name="pairs[{{ $i }}][left_id]" value="{{ $left['id'] }}">
                                     <div class="flex-1">
-                                        <x-form.select name="pairs[{{ $i }}][right_id]" required>
+                                        <x-form.select name="pairs[{{ $i }}][right_id]">
                                             <option value="">Selecciona definición…</option>
                                             @forelse ($current['question']['right_items'] as $right)
-                                                <option value="{{ $right['id'] }}">{{ $right['text'] }}</option>
+                                                <option value="{{ $right['id'] }}" @selected(is_array($draft ?? null) && collect($draft)->contains(fn ($p) => is_array($p) && ($p['left_id'] ?? null) == $left['id'] && ($p['right_id'] ?? null) == $right['id']))>{{ $right['text'] }}</option>
                                             @empty
                                                 <option value="" disabled>Sin definiciones</option>
                                             @endforelse
@@ -89,13 +143,12 @@
                         @break
 
                     @case('open')
-                        <x-form.group name="answer_text" label="Tu respuesta analítica" required>
+                        <x-form.group name="answer_text" label="Tu respuesta analítica">
                             <x-form.textarea
                                 name="answer_text"
                                 rows="6"
-                                required
                                 placeholder="Escribe tu argumentación pedagógica aquí…"
-                            ></x-form.textarea>
+                            >{{ is_string($draft ?? null) ? $draft : '' }}</x-form.textarea>
                         </x-form.group>
                         @break
 
@@ -117,17 +170,23 @@
                                 name="answer_text"
                                 rows="10"
                                 :mono="true"
-                                required
+                                data-starter="{{ $current['question']['starter_code'] }}"
                                 @paste.prevent
                                 onpaste="return false;"
                                 placeholder="// Escribe tu solución aquí..."
-                            >{{ $current['question']['starter_code'] }}</x-form.textarea>
+                            >{{ is_string($draft ?? null) ? $draft : $current['question']['starter_code'] }}</x-form.textarea>
                         </div>
                         @break
                 @endswitch
 
-                <div class="pt-4 flex items-center justify-between">
-                    <x-button type="submit" variant="primary" size="md">
+                <div class="pt-4 flex flex-wrap items-center justify-between gap-3">
+                    {{-- RF-EXA-041: «guardada» solo tras la confirmación del servidor --}}
+                    <p class="order-2 text-xs font-medium" role="status" aria-live="polite">
+                        <span x-show="saveState === 'saved'" style="display: none" class="text-acode-accent">✓ Respuesta guardada</span>
+                        <span x-show="saveState === 'pending' || saveState === 'saving'" style="display: none" class="text-slate-500">Guardando…</span>
+                        <span x-show="saveState === 'error'" style="display: none" class="text-acode-danger">No se pudo guardar; se reintentará automáticamente</span>
+                    </p>
+                    <x-button type="submit" variant="primary" size="md" class="order-1">
                         <x-icon name="check" class="w-4 h-4" />
                         Enviar respuesta
                     </x-button>
@@ -135,7 +194,7 @@
             </form>
         </x-card>
 
-        {{-- Formulario para Finalizar Examen con Confirmación SweetAlert2 (Tabla 20) --}}
+        {{-- Formulario para Finalizar Examen con Confirmación SweetAlert2 (MPW-V3 §8.6) --}}
         <div class="flex justify-end pt-2">
             <form
                 id="finish-exam-form"
@@ -162,7 +221,6 @@
             >
                 @csrf
                 <x-button type="button" variant="danger" size="sm" @click="confirmFinish()">
-                    <x-icon name="lock" class="w-3.5 h-3.5" />
                     Finalizar examen
                 </x-button>
             </form>
@@ -171,6 +229,31 @@
 @endsection
 
 @push('scripts')
+    {{-- RF-EXA-049: señal de presencia; si otra sesión tiene el intento, se sale del examen --}}
+    <script>
+        (() => {
+            const endpoint = @js(route('attempts.heartbeat', $attempt));
+            const ping = async () => {
+                try {
+                    const token = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || '';
+                    const response = await fetch(endpoint, { method: 'POST', headers: { 'X-CSRF-TOKEN': token, 'Accept': 'application/json' } });
+                    if (response.status === 409) {
+                        const data = await response.json().catch(() => ({}));
+                        const go = () => { window.location.href = data.redirect_url || '/'; };
+                        if (data.message && typeof AcodeAlert !== 'undefined') {
+                            AcodeAlert.warning('Intento abierto en otra sesión', data.message).then(go);
+                        } else {
+                            go();
+                        }
+                    }
+                } catch (error) {
+                    // Sin conexión: se reintenta en la siguiente señal
+                }
+            };
+            ping();
+            setInterval(ping, 15000);
+        })();
+    </script>
     @if (\Illuminate\Support\Facades\Route::has('attempts.incident'))
         <script>
             window.acodeIncidentEndpoint = @js(route('attempts.incident', $attempt));

@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-exam.timer (MPW-V2 §7.5.1, §7.5.2, §8.7, §8.9.1, ADR-020) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-exam.timer (MPW-V3 §7.5.1, §7.5.2, §8.7, §8.9.1, ADR-020) --}}
 @props([
     'seconds' => 60,
     'formRef' => 'answerForm',

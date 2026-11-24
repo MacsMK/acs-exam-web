@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: questions/create.blade.php (MPW-V2 §7, §8, Tabla 20) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: questions/create.blade.php (MPW-V3 §7, §8, Tabla 10) --}}
 @extends('layouts.app')
 
 @section('title', 'Nueva pregunta')
@@ -99,6 +99,7 @@
         <form
             id="create-question-form"
             method="POST"
+            enctype="multipart/form-data"
             action="{{ route('questions.store') }}"
             @keydown.enter="if ($event.target.tagName === 'INPUT' && !['submit', 'button'].includes($event.target.type)) { $event.preventDefault(); }"
             class="space-y-6"

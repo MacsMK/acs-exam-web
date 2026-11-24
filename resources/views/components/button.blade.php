@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-button (MPW-V2 §7.3, §7.8, §8.3, Tabla 27) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-button (MPW-V3 §7.3, §7.8, §8.3, Tabla 15) --}}
 @props([
     'variant' => 'primary', // primary, secondary, accent, warning, danger, neutral
     'size' => 'md',        // sm, md, lg (Tabla 14)

@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     StudentWebModuleComplianceTest.php
  * Ubicación:   tests/Feature/StudentWebModuleComplianceTest.php
  * Descripción: Suite de certificación normativa y funcional del módulo web del
- *              estudiante en acs-exam-web (MPW-V2 §7 y §8, MC-V2, P-01 a P-226).
+ *              estudiante en acs-exam-web (MPW-V3 §7 y §8, MC-V3, P-01 a P-226).
  * ============================================================================
  */
 
@@ -94,7 +94,7 @@ class StudentWebModuleComplianceTest extends TestCase
         $response->assertSee('Aviso de privacidad');
         $response->assertSee('Cerrar sesión');
 
-        // Footer normativo de dos secciones (MPW-V2 §8.10.7)
+        // Footer normativo de dos secciones (MPW-V3 §8.10.7)
         $response->assertSee('© 2026 A-Code Solutions.');
         $response->assertSee('Plataforma Evaluadora de Exámenes');
         $response->assertSee('v1.0.0');
@@ -197,6 +197,13 @@ class StudentWebModuleComplianceTest extends TestCase
         $response->assertSee('Condiciones obligatorias para presentar esta evaluación');
         $response->assertSee('El tiempo corre en el servidor');
         $response->assertSee('Confirmar e iniciar examen');
+        // RF-EXA-028: tiempo máximo real (suma de tiempos por pregunta) y orden de preguntas
+        $response->assertSee('Tiempo máximo');
+        $response->assertSee('Orden de preguntas');
+        $response->assertDontSee('Duración total');
+        // RF-EXA-040: las instrucciones describen el guardado automático real (borrador en el servidor)
+        $response->assertSee('Guardado automático');
+        $response->assertDontSee('Auto-guardado permanente');
     }
 
     /**

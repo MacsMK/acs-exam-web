@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: auth/register-student.blade.php (MPW-V2 §7.3, §7.8.2, §8.5, §8.6.1, Tabla 20, Tabla 28) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: auth/register-student.blade.php (MPW-V3 §7.3, §7.8.2, §8.5, §8.6.1, Tabla 10, Tabla 18) --}}
 @extends('layouts.guest')
 
 @section('title', 'Registro de Alumno')
@@ -28,7 +28,7 @@
             }
         }"
     >
-        <form method="POST" action="{{ route('auth.register.student.store') }}" id="register-form" class="space-y-4">
+        <form method="POST" action="{{ route('auth.register.student.store') }}" id="register-form" class="space-y-4" enctype="multipart/form-data">
             @csrf
 
             {{-- Versión del aviso de privacidad que se acepta (RF-AUT-011) --}}
@@ -87,6 +87,18 @@
                     prefixIcon="shield"
                     placeholder="5512345678"
                 />
+            </x-form.group>
+
+            {{-- Fotografía opcional del estudiante: JPG o PNG de hasta 5 MB (RF-AUT-008) --}}
+            <x-form.group name="photo" label="Fotografía (opcional, JPG o PNG de hasta 5 MB)">
+                <input
+                    id="photo"
+                    type="file"
+                    name="photo"
+                    accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+                    class="block w-full h-10 text-sm text-slate-700 file:mr-3 file:h-full file:px-3.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-acode-primary file:text-white hover:file:bg-acode-tech border border-slate-300 rounded-lg bg-white p-1"
+                />
+                <p class="text-xs text-slate-500 mt-1">Si no agregas una, se mostrará la imagen predeterminada con tu inicial.</p>
             </x-form.group>
 
             {{-- Grid de 2 columnas para Contraseñas con validación reactiva Alpine --}}
@@ -161,7 +173,7 @@
             </div>
         </form>
 
-        {{-- Modal de Términos de Servicio y Privacidad con scroll obligatorio (RF-AUT-011, MPW-V2 §8.6.1) --}}
+        {{-- Modal de Términos de Servicio y Privacidad con scroll obligatorio (RF-AUT-011, MPW-V3 §8.6.1) --}}
         <x-modal name="terms-modal" title="Aviso de Privacidad y Términos de Servicio" maxWidth="2xl">
             <div class="space-y-3">
                 <p class="text-xs text-slate-500">

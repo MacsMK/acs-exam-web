@@ -24,7 +24,7 @@
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
         <!--
-            El stack oficial del proyecto es PostgreSQL (MBD-V4), sin
+            El stack oficial del proyecto es PostgreSQL (MBD-V3), sin
             SQLite de respaldo: varias migraciones usan tipos propios de
             Postgres (jsonb). Las pruebas corren contra el mismo Postgres
             que ya configura .env.example / compose.yaml (Sail) en vez del

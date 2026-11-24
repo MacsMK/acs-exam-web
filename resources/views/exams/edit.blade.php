@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/edit.blade.php (MPW-V2 §4.1.2, §7, §8, ADR-043, ADR-056) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/edit.blade.php (MPW-V3 §4.1.2, §7, §8, ADR-043, ADR-056) --}}
 @extends('layouts.app')
 
 @section('title', 'Editar examen: ' . $exam->title)

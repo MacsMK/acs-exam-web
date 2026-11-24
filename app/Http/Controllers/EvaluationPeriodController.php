@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Ubicación:   app/Http/Controllers/EvaluationPeriodController.php
  * Descripción: Gestión de periodos de evaluación y sábana de calificaciones
  *              (RF-CAL-001..005, RF-CAL-009, RF-CAL-012, RF-CAL-017,
- *               RF-CAL-021, RF-CAL-027, RW-28..31, MPW-V2 §5.2.1, §6.1).
+ *               RF-CAL-021, RF-CAL-027, RW-28..31, MPW-V3 §5.2.1, §6.1).
  * ============================================================================
  */
 
@@ -120,7 +120,8 @@ class EvaluationPeriodController extends Controller
 
         // Promedio de exámenes reales aplicados en este grupo para pre-llenado sugerido
         $examIds = $group->exams()->pluck('acs_exams.id');
-        $examAverages = StudentAttempt::whereIn('exam_id', $examIds)
+        $examAverages = StudentAttempt::current()
+            ->whereIn('exam_id', $examIds)
             ->where('group_id', $group->id)
             ->whereNotNull('final_score')
             ->groupBy('student_id')
@@ -232,7 +233,7 @@ class EvaluationPeriodController extends Controller
     }
 
     /**
-     * Valida la propiedad del grupo frente a ataques IDOR (RNF-SEG-004, MPW-V2 §5.2.1).
+     * Valida la propiedad del grupo frente a ataques IDOR (RNF-SEG-004, MPW-V3 §5.2.1).
      */
     private function authorizeTeacher(Group $group): void
     {

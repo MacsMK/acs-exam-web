@@ -6,7 +6,7 @@
     Ubicación:   resources/views/student/exams/instructions.blade.php
     Descripción: Pantalla de instrucciones previas y confirmación expresa antes
                  de iniciar examen contrarreloj (RF-EXA-028, RF-EXA-029, RW-25;
-                 MPW-V2 §7.3, §7.4.2, §7.7, §8.1–§8.3; MC-V2 §2.4).
+                 MPW-V3 §7.3, §7.4.2, §7.7, §8.1–§8.3; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')
@@ -39,6 +39,9 @@
             <span>·</span>
             <span>
                 Escala: <strong class="text-slate-700">{{ $exam->grading_scale === '0-100' ? '0 a 100 puntos' : '0 a 10 con decimales' }}</strong>
+                ·
+                Cierre: <strong class="text-slate-700">{{ $exam->ends_at?->format('d/m/Y H:i') ?? 'Sin vencimiento' }}</strong>
+                ({{ \App\Models\Exam::timezoneLabel() }})
             </span>
         </x-slot:meta>
 
@@ -61,17 +64,17 @@
         />
 
         <x-kpi-card
-            label="Duración total"
-            :value="($exam->total_duration_minutes ?? $exam->duration_minutes ?? 60) . ' min'"
-            meta="Control por temporizador"
+            label="Tiempo máximo"
+            :value="$exam->maxDurationMinutes() . ' min'"
+            meta="Suma de los tiempos por pregunta"
             icon="clock"
             tone="warning"
             :mono="true"
         />
 
         <x-kpi-card
-            label="Modalidad"
-            :value="$exam->randomize_question_order ? 'Aleatoria' : 'Secuencial'"
+            label="Orden de preguntas"
+            :value="$exam->randomize_question_order ? 'Aleatorio' : 'Fijo'"
             meta="1 intento por alumno"
             icon="shield"
             tone="primary"
@@ -93,9 +96,15 @@
                 @if ($exam->require_webcam)
                     <li><strong>Supervisión por cámara web:</strong> Este examen requiere mantener la cámara activa durante toda la sesión.</li>
                 @endif
-                <li><strong>Auto-guardado permanente:</strong> Tus respuestas se registran de inmediato en el servidor de manera segura.</li>
+                <li><strong>Guardado automático:</strong> Tu respuesta se guarda en el servidor mientras respondes y se registra al pulsar «Enviar respuesta» o al agotarse el tiempo de la pregunta.</li>
             </ul>
         </div>
+
+        @if (($reapplicationNumber ?? null) !== null)
+            <div class="rounded-lg border border-acode-tech/30 bg-acode-tech/10 px-4 py-3 text-sm text-slate-700" role="status">
+                <strong>Reaplicación autorizada:</strong> tu docente te dio un intento adicional. Este será tu intento {{ $reapplicationNumber }}; el anterior se conserva y tu calificación será la de este nuevo intento.
+            </div>
+        @endif
 
         <div class="flex flex-col-reverse sm:flex-row items-center justify-between gap-4 border-t border-slate-100 pt-5">
             <x-button :href="route('student.exams.index')" variant="neutral" size="md" class="w-full sm:w-auto">

@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-form.textarea (MPW-V2 §7.3, §8.5, Tabla 29) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-form.textarea (MPW-V3 §7.3, §8.5) --}}
 @props([
     'name' => null,
     'rows' => 4,

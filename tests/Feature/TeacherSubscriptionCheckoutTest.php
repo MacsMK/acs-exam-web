@@ -17,7 +17,7 @@ declare(strict_types=1);
  * Descripción:    Certificación integral de la pasarela de pago simulada
  *                 (tarjeta Luhn y SPEI instantáneo), onboarding obligatorio
  *                 post-verificación docente con Prueba Gratuita (Freemium),
- *                 validaciones normativas MPW-V2 Tabla 17, protección estricta
+ *                 validaciones normativas MPW-V3 Tabla 18, protección estricta
  *                 sin persistencia de PAN/CVV, desbloqueo de cuotas y control
  *                 de acceso / visibilidad en el portal Superadministrador.
  * ============================================================================
@@ -155,6 +155,7 @@ class TeacherSubscriptionCheckoutTest extends TestCase
                 'card_number' => '4242 4242 4242 4242',
                 'card_expiry' => '12/30',
                 'card_cvv' => $rawCvv,
+                'authorize_recurring' => '1',
             ]);
 
         $payResponse->assertRedirect(route('dashboard'))
@@ -225,7 +226,7 @@ class TeacherSubscriptionCheckoutTest extends TestCase
             ->assertDontSee('onboarding_overlay', false);
         $this->actingAs($teacher->fresh())->get(route('groups.index'))->assertOk();
 
-        // Un cambio o renovación posterior (ya con onboarding completado y sin overlay) redirige a teacher.subscription.index
+        // Con suscripción activa no se vuelve a contratar ni a cobrar: se actualiza de nivel (RF-SUS-011/012)
         $proPackage = SubscriptionPackage::where('tier', 'pro')->firstOrFail();
         $this->actingAs($teacher->fresh())
             ->post(route('teacher.subscription.pay', $proPackage), [
@@ -235,6 +236,11 @@ class TeacherSubscriptionCheckoutTest extends TestCase
                 'card_expiry' => '12/30',
                 'card_cvv' => $rawCvv,
             ])
+            ->assertRedirect(route('teacher.subscription.index'))
+            ->assertSessionHasErrors('subscription');
+
+        $this->actingAs($teacher->fresh())
+            ->post(route('teacher.subscription.upgrade', $proPackage))
             ->assertRedirect(route('teacher.subscription.index'))
             ->assertSessionHasNoErrors()
             ->assertSessionHas('status');

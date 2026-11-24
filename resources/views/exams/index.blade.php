@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/index.blade.php (MPW-V2 §4.1.2, §7, §8, Tabla 20, Tabla 28, RF-EXA) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: exams/index.blade.php (MPW-V3 §4.1.2, §7, §8, Tabla 10, Tabla 18, RF-EXA) --}}
 @extends('layouts.app')
 
 @section('title', 'Mis exámenes')
@@ -54,7 +54,7 @@
             </div>
         @endif
 
-        {{-- Nivel 1: Cabecera institucional y acciones principales (MPW-V2 §7.3, §8.1, Tabla 20) --}}
+        {{-- Nivel 1: Cabecera institucional y acciones principales (MPW-V3 §7.3, §8.1, Tabla 10) --}}
         <x-page-header
             title="Mis exámenes"
             subtitle="Diseña evaluaciones con sorteo inteligente o selección manual, calibra ponderaciones sobre 100.00 puntos, supervisa entregas en vivo y recoteja respuestas abiertas asistidas por IA."

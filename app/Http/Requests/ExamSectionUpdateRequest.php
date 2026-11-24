@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        ExamSectionUpdateRequest.php
  * Ubicación:      app/Http/Requests/ExamSectionUpdateRequest.php
- * Requerimiento:  RW-12, RW-13 (Edición de Apartado de Examen, MPW-V2 Tabla 17)
+ * Requerimiento:  RW-12, RW-13 (Edición de Apartado de Examen, MPW-V3 Tabla 18)
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 18/11/2026

@@ -6,7 +6,7 @@
     Ubicación:   resources/views/exams/result-summary.blade.php
     Descripción: Resumen y dictamen normativo del intento finalizado del alumno
                  homologado al UI Kit A-Code, manteniendo blindaje IA ADR-050 /
-                 RF-EVA-009 (MPW-V2 §4.1.2, §5.2.2, §7.3, §8.3; MC-V2 §2.4).
+                 RF-EVA-009 (MPW-V3 §4.1.2, §5.2.2, §7.3, §8.3; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')
@@ -31,6 +31,10 @@
             <span>
                 Entregado el <strong class="font-mono text-slate-700">{{ $attempt->submitted_at?->format('d/m/Y \a \l\a\s H:i') ?? now()->format('d/m/Y H:i') }}</strong>
             </span>
+            @if ($attempt->wasStoppedByTeacher())
+                <span>·</span>
+                <span class="font-semibold text-acode-warning-dark">Finalizado porque el docente detuvo el examen</span>
+            @endif
         </x-slot:meta>
 
         <x-slot:actions>

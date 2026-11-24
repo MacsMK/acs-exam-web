@@ -14,10 +14,10 @@ declare(strict_types=1);
  * Autor:          Equipo de Base de Datos (A-Code Solutions)
  * Versión:        1.1.0
  * Fecha Creación: 26/10/2026
- * Descripción:    Modelo Eloquent de acs_privacy_acceptances (MBD-V4
- *                 Tabla 29). Registra que un usuario aceptó una versión
+ * Descripción:    Modelo Eloquent de acs_privacy_acceptances (ficha BD-02 de
+ *                 acs_privacy_acceptances). Registra que un usuario aceptó una versión
  *                 específica del aviso de privacidad
- *                 (api.v1.privacy.accept, MPM-V2 §6.6.3).
+ *                 (api.v1.privacy.accept, MPM-V3 §6.6.3).
  *                 CAMBIO v1.1.0: se agrega ip_address (ver migración
  *                 BD01-2026-003 v1.1.0).
  * ============================================================================
@@ -36,7 +36,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class PrivacyAcceptance extends Model
 {
     /**
-     * Tabla asociada (prefijo institucional acs_, MBD-V4 §3.4).
+     * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3).
      *
      * @var string
      */

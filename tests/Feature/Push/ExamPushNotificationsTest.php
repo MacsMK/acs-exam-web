@@ -12,7 +12,7 @@ declare(strict_types=1);
  * Requerimiento:  RF-EXA-054 (Notificación de programación o publicación
  *                 de exámenes); los avisos exam.opened, exam.started y
  *                 exam.finished aún no tienen código en DE-01
- *                 (MPM-V4 §6.8, Tabla 14)
+ *                 (MPM-V3 §6.8, Tabla 14)
  * Autor:          Calvo Sandoval Miguel Alexander (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 03/11/2026
@@ -102,6 +102,34 @@ class ExamPushNotificationsTest extends TestCase
 
         $this->artisan('exams:push-due')->assertSuccessful();
         $this->assertSame(['exam.opened'], $this->push->types());
+    }
+
+    /**
+     * RF-EXA-025: al quedar disponible el examen, cada alumno recibe un correo con
+     * el enlace a las instrucciones, una sola vez; asignarlo a futuro no envía correo.
+     */
+    public function test_students_get_an_email_with_the_access_link_when_the_exam_opens_only_once(): void
+    {
+        $exam = $this->createExam(false, now()->addMinutes(10), now()->addHours(2));
+        $this->publish($exam);
+
+        $this->assertCount(0, $this->sentMails());
+
+        $this->travel(11)->minutes();
+        $this->artisan('exams:push-due')->assertSuccessful();
+        $this->artisan('exams:push-due')->assertSuccessful();
+
+        $mails = $this->sentMails();
+        $this->assertCount(2, $mails);
+
+        $recipients = $mails->map(static fn ($sent) => $sent->getOriginalMessage()->getTo()[0]->getAddress())->sort()->values()->all();
+        $expected = collect([$this->studentOne->email, $this->studentTwo->email])->sort()->values()->all();
+        $this->assertSame($expected, $recipients);
+
+        $this->assertStringContainsString(
+            route('student.exams.instructions', $exam),
+            $mails->first()->getOriginalMessage()->getTextBody(),
+        );
     }
 
     public function test_publishing_twice_does_not_notify_twice(): void
@@ -204,11 +232,24 @@ class ExamPushNotificationsTest extends TestCase
         return $this->actingAs($this->teacher)->post(route('exams.publish', $exam));
     }
 
+    /**
+     * Un token por alumno, como un dispositivo: RF-EXA-049 rechaza el mismo
+     * intento desde otro token (otro dispositivo) mientras el primero está activo.
+     *
+     * @var array<int, string>
+     */
+    private array $tokens = [];
+
+    private function tokenFor(User $student): string
+    {
+        return $this->tokens[$student->id] ??= $student->createToken('test')->plainTextToken;
+    }
+
     private function take(Exam $exam, User $student): TestResponse
     {
         $this->app['auth']->forgetGuards();
 
-        return $this->withToken($student->createToken('test')->plainTextToken)
+        return $this->withToken($this->tokenFor($student))
             ->postJson('/api/v1/exams/take', ['exam_id' => $exam->id]);
     }
 
@@ -216,7 +257,7 @@ class ExamPushNotificationsTest extends TestCase
     {
         $this->app['auth']->forgetGuards();
 
-        $this->withToken($student->createToken('test')->plainTextToken)
+        $this->withToken($this->tokenFor($student))
             ->postJson("/api/v1/exams/{$exam->id}/answers", [
                 'question_id' => (string) $question->id,
                 'selected_option_ids' => ['1'],
@@ -306,5 +347,13 @@ class ExamPushNotificationsTest extends TestCase
             'password' => 'Demo1234',
             'is_active' => true,
         ]);
+    }
+
+    /**
+     * Correos enviados en la prueba (MAIL_MAILER=array en phpunit.xml).
+     */
+    private function sentMails(): \Illuminate\Support\Collection
+    {
+        return collect($this->app['mailer']->getSymfonyTransport()->messages());
     }
 }

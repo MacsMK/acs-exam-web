@@ -32,7 +32,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 /**
- * Controlador del panel de resumen operativo post-login (Módulo 2, MPW-V2 §7.9).
+ * Controlador del panel de resumen operativo post-login (Módulo 2, MPW-V3 §7.9).
  *
  * @package App\Http\Controllers
  */
@@ -100,6 +100,7 @@ class DashboardController extends Controller
         $normalizedScoreSql = "CASE WHEN acs_exams.grading_scale = '0-100' THEN COALESCE(acs_student_attempts.final_score, acs_student_attempts.objective_score, 0) / 10.0 ELSE COALESCE(acs_student_attempts.final_score, acs_student_attempts.objective_score, 0) END";
 
         $attemptStats = StudentAttempt::query()
+            ->current()
             ->join('acs_exams', 'acs_student_attempts.exam_id', '=', 'acs_exams.id')
             ->where('acs_student_attempts.status', 'submitted')
             ->where('acs_exams.teacher_id', $teacher->id)
@@ -159,13 +160,14 @@ class DashboardController extends Controller
         $pendingExams = Exam::query()
             ->where('is_published', true)
             ->whereHas('groups', static fn ($query) => $query->where('is_closed', false)->whereHas('students', static fn ($q) => $q->where('acs_users.id', $student->id)))
-            ->whereDoesntHave('studentAttempts', static fn ($query) => $query->where('student_id', $student->id)->where('status', 'submitted'))
+            ->whereDoesntHave('studentAttempts', static fn ($query) => $query->current()->where('student_id', $student->id)->where('status', 'submitted')->whereNull('reapplication_authorized_at'))
             ->with(['groups', 'teacher'])
             ->withCount('examQuestions')
             ->latest()
             ->get();
 
         $recentAttempts = StudentAttempt::query()
+            ->current()
             ->where('student_id', $student->id)
             ->whereHas('group', static fn ($query) => $query->where('is_closed', false))
             ->with(['exam.teacher', 'group'])

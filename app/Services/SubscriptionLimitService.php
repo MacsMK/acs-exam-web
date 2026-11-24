@@ -41,6 +41,46 @@ class SubscriptionLimitService
     public const FREEMIUM_MAX_AI_EVALUATIONS    = 25;
 
     /**
+     * Comprueba el límite de grupos activos antes de reabrir un grupo cerrado
+     * (RF-GRU-014, RF-GRU-020, ACT-WEB-051). Los grupos cerrados no cuentan
+     * como activos, por lo que reabrir uno vuelve a ocupar un lugar del límite.
+     * En la prueba gratuita el límite es el mismo grupo único (RF-SUS-008).
+     *
+     * @param User $teacher Docente propietario del grupo.
+     * @return void
+     *
+     * @throws SubscriptionLimitExceededException Si reabrir excede el límite.
+     */
+    public function ensureCanReopenGroup(User $teacher): void
+    {
+        $package = $this->resolveActivePackage($teacher);
+        $maxGroups = $package === null ? self::FREEMIUM_MAX_CUMULATIVE_GROUPS : $package->max_groups;
+
+        if ($maxGroups === null) {
+            return; // Ilimitado
+        }
+
+        $activeGroups = Group::withoutGlobalScopes()
+            ->where('teacher_id', $teacher->id)
+            ->where('is_closed', false)
+            ->count();
+
+        if ($activeGroups >= $maxGroups) {
+            throw new SubscriptionLimitExceededException(
+                sprintf(
+                    'No se puede reabrir el grupo: ya tienes %d de %d grupos activos permitidos. Cierra otro grupo o sube de nivel para reabrirlo.',
+                    $activeGroups,
+                    $maxGroups
+                ),
+                'groups',
+                $activeGroups,
+                (int) $maxGroups,
+                $package?->tier ?? 'freemium'
+            );
+        }
+    }
+
+    /**
      * Valida si el docente tiene cupo para crear un nuevo grupo escolar.
      *
      * @throws SubscriptionLimitExceededException
@@ -58,7 +98,7 @@ class SubscriptionLimitService
             if ($cumulativeGroups >= self::FREEMIUM_MAX_CUMULATIVE_GROUPS) {
                 throw new SubscriptionLimitExceededException(
                     sprintf(
-                        'El beneficio de prueba gratuita permite crear un máximo histórico de %d grupo (RF-SUS-010). Eliminar o cerrar el grupo no restablece el beneficio. Contrata un plan para continuar.',
+                        'El beneficio de prueba gratuita permite crear un máximo histórico de %d grupo. Eliminar o cerrar el grupo no restablece el beneficio. Contrata un plan para continuar.',
                         self::FREEMIUM_MAX_CUMULATIVE_GROUPS
                     ),
                     'groups',
@@ -212,7 +252,7 @@ class SubscriptionLimitService
             if ($cumulativeExams >= self::FREEMIUM_MAX_CUMULATIVE_EXAMS) {
                 throw new SubscriptionLimitExceededException(
                     sprintf(
-                        'El beneficio de prueba gratuita permite crear un máximo histórico de %d examen (RF-SUS-010). Contrata un paquete docente para diseñar más evaluaciones.',
+                        'El beneficio de prueba gratuita permite crear un máximo histórico de %d examen. Contrata un paquete docente para diseñar más evaluaciones.',
                         self::FREEMIUM_MAX_CUMULATIVE_EXAMS
                     ),
                     'exams',
@@ -358,7 +398,7 @@ class SubscriptionLimitService
             $limit = self::FREEMIUM_MAX_AI_EVALUATIONS;
             $remaining = max(0, $limit - $used);
             $percent = min(100, (int) round(($used / max(1, $limit)) * 100));
-            $variant = $percent >= 90 ? 'danger' : ($percent >= 75 ? 'warning' : 'tech');
+            $variant = $percent >= 75 ? 'warning' : 'tech';
 
             return [
                 'used' => $used,
@@ -370,7 +410,7 @@ class SubscriptionLimitService
                 'percent' => $percent,
                 'variant' => $variant,
                 'is_suspended' => false,
-                'cycle_label' => 'Prueba gratuita (histórico acumulado)',
+                'cycle_label' => 'Histórico acumulado de la prueba gratuita',
             ];
         }
 
@@ -403,7 +443,7 @@ class SubscriptionLimitService
 
         $remaining = max(0, $limit - $used);
         $percent = min(100, (int) round(($used / max(1, $limit)) * 100));
-        $variant = $percent >= 90 ? 'danger' : ($percent >= 75 ? 'warning' : 'tech');
+        $variant = $percent >= 75 ? 'warning' : 'tech';
 
         return [
             'used' => $used,
@@ -503,6 +543,11 @@ class SubscriptionLimitService
                 0,
                 'suspended'
             );
+        }
+
+        // Cobro de renovación rechazado: el plan sigue vigente durante los reintentos (RF-SUS-005)
+        if ($subscription->isInRenewalGracePeriod()) {
+            return $subscription->subscriptionPackage;
         }
 
         if ($subscription->payment_status !== 'paid') {

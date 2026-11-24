@@ -25,7 +25,7 @@
 }
 
 /*
- * Utilidades de transición y micro-interacciones suaves A-Code (MPW-V2 §7.5)
+ * Utilidades de transición y micro-interacciones suaves A-Code (MPW-V3 §7.5)
  */
 .acode-tab-transition {
     transition: opacity 200ms ease-out, transform 200ms ease-out;
@@ -42,7 +42,7 @@
 /*
  * Oculta los elementos marcados con x-cloak hasta que Alpine termina de
  * inicializar. Sustituye los estilos en línea "display: none" de las vistas
- * (MPW-V2 §7.4.2: sin style="" en Blade).
+ * (MPW-V3 §7.4.2: sin style="" en Blade).
  */
 [x-cloak] {
     display: none !important;

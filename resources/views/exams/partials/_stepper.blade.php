@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Partial: exams/partials/_stepper.blade.php (MPW-V2 §4.1.2, §7, §8) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Partial: exams/partials/_stepper.blade.php (MPW-V3 §4.1.2, §7, §8) --}}
 @php
     $stepNumber = (int) ($currentStep ?? 1);
     $showTitle = (bool) ($showTitle ?? false);

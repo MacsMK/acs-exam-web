@@ -9,13 +9,13 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        QuestionUpdateRequest.php
  * Ubicación:      app/Http/Requests/QuestionUpdateRequest.php
- * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V2 §6.3, Tabla 17)
+ * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §6.3, Tabla 18)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        2.0.0
+ * Versión:        2.2.0
  * Fecha Creación: 28/10/2026
  * Descripción:    Validación tipada de actualización de reactivos polimórficos
  *                 con blindaje de inmutabilidad de tipo [MEDIA-01], saneamiento
- *                 Unicode y mensajes en español canónicos (MPW-V2 Tabla 17).
+ *                 Unicode y mensajes en español canónicos (MPW-V3 Tabla 18).
  * ============================================================================
  */
 
@@ -51,12 +51,15 @@ class QuestionUpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-        $question = $this->route('question');
+        $question = $this->routeQuestion();
         $allowedTypes = $question instanceof Question
             ? [$question->question_type]
             : Question::VALID_TYPES;
 
-        return $this->polymorphicQuestionRules('', $allowedTypes);
+        return array_merge(
+            $this->polymorphicQuestionRules('', $allowedTypes),
+            $this->questionFileRules(),
+        );
     }
 
     public function withValidator(Validator $validator): void
@@ -71,7 +74,7 @@ class QuestionUpdateRequest extends FormRequest
      */
     public function messages(): array
     {
-        return $this->polymorphicQuestionMessages();
+        return array_merge($this->polymorphicQuestionMessages(), $this->questionFileMessages());
     }
 
     protected function prepareForValidation(): void
@@ -79,11 +82,27 @@ class QuestionUpdateRequest extends FormRequest
         $sanitized = $this->sanitizeQuestionPayload($this->all());
 
         // [MEDIA-01] Blindaje de inmutabilidad: jamás permitir mutar question_type vía formulario.
-        $question = $this->route('question');
+        $question = $this->routeQuestion();
         if ($question instanceof Question) {
             $sanitized['question_type'] = $question->question_type;
         }
 
         $this->replace($sanitized);
+    }
+
+    /**
+     * Pregunta que se edita: desde el banco (questions.update) o desde un
+     * examen (exams.questions.update, RF-EXA-005).
+     */
+    private function routeQuestion(): ?Question
+    {
+        $question = $this->route('question');
+        if ($question instanceof Question) {
+            return $question;
+        }
+
+        $examQuestion = $this->route('examQuestion');
+
+        return $examQuestion instanceof \App\Models\ExamQuestion ? $examQuestion->question : null;
     }
 }

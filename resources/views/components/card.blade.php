@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-card (MPW-V2 §7.3, §8.1.1, §8.3, Tabla 29) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-card (MPW-V3 §7.3, §8.1.1, §8.3) --}}
 @props([
     'title' => null,
     'subtitle' => null,

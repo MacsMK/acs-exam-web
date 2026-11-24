@@ -12,7 +12,7 @@ declare(strict_types=1);
  *              aviso de privacidad versionado: las vistas envían el id del
  *              aviso vigente, el servidor registra la aceptación con la IP y
  *              rechaza un aviso desactualizado o ausente (RF-AUT-001,
- *              RF-AUT-002, RF-AUT-011 — MPW-V2 §7.3, §8.6.1).
+ *              RF-AUT-002, RF-AUT-011 — MPW-V3 §7.3, §8.6.1).
  * ============================================================================
  */
 

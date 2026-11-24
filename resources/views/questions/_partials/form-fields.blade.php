@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Parcial: questions/_partials/form-fields.blade.php (MPW-V2 §7, §8, Tabla 20, Tabla 28, Tabla 29) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Parcial: questions/_partials/form-fields.blade.php (MPW-V3 §7, §8, Tabla 10, Tabla 18) --}}
 @props([
     'mode' => 'create',
     'subjects' => collect(),
@@ -208,6 +208,37 @@
                     <span class="text-xs font-mono text-slate-500" x-text="stem.length + ' / 5000'"></span>
                 </div>
             </x-form.group>
+
+            {{-- Imagen y PDF opcionales de la pregunta, uno de cada tipo (RF-BAN-012, RF-BAN-013) --}}
+            @php
+                $questionFileFields = [
+                    'image' => ['label' => 'Imagen (opcional, JPG o PNG de hasta 5 MB)', 'accept' => '.jpg,.jpeg,.png,image/jpeg,image/png', 'column' => 'image_path', 'kind' => 'imagen', 'current' => 'Ver imagen actual', 'remove' => 'Quitar la imagen'],
+                    'pdf' => ['label' => 'PDF de apoyo (opcional, hasta 5 MB)', 'accept' => '.pdf,application/pdf', 'column' => 'pdf_path', 'kind' => 'pdf', 'current' => 'Ver PDF actual', 'remove' => 'Quitar el PDF'],
+                ];
+            @endphp
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                @foreach ($questionFileFields as $fileField => $fileConfig)
+                    <x-form.group :name="$fileField" :label="$fileConfig['label']">
+                        <input
+                            id="{{ $fileField }}"
+                            type="file"
+                            name="{{ $fileField }}"
+                            accept="{{ $fileConfig['accept'] }}"
+                            class="block w-full h-10 text-sm text-slate-700 file:mr-3 file:h-full file:px-3.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-acode-primary file:text-white hover:file:bg-acode-tech border border-slate-300 rounded-lg bg-white p-1"
+                        />
+                        @if ($mode === 'edit' && $question?->{$fileConfig['column']})
+                            <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                                <a href="{{ route('questions.file', ['question' => $question->id, 'kind' => $fileConfig['kind']]) }}" target="_blank" rel="noopener" class="font-medium text-acode-tech hover:underline">{{ $fileConfig['current'] }}</a>
+                                <label class="inline-flex items-center gap-1.5 text-slate-600">
+                                    <input type="checkbox" name="remove_{{ $fileField }}" value="1" class="rounded border-slate-300 text-acode-tech focus:ring-acode-tech">
+                                    {{ $fileConfig['remove'] }}
+                                </label>
+                            </div>
+                            <p class="mt-1 text-xs text-slate-500">Si eliges un archivo nuevo, reemplaza al actual.</p>
+                        @endif
+                    </x-form.group>
+                @endforeach
+            </div>
         </div>
     </x-card>
 
@@ -515,6 +546,21 @@
                     maxlength="5000"
                     placeholder="Ej. Implementa la función sin modificar la firma ni usar librerías externas…"
                 >{{ old('instructions', $question?->questionable?->instructions ?? '') }}</x-form.textarea>
+            </x-form.group>
+
+            {{-- Criterios de evaluación opcionales (RF-BAN-004); se envían a la evaluación asistida por IA (RF-IAR-003) --}}
+            <x-form.group
+                name="evaluation_rubric"
+                label="Criterios de evaluación (opcional)"
+                help-text="Aspectos que deben cumplirse para calificar la solución: lógica, casos límite, buenas prácticas o puntaje por criterio."
+            >
+                <x-form.textarea
+                    name="evaluation_rubric"
+                    x-model="evaluationRubric"
+                    rows="3"
+                    maxlength="10000"
+                    placeholder="Ej. Usa un ciclo, maneja la lista vacía y devuelve el resultado sin imprimirlo…"
+                >{{ old('evaluation_rubric', $question?->questionable?->evaluation_rubric ?? '') }}</x-form.textarea>
             </x-form.group>
 
             <x-form.group
@@ -868,24 +914,7 @@
                     },
 
                     get codeExtension() {
-                        const map = {
-                            python: 'py',
-                            py: 'py',
-                            javascript: 'js',
-                            js: 'js',
-                            typescript: 'ts',
-                            ts: 'ts',
-                            php: 'php',
-                            java: 'java',
-                            sql: 'sql',
-                            c: 'c',
-                            'c++': 'cpp',
-                            cpp: 'cpp',
-                            'c#': 'cs',
-                            csharp: 'cs',
-                            go: 'go',
-                            golang: 'go',
-                        };
+                        const map = @js(\App\Models\CodeItem::FILE_EXTENSIONS);
                         const normalized = (this.programmingLanguage || '').trim().toLowerCase();
                         return map[normalized] || 'txt';
                     },

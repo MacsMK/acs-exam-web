@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: questions/show.blade.php (MPW-V2 §2.4, §5.2.2, §6.3, §7.3, §7.8, §8.4, §8.7, Tabla 20, Tabla 31, RF-BAN-007, RF-BAN-010) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Vista: questions/show.blade.php (MPW-V3 §2.4, §5.2.2, §6.3, §7.3, §7.8, §8.4, §8.7, Tabla 10, RF-BAN-007, RF-BAN-010) --}}
 @extends('layouts.app')
 
 @section('title', 'Detalle del Reactivo · ' . $question->title)
@@ -119,9 +119,9 @@
                 <span class="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     Enunciado o Planteamiento Principal
                 </span>
-                <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm leading-6 whitespace-pre-line">
-                    {{ $question->stem }}
-                </div>
+                {{-- whitespace-pre-wrap conserva espacios y sangrías del código en el enunciado (RF-BAN-014) --}}
+                <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm leading-6 whitespace-pre-wrap break-words">{{ $question->stem }}</div>
+                <x-question.files :question-id="$question->id" :has-image="$question->image_path !== null" :has-pdf="$question->pdf_path !== null" />
             </div>
         </x-card>
 
@@ -321,7 +321,7 @@
                 </div>
                 @break
 
-            {{-- 4. Código Fuente (MPW-V2 Tabla 13 & MC-V2 Tabla 4) --}}
+            {{-- 4. Código Fuente (MPW-V3 Tabla 14 & MC-V3 Tabla 4) --}}
             @case('code')
                 <x-card>
                     <div class="space-y-5">
@@ -342,15 +342,25 @@
                             </div>
                         </div>
 
-                        {{-- Instrucciones técnicas --}}
-                        <div>
-                            <span class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                Instrucciones Técnicas
-                            </span>
-                            <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 leading-5">
-                                {{ $question->questionable->instructions }}
+                        {{-- Instrucciones técnicas (opcionales: solo se muestran si existen) --}}
+                        @if (filled($question->questionable->instructions))
+                            <div>
+                                <span class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                                    Instrucciones Técnicas
+                                </span>
+                                <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 leading-5 whitespace-pre-wrap">{{ $question->questionable->instructions }}</div>
                             </div>
-                        </div>
+                        @endif
+
+                        {{-- Criterios de evaluación (opcionales, RF-BAN-004) --}}
+                        @if (filled($question->questionable->evaluation_rubric))
+                            <div>
+                                <span class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                                    Criterios de Evaluación
+                                </span>
+                                <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 leading-5 whitespace-pre-wrap">{{ $question->questionable->evaluation_rubric }}</div>
+                            </div>
+                        @endif
 
                         {{-- Código inicial si aplica --}}
                         @if (!empty($question->questionable->starter_code))
@@ -363,7 +373,7 @@
                                 </div>
                                 <div class="rounded-lg overflow-hidden border border-slate-300 border-l-4 border-l-acode-primary bg-slate-100">
                                     <div class="bg-white/80 px-3.5 py-1.5 border-b border-slate-200 text-xs font-mono text-slate-600 flex items-center justify-between">
-                                        <span>starter_code.{{ strtolower($question->questionable->programming_language ?? 'txt') }}</span>
+                                        <span>starter_code.{{ $question->questionable->fileExtension() }}</span>
                                         <span class="uppercase tracking-wider text-slate-500 font-sans font-semibold">Sólo lectura</span>
                                     </div>
                                     <pre class="p-3.5 text-xs font-mono text-acode-ink overflow-x-auto leading-5"><code>{{ $question->questionable->starter_code }}</code></pre>
@@ -381,7 +391,7 @@
                             </div>
                             <div class="rounded-lg overflow-hidden border border-slate-300 border-l-4 border-l-acode-accent bg-slate-100">
                                 <div class="bg-white/80 px-3.5 py-1.5 border-b border-slate-200 text-xs font-mono text-slate-600 flex items-center justify-between">
-                                    <span>solution.{{ strtolower($question->questionable->programming_language ?? 'txt') }}</span>
+                                    <span>solution.{{ $question->questionable->fileExtension() }}</span>
                                     <span class="uppercase tracking-wider text-acode-accent font-sans font-semibold">Respuesta Correcta</span>
                                 </div>
                                 <pre class="p-3.5 text-xs font-mono text-acode-ink overflow-x-auto leading-5"><code>{{ $question->questionable->reference_solution }}</code></pre>
@@ -468,7 +478,7 @@
                     {{-- Enunciado original de referencia --}}
                     <div class="p-3 bg-white rounded-lg border border-slate-200 text-sm">
                         <span class="font-semibold text-slate-500 block text-xs uppercase tracking-wider mb-1">Enunciado Original de Referencia</span>
-                        <p class="text-slate-700 whitespace-pre-line leading-5">"{{ $question->stem }}"</p>
+                        <p class="text-slate-700 whitespace-pre-wrap break-words leading-5">"{{ $question->stem }}"</p>
                     </div>
 
                     @if ($errors->paraphrase->any() || $errors->has('stem'))
@@ -531,9 +541,7 @@
                                         Registrada {{ $paraphrase->created_at?->diffForHumans() ?? 'recientemente' }}
                                     </span>
                                 </div>
-                                <p class="text-sm text-slate-700 leading-5">
-                                    {{ $paraphrase->stem }}
-                                </p>
+                                <p class="text-sm text-slate-700 leading-5 whitespace-pre-wrap break-words">{{ $paraphrase->stem }}</p>
                             </div>
 
                             <form
@@ -628,7 +636,7 @@
             function confirmDeleteBottom() {
                 AcodeAlert.confirm({
                     title: '¿Eliminar reactivo?',
-                    text: 'El reactivo "' + questionTitleLabel + '" será retirado de tu catálogo activo.',
+                    text: 'El reactivo "' + questionTitleLabel + '" será retirado de tu banco. Los exámenes donde ya se usó lo conservarán.',
                     confirmButtonText: 'Eliminar',
                     cancelButtonText: 'Cancelar',
                     isDanger: true,

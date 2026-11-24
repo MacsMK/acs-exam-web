@@ -7,7 +7,7 @@
     Descripción: Panel de control del estudiante homologado al UI Kit A-Code:
                  encabezado institucional, tarjetas KPI interactivas, asignaturas
                  matriculadas, exámenes disponibles e historial de intentos
-                 (MPW-V2 §7.3, §7.4.2, §7.8.2, §8.1–§8.4; MC-V2 §2.4).
+                 (MPW-V3 §7.3, §7.4.2, §7.8.2, §8.1–§8.4; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')
@@ -145,7 +145,7 @@
                         <x-badge variant="neutral">{{ $exam->exam_questions_count }} reactivos</x-badge>
                     </x-table.td>
                     <x-table.td align="center">
-                        <span class="text-xs font-mono text-slate-600">{{ $exam->total_duration_minutes ?? $exam->duration_minutes ?? 60 }} min</span>
+                        <span class="text-xs font-mono text-slate-600">{{ $exam->maxDurationMinutes() }} min</span>
                     </x-table.td>
                     <x-table.td align="right">
                         <x-button :href="route('student.exams.instructions', $exam)" variant="primary" size="sm">

@@ -8,7 +8,7 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     AttemptController.php
  * Ubicación:   app/Http/Controllers/AttemptController.php
- * Descripción: Versión web (sesión) de la aplicación de examen (MPW-V2 §5.6,
+ * Descripción: Versión web (sesión) de la aplicación de examen (MPW-V3 §5.6,
  *              §6.1, §6.3): delega a AttemptService y bloquea envíos fuera
  *              de secuencia o en intentos inactivos.
  * ============================================================================
@@ -30,6 +30,8 @@ use Illuminate\Http\RedirectResponse;
 
 class AttemptController extends Controller
 {
+    private const OTHER_SESSION_MESSAGE = 'Este intento está abierto en otra sesión o dispositivo. Ciérralo ahí o espera un minuto e inténtalo de nuevo.';
+
     public function __construct(
         private readonly AttemptService $attemptService,
         private readonly StudentResultService $studentResultService,
@@ -55,6 +57,10 @@ class AttemptController extends Controller
             return redirect()->route('attempts.result', $attempt);
         }
 
+        if (! $this->attemptService->sessionAvailable($attempt, $this->sessionHolder())) {
+            return redirect()->route('student.exams.index')->withErrors(['attempt' => self::OTHER_SESSION_MESSAGE]);
+        }
+
         $attempt->loadMissing('exam');
         $current = $this->attemptService->currentUnansweredQuestion($attempt);
 
@@ -64,7 +70,12 @@ class AttemptController extends Controller
             return redirect()->route('attempts.result', $attempt);
         }
 
-        return view('exams.take-exam', ['attempt' => $attempt, 'current' => $current]);
+        return view('exams.take-exam', [
+            'attempt' => $attempt,
+            'current' => $current,
+            // Borrador guardado de la pregunta activa (RF-EXA-040, RF-EXA-048)
+            'draft' => $this->attemptService->draftFor($attempt, (int) $current['exam_question_id']),
+        ]);
     }
 
     public function answer(AttemptAnswerWebRequest $request, StudentAttempt $attempt): RedirectResponse
@@ -76,6 +87,10 @@ class AttemptController extends Controller
                 ->withErrors(['attempt' => 'El intento ya no se encuentra activo.']);
         }
 
+        if (! $this->attemptService->sessionAvailable($attempt, $this->sessionHolder())) {
+            return redirect()->route('student.exams.index')->withErrors(['attempt' => self::OTHER_SESSION_MESSAGE]);
+        }
+
         $data = $request->validated();
         $current = $this->attemptService->currentUnansweredQuestion($attempt);
 
@@ -85,12 +100,7 @@ class AttemptController extends Controller
             'La pregunta enviada no corresponde al reactivo activo en secuencia.',
         );
 
-        $answerPayload = match (true) {
-            $request->has('selected_option_index') => ['selected_option_index' => (int) $request->input('selected_option_index')],
-            $request->has('pairs') => $request->input('pairs'),
-            $request->has('given_answer') => $request->input('given_answer'),
-            default => (string) ($request->input('answer_text') ?? ''),
-        };
+        $answerPayload = $this->answerPayloadFrom($request);
 
         try {
             $isLate = $this->attemptService->submitAnswer($attempt, (int) $data['exam_question_id'], $answerPayload);
@@ -100,7 +110,7 @@ class AttemptController extends Controller
 
         $next = redirect()->route('attempts.show', $attempt);
 
-        // Mensaje oficial "Tiempo agotado" (MPW-V2 §7.8) cuando la respuesta llegó fuera de tiempo.
+        // Mensaje oficial "Tiempo agotado" (MPW-V3 §7.8) cuando la respuesta llegó fuera de tiempo.
         return $isLate
             ? $next->with('status', 'El tiempo asignado a este reactivo ha concluido. Tu avance fue guardado.')
             : $next;
@@ -108,7 +118,7 @@ class AttemptController extends Controller
 
     /**
      * Registra un incidente anti-trampa detectado en el navegador web durante
-     * el intento activo y emite el evento en vivo por Reverb (MPW-V2 §7.7, ADR-042).
+     * el intento activo y emite el evento en vivo por Reverb (MPW-V3 §7.7, ADR-042).
      */
     public function incident(AttemptIncidentStoreRequest $request, StudentAttempt $attempt): JsonResponse
     {
@@ -180,6 +190,72 @@ class AttemptController extends Controller
             'attempt' => $attempt->loadMissing('exam', 'group.teacher'),
             'reviewData' => $reviewData,
         ]);
+    }
+
+    /**
+     * Guarda el borrador de la pregunta activa sin calificarla (RF-EXA-040). La
+     * vista solo marca la respuesta como guardada al recibir esta confirmación
+     * (RF-EXA-041).
+     */
+    public function draft(AttemptAnswerWebRequest $request, StudentAttempt $attempt): JsonResponse
+    {
+        $this->authorizeOwnership($attempt);
+
+        if (! $this->attemptService->sessionAvailable($attempt, $this->sessionHolder())) {
+            return response()->json(['saved' => false, 'message' => self::OTHER_SESSION_MESSAGE], 409);
+        }
+
+        try {
+            $this->attemptService->saveDraft(
+                $attempt,
+                (int) $request->validated('exam_question_id'),
+                $this->answerPayloadFrom($request),
+            );
+        } catch (DomainException $e) {
+            return response()->json(['saved' => false, 'message' => $e->getMessage()], 409);
+        }
+
+        return response()->json(['saved' => true, 'saved_at' => now()->toIso8601String()]);
+    }
+
+    /**
+     * Normaliza la respuesta del formulario web según el tipo de pregunta.
+     */
+    private function answerPayloadFrom(AttemptAnswerWebRequest $request): mixed
+    {
+        return match (true) {
+            $request->has('selected_option_index') => ['selected_option_index' => (int) $request->input('selected_option_index')],
+            $request->has('pairs') => $request->input('pairs'),
+            $request->has('given_answer') => $request->input('given_answer'),
+            default => (string) ($request->input('answer_text') ?? ''),
+        };
+    }
+
+    /**
+     * Señal de presencia de la pestaña que presenta el intento (RF-EXA-049).
+     */
+    public function heartbeat(StudentAttempt $attempt): JsonResponse
+    {
+        $this->authorizeOwnership($attempt);
+
+        if ($attempt->status !== 'in_progress') {
+            return response()->json(['active' => false, 'redirect_url' => route('attempts.result', $attempt)], 409);
+        }
+
+        if (! $this->attemptService->acquireSession($attempt, $this->sessionHolder())) {
+            return response()->json([
+                'active' => false,
+                'message' => self::OTHER_SESSION_MESSAGE,
+                'redirect_url' => route('student.exams.index'),
+            ], 409);
+        }
+
+        return response()->json(['active' => true]);
+    }
+
+    private function sessionHolder(): string
+    {
+        return 'web:' . request()->session()->getId();
     }
 
     private function authorizeOwnership(StudentAttempt $attempt): void

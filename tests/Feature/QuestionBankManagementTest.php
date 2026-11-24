@@ -33,6 +33,7 @@ use App\Models\StudentAttempt;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class QuestionBankManagementTest extends TestCase
@@ -258,6 +259,56 @@ class QuestionBankManagementTest extends TestCase
     }
 
     /**
+     * 3.5 Código fuente: el archivo usa la extensión real del lenguaje (solution.py)
+     *     y las instrucciones técnicas, al ser opcionales, no se muestran vacías.
+     */
+    public function test_code_question_detail_uses_file_extension_and_hides_empty_instructions(): void
+    {
+        $teacher = $this->createTeacher();
+        $codeQuestion = $this->createCodeQuestion($teacher, ['title' => 'Código sin instrucciones']);
+        $codeQuestion->questionable->update(['programming_language' => 'Python', 'instructions' => '']);
+
+        $response = $this->actingAs($teacher)->get(route('questions.show', $codeQuestion));
+
+        $response->assertOk();
+        $response->assertSee('solution.py');
+        $response->assertDontSee('solution.python');
+        $response->assertDontSee('Instrucciones Técnicas');
+
+        $this->assertSame('cpp', (new CodeItem(['programming_language' => 'C++']))->fileExtension());
+        $this->assertSame('txt', (new CodeItem(['programming_language' => 'Otro']))->fileExtension());
+    }
+
+    /**
+     * 3.6 Código fuente: criterios de evaluación opcionales (RF-BAN-004), visibles en el detalle.
+     */
+    public function test_code_question_stores_optional_evaluation_criteria(): void
+    {
+        $teacher = $this->createTeacher();
+        $codeQuestion = $this->createCodeQuestion($teacher, ['title' => 'Código con criterios']);
+        $codeQuestion->questionable->update(['evaluation_rubric' => "Usa un ciclo\nManeja la lista vacía"]);
+
+        $this->actingAs($teacher)
+            ->get(route('questions.show', $codeQuestion))
+            ->assertOk()
+            ->assertSee('Criterios de Evaluación')
+            ->assertSee('Maneja la lista vacía');
+
+        $this->actingAs($teacher)->post(route('questions.store'), [
+            'title' => 'Código nuevo con criterios',
+            'stem' => 'Escribe una función que sume una lista.',
+            'question_type' => 'code',
+            'programming_language' => 'Python',
+            'reference_solution' => 'def suma(xs):\n    return sum(xs)',
+            'evaluation_rubric' => 'Maneja la lista vacía',
+            'default_points' => 10,
+            'default_time_seconds' => 120,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('acs_code_items', ['evaluation_rubric' => 'Maneja la lista vacía']);
+    }
+
+    /**
      * 4. Certifica la edición in-situ cuando un reactivo NO está vinculado a ningún examen:
      *    Se modifica directamente el registro existente conservando su ID original.
      */
@@ -425,9 +476,9 @@ class QuestionBankManagementTest extends TestCase
 
     /**
      * 7. Certifica ambas garantías de [ALTA-02] y la resolución 404 de [ALTA-01]:
-     *    (a) Un reactivo vinculado a un examen publicado o con intentos bloquea DELETE con error 'question'
-     *        y mantiene deleted_at === null.
-     *    (b) Un reactivo vinculado únicamente a un examen borrador sin intentos permite SoftDelete,
+     *    (a) RF-BAN-011: un reactivo vinculado a un examen publicado o con intentos también se
+     *        elimina (SoftDelete) y el examen conserva su contenido.
+     *    (b) Un reactivo vinculado a un examen borrador sin intentos permite SoftDelete,
      *        $examQuestion->fresh()->question sigue resolviendo vía withTrashed() sin lanzar null/500,
      *        y acceder por URL a show/edit del reactivo eliminado devuelve 404.
      */
@@ -443,22 +494,23 @@ class QuestionBankManagementTest extends TestCase
             'is_active' => true,
         ]);
 
-        // (a.1) Bloqueo ante examen publicado
+        // (a.1) RF-BAN-011: se elimina aunque esté en un examen publicado; el examen la conserva
         $publishedQuestion = $this->createMultipleChoiceQuestion($teacher, [
             'title' => 'Reactivo En Examen Publicado',
         ]);
-        $this->linkQuestionToExam($teacher, $publishedQuestion, true);
+        $publishedExamQuestion = $this->linkQuestionToExam($teacher, $publishedQuestion, true);
 
-        $blockedPublishedResponse = $this->actingAs($teacher)
-            ->from(route('questions.index'))
-            ->delete(route('questions.destroy', $publishedQuestion));
+        $this->actingAs($teacher)
+            ->delete(route('questions.destroy', $publishedQuestion))
+            ->assertRedirect(route('questions.index'))
+            ->assertSessionHas('status', 'Reactivo eliminado del banco exitosamente.');
 
-        $blockedPublishedResponse->assertRedirect(route('questions.index'));
-        $blockedPublishedResponse->assertSessionHasErrors('question');
-        $this->assertNull($publishedQuestion->fresh()->deleted_at);
-        $this->assertNotSoftDeleted('acs_questions', ['id' => $publishedQuestion->id]);
+        $this->assertSoftDeleted('acs_questions', ['id' => $publishedQuestion->id]);
+        $resolvedPublished = $publishedExamQuestion->fresh()->question;
+        $this->assertNotNull($resolvedPublished);
+        $this->assertNotNull($resolvedPublished->questionable);
 
-        // (a.2) Bloqueo ante examen no publicado pero con intentos de alumnos
+        // (a.2) RF-BAN-011: se elimina aunque el examen tenga intentos; el intento conserva la pregunta
         $attemptedQuestion = $this->createMultipleChoiceQuestion($teacher, [
             'title' => 'Reactivo En Examen Con Intento',
         ]);
@@ -479,13 +531,12 @@ class QuestionBankManagementTest extends TestCase
             'status' => 'submitted',
         ]);
 
-        $blockedAttemptResponse = $this->actingAs($teacher)
-            ->from(route('questions.index'))
-            ->delete(route('questions.destroy', $attemptedQuestion));
+        $this->actingAs($teacher)
+            ->delete(route('questions.destroy', $attemptedQuestion))
+            ->assertRedirect(route('questions.index'));
 
-        $blockedAttemptResponse->assertRedirect(route('questions.index'));
-        $blockedAttemptResponse->assertSessionHasErrors('question');
-        $this->assertNull($attemptedQuestion->fresh()->deleted_at);
+        $this->assertSoftDeleted('acs_questions', ['id' => $attemptedQuestion->id]);
+        $this->assertSame($attemptedQuestion->stem, $attemptedExamQuestion->fresh()->question->stem);
 
         // (b) Examen borrador sin intentos permite SoftDelete preservando FK y withTrashed()
         $draftQuestion = $this->createMultipleChoiceQuestion($teacher, [
@@ -636,6 +687,96 @@ class QuestionBankManagementTest extends TestCase
     // =========================================================================
     // Métodos Auxiliares de Soporte para la Suite de Certificación
     // =========================================================================
+
+    /**
+     * RF-BAN-012 y RF-BAN-013: imagen y PDF opcionales en disco privado, validados en el
+     * servidor, visibles solo para el docente dueño y los alumnos con intento, y
+     * compartidos por las versiones sin borrarse mientras alguna los use.
+     */
+    public function test_question_image_and_pdf_are_private_validated_and_versioned(): void
+    {
+        Storage::fake('local');
+        $teacher = $this->createTeacher();
+        $otherTeacher = $this->createTeacher();
+        $student = User::create([
+            'role' => 'student',
+            'first_name' => 'Alumno',
+            'last_name' => 'Archivos',
+            'email' => uniqid('student-', true) . '@acode.test',
+            'password' => 'Alumno123!',
+            'is_active' => true,
+        ]);
+
+        $payload = [
+            'title' => 'Pregunta con archivos',
+            'stem' => 'Observa la imagen y responde.',
+            'question_type' => 'multiple_choice',
+            'default_points' => 5,
+            'default_time_seconds' => 60,
+            'options' => ['Alfa', 'Beta'],
+            'correct_option_index' => 0,
+        ];
+
+        // Formatos no permitidos se rechazan en el servidor (RNF-SEG-007)
+        $this->actingAs($teacher)->post(route('questions.store'), $payload + [
+            'image' => UploadedFile::fake()->create('diagrama.gif', 100, 'image/gif'),
+            'pdf' => UploadedFile::fake()->create('apoyo.docx', 100, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+        ])->assertSessionHasErrors(['image', 'pdf']);
+
+        $this->actingAs($teacher)->post(route('questions.store'), $payload + [
+            'image' => UploadedFile::fake()->image('diagrama.png', 200, 120),
+            'pdf' => UploadedFile::fake()->create('apoyo.pdf', 200, 'application/pdf'),
+        ])->assertSessionHasNoErrors();
+
+        $question = Question::query()->where('title', 'Pregunta con archivos')->firstOrFail();
+        $this->assertNotNull($question->image_path);
+        $this->assertNotNull($question->pdf_path);
+        Storage::disk('local')->assertExists([$question->image_path, $question->pdf_path]);
+
+        $this->actingAs($teacher)->get(route('questions.show', $question))->assertOk()->assertSee('Ver PDF de apoyo');
+        $this->actingAs($teacher)->get(route('questions.file', [$question->id, 'imagen']))->assertOk();
+        $this->actingAs($otherTeacher)->get(route('questions.file', [$question->id, 'pdf']))->assertForbidden();
+        $this->actingAs($student)->get(route('questions.file', [$question->id, 'imagen']))->assertForbidden();
+
+        // Con un intento en un examen que incluye la pregunta, el alumno sí puede verla
+        $examQuestion = $this->linkQuestionToExam($teacher, $question, true);
+        $group = Group::create(['teacher_id' => $teacher->id, 'name' => 'Grupo Archivos', 'access_folio' => 'FILE001', 'is_closed' => false]);
+        StudentAttempt::create([
+            'exam_id' => $examQuestion->exam_id,
+            'student_id' => $student->id,
+            'group_id' => $group->id,
+            'question_sequence_payload' => [$examQuestion->id],
+            'current_question_index' => 0,
+            'started_at' => now(),
+            'status' => 'submitted',
+        ]);
+        $this->actingAs($student)->get(route('questions.file', [$question->id, 'pdf']))->assertOk();
+
+        // Nueva versión (pregunta en examen) quitando la imagen: la versión anterior la conserva
+        $oldImage = $question->image_path;
+        $this->actingAs($teacher)->put(route('questions.update', $question), $payload + ['remove_image' => '1'])
+            ->assertSessionHasNoErrors();
+        $version = Question::query()->where('parent_question_id', $question->id)->firstOrFail();
+        $this->assertNull($version->image_path);
+        $this->assertSame($question->pdf_path, $version->pdf_path);
+        Storage::disk('local')->assertExists($oldImage);
+
+        // Edición en sitio de la versión (sin examen) quitando el PDF compartido: no se borra del disco
+        $this->actingAs($teacher)->put(route('questions.update', $version), $payload + ['remove_pdf' => '1'])
+            ->assertSessionHasNoErrors();
+        $this->assertNull($version->fresh()->pdf_path);
+        Storage::disk('local')->assertExists($question->pdf_path);
+
+        // Archivo que nadie más usa: al reemplazarlo se borra del disco
+        $this->actingAs($teacher)->put(route('questions.update', $version), $payload + [
+            'image' => UploadedFile::fake()->image('nueva.jpg', 100, 100),
+        ])->assertSessionHasNoErrors();
+        $firstVersionImage = $version->fresh()->image_path;
+        $this->actingAs($teacher)->put(route('questions.update', $version), $payload + [
+            'image' => UploadedFile::fake()->image('otra.png', 100, 100),
+        ])->assertSessionHasNoErrors();
+        Storage::disk('local')->assertMissing($firstVersionImage);
+    }
 
     private function createTeacher(): User
     {

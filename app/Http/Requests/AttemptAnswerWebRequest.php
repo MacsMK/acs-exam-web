@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Ubicación:   app/Http/Requests/AttemptAnswerWebRequest.php
  * Descripción: Validación de envío de respuesta en aplicación de examen web
  *              con integridad biyectiva en relación de columnas [CRÍTICA-03]
- *              (attempts.answer, MPW-V2 §6.3, Tabla 17).
+ *              (attempts.answer, MPW-V3 §6.3, Tabla 18).
  * ============================================================================
  */
 

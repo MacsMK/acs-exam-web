@@ -9,16 +9,20 @@ declare(strict_types=1);
  * Archivo:     GroupController.php
  * Ubicación:   app/Http/Controllers/GroupController.php
  * Descripción: CRUD de grupos del docente + folio/QR y cierre semestral seguro
- *              (RW-32 a RW-36, RF-GRU-018, MPW-V2 §5.2.1, §6.1).
+ *              (RW-32 a RW-36, RF-GRU-018, MPW-V3 §5.2.1, §6.1).
  * ============================================================================
  */
 
 namespace App\Http\Controllers;
 
 use App\Http\Requests\GroupStoreRequest;
+use App\Http\Requests\GroupUpdateRequest;
 use App\Models\Group;
 use App\Models\StudentAttempt;
+use App\Models\User;
+use App\Services\SubscriptionLimitService;
 use App\Services\GroupEnrollmentService;
+use App\Services\GroupRetentionService;
 use DomainException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -50,7 +54,36 @@ class GroupController extends Controller
         return redirect()->route('groups.show', $group)->with('status', 'Grupo creado.');
     }
 
-    public function show(Group $group): View
+    /**
+     * Formulario de modificación de un grupo activo (RF-GRU-003, ACT-WEB-020).
+     */
+    public function edit(Group $group): View|RedirectResponse
+    {
+        $this->authorizeOwnership($group);
+
+        if ($group->is_closed) {
+            return redirect()
+                ->route('groups.show', $group)
+                ->withErrors(['group' => 'Solo puedes modificar grupos activos. Reabre el grupo para editarlo.']);
+        }
+
+        return view('groups.edit', ['group' => $group]);
+    }
+
+    public function update(GroupUpdateRequest $request, Group $group): RedirectResponse
+    {
+        $this->authorizeOwnership($group);
+
+        try {
+            $this->groupEnrollmentService->updateGroup($group, $request->validated());
+        } catch (DomainException $e) {
+            return redirect()->route('groups.show', $group)->withErrors(['group' => $e->getMessage()]);
+        }
+
+        return redirect()->route('groups.show', $group)->with('status', 'Grupo actualizado.');
+    }
+
+    public function show(Group $group, GroupRetentionService $retention): View
     {
         $this->authorizeOwnership($group);
 
@@ -83,6 +116,7 @@ class GroupController extends Controller
         return view('groups.show', [
             'group' => $group,
             'attempts' => $attempts,
+            'deletionDate' => $retention->deletionDateFor($group),
         ]);
     }
 
@@ -99,11 +133,32 @@ class GroupController extends Controller
         return redirect()->route('groups.show', $group)->with('status', 'Grupo cerrado (cierre semestral, RW-35).');
     }
 
-    public function reopen(Group $group): RedirectResponse
+    /**
+     * Retiro de un estudiante por el docente (RF-GRU-011, RF-GRU-016, ACT-WEB-021).
+     */
+    public function removeStudent(Group $group, User $student): RedirectResponse
+    {
+        $this->authorizeOwnership($group);
+
+        try {
+            $this->groupEnrollmentService->removeStudent($group, $student, auth()->user());
+        } catch (DomainException $e) {
+            return redirect()->route('groups.show', $group)->withErrors(['student' => $e->getMessage()]);
+        }
+
+        return redirect()
+            ->route('groups.show', $group)
+            ->with('status', "Se retiró a {$student->full_name} del grupo. Sus registros académicos se conservan.");
+    }
+
+    public function reopen(Group $group, SubscriptionLimitService $subscriptionLimitService): RedirectResponse
     {
         $this->authorizeOwnership($group);
 
         abort_unless($group->is_closed, 409, 'El grupo ya está activo.');
+
+        // Reabrir vuelve a ocupar un lugar del límite de grupos activos (RF-GRU-014, ACT-WEB-051)
+        $subscriptionLimitService->ensureCanReopenGroup($group->teacher()->firstOrFail());
 
         $group->update([
             'is_closed' => false,

@@ -9,9 +9,9 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        NormalizesQuestionInputs.php
  * Ubicación:      app/Http/Requests/Concerns/NormalizesQuestionInputs.php
- * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V2 §6.3, Tabla 17)
+ * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §6.3, Tabla 18)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.2.0
  * Fecha Creación: 12/11/2026
  * Descripción:    Trait compartido para saneamiento Unicode de entradas de
  *                 reactivos, reglas polimórficas unificadas, validación de
@@ -253,7 +253,8 @@ trait NormalizesQuestionInputs
 
             // open
             $prefix . 'reference_answer' => ["exclude_unless:{$typeKey},open", 'required', 'string', 'max:10000'],
-            $prefix . 'evaluation_rubric' => ["exclude_unless:{$typeKey},open", 'nullable', 'string', 'max:10000'],
+            // Criterios opcionales en preguntas abiertas y de programación (RF-BAN-003, RF-BAN-004)
+            $prefix . 'evaluation_rubric' => ["exclude_unless:{$typeKey},open,code", 'nullable', 'string', 'max:10000'],
 
             // code
             $prefix . 'programming_language' => ["exclude_unless:{$typeKey},code", 'required', 'string', 'max:40'],
@@ -291,7 +292,7 @@ trait NormalizesQuestionInputs
     }
 
     /**
-     * Mensajes canónicos en español conforme a MPW-V2 Tabla 17.
+     * Mensajes canónicos en español conforme a MPW-V3 Tabla 18.
      *
      * @return array<string, string>
      */
@@ -406,4 +407,36 @@ trait NormalizesQuestionInputs
 
         return $value;
     }
+
+    /**
+     * Imagen (JPG/PNG) y PDF opcionales de la pregunta, uno de cada tipo y de hasta
+     * 5 MB, validados en el servidor (RF-BAN-012, RF-BAN-013, RNF-SEG-007).
+     *
+     * @return array<string, array<int, string>>
+     */
+    protected function questionFileRules(): array
+    {
+        return [
+            'image' => ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:5120'],
+            'pdf' => ['nullable', 'file', 'mimes:pdf', 'max:5120'],
+            'remove_image' => ['nullable', 'boolean'],
+            'remove_pdf' => ['nullable', 'boolean'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function questionFileMessages(): array
+    {
+        return [
+            'image.file' => 'La imagen no tiene un formato válido',
+            'image.mimes' => 'La imagen debe ser un archivo JPG o PNG',
+            'image.max' => 'La imagen no debe pesar más de 5 MB',
+            'pdf.file' => 'El PDF no tiene un formato válido',
+            'pdf.mimes' => 'El archivo adjunto debe ser un PDF',
+            'pdf.max' => 'El PDF no debe pesar más de 5 MB',
+        ];
+    }
+
 }

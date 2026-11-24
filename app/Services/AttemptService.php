@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     AttemptService.php
  * Ubicación:   app/Services/AttemptService.php
  * Descripción: Lógica transaccional de aplicación de examen (Módulo 7)
- *              compartida entre el panel web y la API móvil v1 (MPW-V2 §5.6,
+ *              compartida entre el panel web y la API móvil v1 (MPW-V3 §5.6,
  *              §6.4): validación server-side de ventana y cronómetro,
  *              calificación proporcional en relación de columnas (RF-EVA-002),
  *              omisión de IA en respuestas en blanco (RF-EVA-008) y exposición
@@ -22,6 +22,7 @@ namespace App\Services;
 use App\Events\ExamAttemptIncidentReported;
 use App\Events\ExamAttemptStarted;
 use App\Events\ExamAttemptSubmitted;
+use App\Models\AuditLog;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
 use App\Models\QuestionParaphrase;
@@ -30,15 +31,18 @@ use App\Models\StudentAttempt;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use DomainException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class AttemptService
 {
     /**
      * Tolerancia técnica de red, en segundos, que se suma al límite de cada
-     * pregunta antes de considerar una respuesta extemporánea (MPW-V2 §5.6.1
-     * y MPM-V4 §5.4.1: tres segundos).
+     * pregunta antes de considerar una respuesta extemporánea (MPW-V3 §5.6.1
+     * y MPM-V3 §5.4.1: tres segundos).
      */
     public const QUESTION_TIME_TOLERANCE_SECONDS = 3;
 
@@ -52,6 +56,94 @@ class AttemptService
     public function start(Exam $exam, User $student): StudentAttempt
     {
         return $this->startOrResumeAttempt($exam, $student);
+    }
+
+    /**
+     * Intento vigente (el más reciente) del alumno en el examen, o null si no
+     * lo ha iniciado (RF-EXA-052).
+     */
+    public function latestAttemptFor(Exam $exam, User $student): ?StudentAttempt
+    {
+        return StudentAttempt::where('exam_id', $exam->id)
+            ->where('student_id', $student->id)
+            ->orderByDesc('attempt_number')
+            ->first();
+    }
+
+    /**
+     * Indica si el docente puede autorizar un intento adicional a partir de
+     * este intento: debe ser el vigente, estar terminado, no tener ya una
+     * autorización y el examen seguir abierto (decisión del 22/11/2026: la
+     * reaplicación solo se presenta dentro de la ventana de acceso).
+     */
+    public function canAuthorizeReapplication(StudentAttempt $attempt): bool
+    {
+        return $this->reapplicationBlocker($attempt) === null;
+    }
+
+    /**
+     * Autoriza un intento adicional individual (RF-EXA-052). El intento
+     * actual se conserva con sus resultados; el alumno presenta el siguiente
+     * al volver a iniciar el examen y la calificación vigente pasa a ser la
+     * del nuevo intento.
+     *
+     * @throws DomainException Si el intento no admite reaplicación.
+     */
+    public function authorizeReapplication(StudentAttempt $attempt, User $teacher): StudentAttempt
+    {
+        return DB::transaction(function () use ($attempt, $teacher): StudentAttempt {
+            $locked = StudentAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            $locked->setRelation('exam', $attempt->exam ?? $locked->exam()->firstOrFail());
+
+            $blocker = $this->reapplicationBlocker($locked);
+            if ($blocker !== null) {
+                throw new DomainException($blocker);
+            }
+
+            $locked->update(['reapplication_authorized_at' => now()]);
+
+            AuditLog::query()->create([
+                'user_id' => $teacher->id,
+                'action' => StudentAttempt::ACTION_REAPPLICATION_AUTHORIZED,
+                'auditable_type' => StudentAttempt::class,
+                'auditable_id' => $locked->id,
+                'new_values' => [
+                    'student_id' => (int) $locked->student_id,
+                    'attempt_number' => (int) $locked->attempt_number,
+                    'next_attempt_number' => (int) $locked->attempt_number + 1,
+                ],
+            ]);
+
+            return $locked;
+        });
+    }
+
+    private function reapplicationBlocker(StudentAttempt $attempt): ?string
+    {
+        $exam = $attempt->exam;
+
+        if ($attempt->reapplication_authorized_at !== null) {
+            return 'Este alumno ya tiene una reaplicación autorizada.';
+        }
+
+        if ($attempt->status === 'in_progress') {
+            return 'El alumno aún está presentando este intento.';
+        }
+
+        $isLatest = ! StudentAttempt::where('exam_id', $attempt->exam_id)
+            ->where('student_id', $attempt->student_id)
+            ->where('attempt_number', '>', $attempt->attempt_number)
+            ->exists();
+
+        if (! $isLatest) {
+            return 'Solo se puede autorizar la reaplicación desde el intento más reciente.';
+        }
+
+        if (! $exam->is_published || ($exam->ends_at !== null && now()->gte($exam->ends_at))) {
+            return 'La reaplicación solo se autoriza mientras el examen sigue abierto.';
+        }
+
+        return null;
     }
 
     /**
@@ -81,17 +173,23 @@ class AttemptService
         $attempt = DB::transaction(function () use ($exam, $student, $group): StudentAttempt {
             $existing = StudentAttempt::where('exam_id', $exam->id)
                 ->where('student_id', $student->id)
+                ->orderByDesc('attempt_number')
+                ->lockForUpdate()
                 ->first();
 
-            if ($existing !== null) {
+            // RF-EXA-051: un intento por alumno; RF-EXA-052: solo una reaplicación
+            // autorizada por el docente abre el siguiente, conservando el anterior.
+            if ($existing !== null && ($existing->reapplication_authorized_at === null || $existing->status === 'in_progress')) {
                 return $existing;
             }
+
+            $attemptNumber = $existing === null ? 1 : (int) $existing->attempt_number + 1;
 
             $sequence = $this->assemblyService->buildQuestionSequence($exam);
             $paraphraseSnapshot = $this->buildParaphraseSnapshot($sequence, (int) $student->id);
 
             return StudentAttempt::firstOrCreate(
-                ['exam_id' => $exam->id, 'student_id' => $student->id],
+                ['exam_id' => $exam->id, 'student_id' => $student->id, 'attempt_number' => $attemptNumber],
                 [
                     'group_id' => $group->id,
                     'question_sequence_payload' => $sequence,
@@ -108,14 +206,14 @@ class AttemptService
             $this->examNotifications->examStarted($exam, $attempt);
 
             $studentUser = $attempt->relationLoaded('student') ? $attempt->student : $attempt->student()->first();
-            ExamAttemptStarted::dispatch(
+            $this->broadcastSafely(static fn () => ExamAttemptStarted::dispatch(
                 (int) $exam->id,
                 (int) $attempt->id,
                 (int) $student->id,
                 $studentUser ? $studentUser->full_name : 'Estudiante #' . $student->id,
                 now()->format('H:i:s'),
                 'in_progress'
-            );
+            ));
         }
 
         return $attempt;
@@ -164,7 +262,7 @@ class AttemptService
 
     /**
      * Segundos transcurridos en la pregunta activa según el reloj del
-     * servidor (MPW-V2 §5.6.1: el cliente nunca es la autoridad del tiempo).
+     * servidor (MPW-V3 §5.6.1: el cliente nunca es la autoridad del tiempo).
      */
     public function elapsedOnActiveQuestion(StudentAttempt $attempt): float
     {
@@ -174,7 +272,7 @@ class AttemptService
     /**
      * Segundos que le quedan al alumno en la pregunta activa, entre 0 y el
      * límite de la pregunta. Reabrir la app o volver a consultar el examen ya
-     * no devuelve el tiempo completo (MPM-V4 §5.4.1).
+     * no devuelve el tiempo completo (MPM-V3 §5.4.1).
      */
     public function remainingSeconds(StudentAttempt $attempt, int $timeLimitSeconds): int
     {
@@ -215,7 +313,7 @@ class AttemptService
      * Registra y califica la respuesta de una pregunta validando estado activo
      * y tiempo del lado servidor: la ventana del examen (con margen de 60
      * segundos) y el límite de la propia pregunta (con tolerancia de 3
-     * segundos, MPW-V2 §5.6.1). Una respuesta extemporánea se conserva para
+     * segundos, MPW-V3 §5.6.1). Una respuesta extemporánea se conserva para
      * la revisión docente, pero se califica con cero puntos y sin evaluador
      * de IA; el intento avanza igual a la siguiente pregunta.
      *
@@ -268,7 +366,99 @@ class AttemptService
             $lockedAttempt->increment('current_question_index');
         });
 
+        Cache::forget($this->draftKey($attempt, $examQuestion->id));
+
         return $isLate;
+    }
+
+    /**
+     * Guarda en el servidor el borrador de la pregunta activa mientras el alumno
+     * responde (RF-EXA-040). Solo acepta la pregunta activa de un intento en
+     * curso; el borrador dura hasta el tiempo máximo del intento y se descarta
+     * al registrar la respuesta. No califica ni avanza la secuencia.
+     *
+     * @throws DomainException
+     */
+    public function saveDraft(StudentAttempt $attempt, int $examQuestionId, mixed $payload): void
+    {
+        if (! $this->isInProgress($attempt)) {
+            throw new DomainException('El intento ya no se encuentra activo.');
+        }
+
+        $current = $this->currentQuestion($attempt);
+        if ($current === null || (int) $current['exam_question_id'] !== $examQuestionId) {
+            throw new DomainException('La pregunta ya no es la activa; vuelve a consultar el examen.');
+        }
+
+        $deadline = $this->attemptDeadline($attempt) ?? now()->addHours(6);
+        Cache::put($this->draftKey($attempt, $examQuestionId), $payload, $deadline);
+    }
+
+    /**
+     * Borrador guardado de la pregunta activa, para recuperarlo al volver al
+     * intento (RF-EXA-048). Null si no hay.
+     */
+    public function draftFor(StudentAttempt $attempt, int $examQuestionId): mixed
+    {
+        return Cache::get($this->draftKey($attempt, $examQuestionId));
+    }
+
+    /**
+     * Segundos sin señal de presencia tras los cuales otra sesión puede tomar el
+     * intento (por ejemplo, si se cerró el navegador o se cambió de dispositivo).
+     */
+    public const SESSION_IDLE_SECONDS = 45;
+
+    /**
+     * Registra la sesión que presenta el intento (RF-EXA-049). Rechaza si otra
+     * sesión o dispositivo dio señal de presencia en los últimos
+     * SESSION_IDLE_SECONDS segundos.
+     */
+    public function acquireSession(StudentAttempt $attempt, string $holder): bool
+    {
+        if (! $this->sessionAvailable($attempt, $holder)) {
+            return false;
+        }
+
+        $deadline = $this->attemptDeadline($attempt) ?? now()->addHours(6);
+        Cache::put($this->sessionKey($attempt), ['holder' => $holder, 'seen' => now()->getTimestamp()], $deadline);
+
+        return true;
+    }
+
+    /**
+     * Indica si la sesión puede usar el intento: no hay otra sesión activa.
+     */
+    public function sessionAvailable(StudentAttempt $attempt, string $holder): bool
+    {
+        $lock = Cache::get($this->sessionKey($attempt));
+
+        return ! is_array($lock)
+            || ($lock['holder'] ?? null) === $holder
+            || now()->getTimestamp() - (int) ($lock['seen'] ?? 0) >= self::SESSION_IDLE_SECONDS;
+    }
+
+    private function sessionKey(StudentAttempt $attempt): string
+    {
+        return sprintf('attempt-session:%d', $attempt->id);
+    }
+
+    private function draftKey(StudentAttempt $attempt, int $examQuestionId): string
+    {
+        return sprintf('attempt-draft:%d:%d', $attempt->id, $examQuestionId);
+    }
+
+    /**
+     * El monitoreo en tiempo real (Reverb) es auxiliar: si no responde, el
+     * examen continúa y solo se registra el error, igual que con los avisos push.
+     */
+    private function broadcastSafely(callable $dispatch): void
+    {
+        try {
+            $dispatch();
+        } catch (Throwable $e) {
+            Log::warning('No se pudo emitir el evento de monitoreo en tiempo real.', ['reason' => $e->getMessage()]);
+        }
     }
 
     /**
@@ -295,7 +485,7 @@ class AttemptService
             }
         }
 
-        ExamAttemptIncidentReported::dispatch(
+        $this->broadcastSafely(static fn () => ExamAttemptIncidentReported::dispatch(
             (int) $attempt->exam_id,
             (int) $attempt->id,
             (int) $attempt->student_id,
@@ -305,7 +495,7 @@ class AttemptService
             (int) $attempt->incidents_count,
             now()->format('H:i:s'),
             $isCancelled
-        );
+        ));
 
         return $attempt;
     }
@@ -366,7 +556,7 @@ class AttemptService
         $this->examNotifications->attemptClosed($submitted);
 
         $studentUser = $submitted->relationLoaded('student') ? $submitted->student : $submitted->student()->first();
-        ExamAttemptSubmitted::dispatch(
+        $this->broadcastSafely(static fn () => ExamAttemptSubmitted::dispatch(
             (int) $submitted->exam_id,
             (int) $submitted->id,
             (int) $submitted->student_id,
@@ -374,14 +564,14 @@ class AttemptService
             now()->format('H:i:s'),
             $submitted->final_score !== null ? (float) $submitted->final_score : null,
             (string) $submitted->status
-        );
+        ));
 
         return $submitted;
     }
 
     /**
      * Verifica la ventana y duración del intento en el servidor con margen de
-     * tolerancia de red de 60 segundos (MPW-V2 §5.6.1, RNF-CON-001).
+     * tolerancia de red de 60 segundos (MPW-V3 §5.6.1, RNF-CON-001).
      *
      * @throws DomainException
      */
@@ -418,20 +608,43 @@ class AttemptService
     }
 
     /**
-     * Venció la duración del intento o la ventana del examen (tolerancia de
-     * red de 60 segundos en ambos casos).
+     * Venció el tiempo propio del intento (RF-EXA-050): la hora límite del
+     * examen solo impide nuevos inicios, y un intento iniciado continúa hasta
+     * agotar los tiempos de sus preguntas. Si el docente detiene el examen, los
+     * intentos en curso se finalizan en ExamAssemblyService::closeExamEarly
+     * (RF-EXA-024).
      */
     private function deadlineHasPassed(StudentAttempt $attempt, Exam $exam): bool
     {
-        $durationMinutes = (int) ($exam->duration_minutes ?? 0);
-        if ($durationMinutes > 0 && $attempt->started_at !== null) {
-            $deadline = $attempt->started_at->copy()->addMinutes($durationMinutes)->addSeconds(60);
-            if (now()->gt($deadline)) {
-                return true;
-            }
+        $deadline = $this->attemptDeadline($attempt);
+
+        return $deadline !== null && now()->gt($deadline);
+    }
+
+    /**
+     * Momento máximo en que un intento puede seguir recibiendo respuestas: su
+     * inicio más la suma de los tiempos de sus preguntas, la tolerancia de tres
+     * segundos por pregunta y la tolerancia de red de 60 segundos.
+     */
+    public function attemptDeadline(StudentAttempt $attempt): ?CarbonInterface
+    {
+        if ($attempt->started_at === null) {
+            return null;
         }
 
-        return $exam->ends_at !== null && now()->gt($exam->ends_at->copy()->addSeconds(60));
+        $sequence = array_map('intval', $attempt->question_sequence_payload ?? []);
+
+        // Sin preguntas no hay tiempos que sumar: el límite es el cierre del examen
+        if ($sequence === []) {
+            $exam = $attempt->relationLoaded('exam') ? $attempt->exam : $attempt->exam()->first();
+
+            return $exam?->ends_at?->copy()->addSeconds(60);
+        }
+
+        $totalSeconds = (int) ExamQuestion::query()->whereIn('id', $sequence)->sum('time_limit_seconds');
+
+        return $attempt->started_at->copy()
+            ->addSeconds($totalSeconds + count($sequence) * self::QUESTION_TIME_TOLERANCE_SECONDS + 60);
     }
 
     /**
@@ -452,7 +665,9 @@ class AttemptService
      */
     private function gradeMultipleChoice(mixed $item, mixed $answerPayload, float $pointsWeight): array
     {
-        $selectedIndex = (int) (is_array($answerPayload) ? ($answerPayload['selected_option_index'] ?? -1) : $answerPayload);
+        $rawIndex = is_array($answerPayload) ? ($answerPayload['selected_option_index'] ?? null) : $answerPayload;
+        // Sin selección (avance sin responder o tiempo agotado, RF-EXA-031) vale cero: '' no debe leerse como la opción 0
+        $selectedIndex = is_int($rawIndex) || (is_string($rawIndex) && ctype_digit($rawIndex)) ? (int) $rawIndex : -1;
         $isCorrect = $selectedIndex === (int) $item->correct_option_index;
 
         return ['is_correct' => $isCorrect, 'points_awarded' => $isCorrect ? $pointsWeight : 0.0];
@@ -617,6 +832,9 @@ class AttemptService
             'title' => $question->title,
             'stem' => $stem,
             'question_type' => $question->question_type,
+            // Imagen y PDF de la pregunta (RF-BAN-012, RF-BAN-013)
+            'has_image' => $question->image_path !== null,
+            'has_pdf' => $question->pdf_path !== null,
         ];
 
         if ($resolved['paraphrase_id'] !== null) {

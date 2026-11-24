@@ -8,7 +8,7 @@ declare(strict_types=1);
  * ============================================================================
  * Archivo:     LoginRequest.php
  * Ubicación:   app/Http/Requests/LoginRequest.php
- * Descripción: Login con correo y contraseña (MPM-V2 §6.6.1): paso 1 de 2
+ * Descripción: Login con correo y contraseña (MPM-V3 §6.6.1): paso 1 de 2
  *              antes del código de un solo uso (2FA).
  * ============================================================================
  */

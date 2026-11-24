@@ -6,7 +6,7 @@
     Ubicación:   resources/views/student/grades/index.blade.php
     Descripción: Vista de Mis Calificaciones e Historial Académico del estudiante
                  homologada al UI Kit A-Code (RF-REP-003, RF-REP-007, RF-REP-012;
-                 MPW-V2 §7.3, §7.4.2, §7.8.2, §8.1–§8.4; MC-V2 §2.4).
+                 MPW-V3 §7.3, §7.4.2, §7.8.2, §8.1–§8.4; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')

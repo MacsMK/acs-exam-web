@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-search-filter (MPW-V2 §7.8.2, §8.8, Tabla 20, Tabla 28) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-search-filter (MPW-V3 §7.8.2, §8.8, Tabla 10, Tabla 18) --}}
 @props([
     'action' => request()->url(),
     'method' => 'GET',

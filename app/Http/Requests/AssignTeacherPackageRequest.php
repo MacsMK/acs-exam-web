@@ -15,7 +15,7 @@ declare(strict_types=1);
  * Fecha Creación: 18/11/2026
  * Descripción:    Valida la asignación manual de paquete SaaS y estado de pago
  *                 para una cuenta docente desde el portal Superadministrador
- *                 con mensajes normativos en español (MPW-V2 §6.3, Tabla 17).
+ *                 con mensajes normativos en español (MPW-V3 §6.3, Tabla 18).
  * ============================================================================
  */
 
@@ -55,7 +55,7 @@ class AssignTeacherPackageRequest extends FormRequest
     }
 
     /**
-     * Mensajes de validación normalizados conforme a MPW-V2 §8.11 / Tabla 17.
+     * Mensajes de validación normalizados conforme a MPW-V3 §8.11 / Tabla 18.
      *
      * @return array<string, string>
      */

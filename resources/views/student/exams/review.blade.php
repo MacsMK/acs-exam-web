@@ -6,7 +6,7 @@
     Ubicación:   resources/views/student/exams/review.blade.php
     Descripción: Vista de revisión post-examen con soluciones de referencia y
                  retroalimentación docente autorizada, homologada al UI Kit A-Code
-                 (RF-REP-005 / P-172; MPW-V2 §7.3, §7.4.2, §8.1–§8.3; MC-V2 §2.4).
+                 (RF-REP-005 / P-172; MPW-V3 §7.3, §7.4.2, §8.1–§8.3; MC-V3 §2.4).
     ============================================================================
 --}}
 @extends('layouts.app')
@@ -94,6 +94,7 @@
                     <div class="font-sans text-sm leading-relaxed text-slate-800">
                         {!! nl2br(e($q['stem'])) !!}
                     </div>
+                    <x-question.files class="mt-3" :question-id="$q['id']" :has-image="$q['has_image'] ?? false" :has-pdf="$q['has_pdf'] ?? false" />
                 </div>
 
                 {{-- Respuesta del estudiante vs Solución de referencia --}}

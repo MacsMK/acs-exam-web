@@ -9,9 +9,9 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        QuestionStoreRequest.php
  * Ubicación:      app/Http/Requests/QuestionStoreRequest.php
- * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V2 §6.3, Tabla 7 y Tabla 17)
+ * Requerimiento:  RF-BAN (Banco de Preguntas Polimórfico, MPW-V3 §6.3, Tabla 7 y Tabla 18)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        2.0.0
+ * Versión:        2.1.0
  * Fecha Creación: 26/10/2026
  * Descripción:    Validación tipada de creación de reactivo polimórfico en el
  *                 Banco de Preguntas con saneamiento Unicode, paráfrasis
@@ -42,6 +42,7 @@ class QuestionStoreRequest extends FormRequest
     {
         return array_merge(
             $this->polymorphicQuestionRules(),
+            $this->questionFileRules(),
             [
                 'save_and_new' => ['nullable', 'boolean'],
                 'initial_paraphrases' => ['nullable', 'array', 'list', 'max:3'],
@@ -65,6 +66,7 @@ class QuestionStoreRequest extends FormRequest
     {
         return array_merge(
             $this->polymorphicQuestionMessages(),
+            $this->questionFileMessages(),
             [
                 'save_and_new.boolean' => 'La opción guardar y crear otro debe ser booleana',
                 'initial_paraphrases.array' => 'Las paráfrasis iniciales deben enviarse como un arreglo',

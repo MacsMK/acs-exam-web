@@ -1,4 +1,4 @@
-{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-badge (MPW-V2 §7.3, §8.1.1, §8.6) --}}
+{{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-badge (MPW-V3 §7.3, §8.1.1, §8.6) --}}
 @props([
     'variant' => 'neutral', // success/accent, warning, danger, tech/info, primary, neutral
 ])

@@ -12,7 +12,7 @@ declare(strict_types=1);
  * Requerimiento:  RF-IAR-001..014, RF-EVA-004..013, RNF-PRI-001, RNF-CON-002,
  *                 ADR-059
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Fecha Creación: 19/11/2026
  * Descripción:    Servicio de dominio transaccional que orquesta la evaluación
  *                 asistida por IA bajo demanda (individual y en lote), el
@@ -330,6 +330,11 @@ class AiEvaluationService
 
             if (isset($questionable->starter_code) && trim((string) $questionable->starter_code) !== '') {
                 $context['starter_code'] = (string) $questionable->starter_code;
+            }
+
+            // Criterios de evaluación de programación (RF-BAN-004, RF-IAR-003)
+            if (isset($questionable->evaluation_rubric) && trim((string) $questionable->evaluation_rubric) !== '') {
+                $context['evaluation_rubric'] = trim((string) $questionable->evaluation_rubric);
             }
         }
 

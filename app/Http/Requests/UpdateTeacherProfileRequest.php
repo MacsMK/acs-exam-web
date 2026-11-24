@@ -15,7 +15,7 @@ declare(strict_types=1);
  * Fecha Creación: 18/11/2026
  * Descripción:    Valida la actualización de datos personales, teléfono y
  *                 contraseña del usuario docente autenticado con mensajes
- *                 normativos en español (MPW-V2 §6.3, §8.11, Tabla 17).
+ *                 normativos en español (MPW-V3 §6.3, §8.11, Tabla 18).
  * ============================================================================
  */
 
@@ -58,7 +58,7 @@ class UpdateTeacherProfileRequest extends FormRequest
     }
 
     /**
-     * Mensajes de validación normalizados conforme a MPW-V2 §8.11 / Tabla 17.
+     * Mensajes de validación normalizados conforme a MPW-V3 §8.11 / Tabla 18.
      *
      * @return array<string, string>
      */

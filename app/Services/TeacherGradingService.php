@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Archivo:     TeacherGradingService.php
  * Ubicación:   app/Services/TeacherGradingService.php
  * Descripción: Consulta optimizada sin N+1 de calificaciones y estadísticas
- *              para docentes y alumnos (Módulo 8, MPW-V2 §6.1).
+ *              para docentes y alumnos (Módulo 8, MPW-V3 §6.1).
  * ============================================================================
  */
 
@@ -67,6 +67,7 @@ class TeacherGradingService
     private function studentListRows(User $student, ?int $groupId): Collection
     {
         $published = StudentAttempt::where('student_id', $student->id)
+            ->current()
             ->inCurrentGroupsOfStudent($student->id)
             ->when($groupId !== null, static fn ($query) => $query->where('group_id', $groupId))
             ->whereNotNull('final_score')
@@ -103,6 +104,7 @@ class TeacherGradingService
         }
 
         return StudentAttempt::where('student_id', $user->id)
+            ->current()
             ->inCurrentGroupsOfStudent($user->id)
             ->whereNotNull('final_score')
             ->whereHas('exam', static fn ($query) => $query->where('result_visibility_mode', '!=', 'hidden'))
@@ -127,9 +129,9 @@ class TeacherGradingService
     {
         return Exam::where('teacher_id', $teacher->id)
             ->where('is_published', true)
-            ->whereHas('studentAttempts', static fn ($q) => $q->whereNotNull('final_score'))
+            ->whereHas('studentAttempts', static fn ($q) => $q->current()->whereNotNull('final_score'))
             ->withAvg(
-                ['studentAttempts as average_final_score' => static fn ($q) => $q->whereNotNull('final_score')],
+                ['studentAttempts as average_final_score' => static fn ($q) => $q->current()->whereNotNull('final_score')],
                 'final_score',
             )
             ->get()

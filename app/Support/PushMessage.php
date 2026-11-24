@@ -12,7 +12,7 @@ declare(strict_types=1);
  * Requerimiento:  RF-EXA-054 (Notificación de programación o publicación
  *                 de exámenes); los avisos exam.opened, exam.started y
  *                 exam.finished aún no tienen código en DE-01
- *                 (MPM-V4 §6.8, Tabla 14)
+ *                 (MPM-V3 §6.8, Tabla 14)
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 03/11/2026
@@ -49,7 +49,7 @@ final readonly class PushMessage
     }
 
     /**
-     * Bloque `data` del mensaje FCM (MPM-V4 Tabla 14).
+     * Bloque `data` del mensaje FCM (MPM-V3 Tabla 14).
      *
      * @return array{type: string, exam_id: string, group_id: string}
      */

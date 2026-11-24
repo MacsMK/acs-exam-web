@@ -14,8 +14,8 @@ declare(strict_types=1);
  * Autor:          Calvo Sandoval Miguel Alexander (A-Code Solutions)
  * Versión:        1.0.0
  * Fecha Creación: 03/11/2026
- * Descripción:    Verifica la doble validación de tiempo de MPW-V2 §5.6.1 y
- *                 MPM-V4 §5.4.1: el servidor es la autoridad. El tiempo
+ * Descripción:    Verifica la doble validación de tiempo de MPW-V3 §5.6.1 y
+ *                 MPM-V3 §5.4.1: el servidor es la autoridad. El tiempo
  *                 restante de la pregunta activa sale del reloj del
  *                 servidor (no se reinicia al reabrir la app), una respuesta
  *                 dentro del límite más 3 segundos se califica normal y una
@@ -101,6 +101,99 @@ class ExamQuestionTimingTest extends TestCase
         foreach ([0, 1] as $order) {
             $this->questions[] = $this->attachQuestion($teacher, $section, $order);
         }
+    }
+
+    /**
+     * RF-EXA-026 y RF-EXA-028: el tiempo máximo mostrado al alumno es la suma de
+     * los tiempos por pregunta (2 × 60 s = 2 min), no un valor fijo.
+     */
+    public function test_the_max_duration_is_the_sum_of_the_question_limits(): void
+    {
+        $this->assertSame(2, $this->exam->maxDurationMinutes());
+    }
+
+    /**
+     * RF-EXA-031: avanzar sin responder vale cero puntos, aunque la respuesta
+     * correcta sea la primera opción (el formulario web envía la selección vacía).
+     */
+    public function test_advancing_without_answer_scores_zero_even_if_the_first_option_is_correct(): void
+    {
+        $this->take()->assertOk();
+        $this->questions[0]->questionable->update(['correct_option_index' => 0]);
+
+        $attempt = \App\Models\StudentAttempt::query()->where('exam_id', $this->exam->id)->firstOrFail();
+        $examQuestionId = (int) $attempt->question_sequence_payload[0];
+
+        app(AttemptService::class)->submitAnswer($attempt, $examQuestionId, '');
+
+        $this->assertDatabaseHas('acs_student_answers', [
+            'student_attempt_id' => $attempt->id,
+            'exam_question_id' => $examQuestionId,
+            'points_awarded' => 0,
+        ]);
+    }
+
+    /**
+     * RF-EXA-040 y RF-EXA-048: el borrador de la pregunta activa se guarda en el
+     * servidor, se recupera al volver y se descarta al registrar la respuesta;
+     * no se acepta para una pregunta que no es la activa.
+     */
+    public function test_the_draft_of_the_active_question_is_saved_recovered_and_cleared(): void
+    {
+        $student = User::query()->where('role', 'student')->firstOrFail();
+        $this->actingAs($student)->post(route('attempts.start', $this->exam))->assertRedirect();
+        $attempt = \App\Models\StudentAttempt::query()->where('exam_id', $this->exam->id)->firstOrFail();
+        $sequence = $attempt->question_sequence_payload;
+
+        $this->actingAs($student)
+            ->postJson(route('attempts.draft', $attempt), ['exam_question_id' => $sequence[0], 'selected_option_index' => 1])
+            ->assertOk()
+            ->assertJsonPath('saved', true);
+
+        $this->assertSame(['selected_option_index' => 1], app(AttemptService::class)->draftFor($attempt, (int) $sequence[0]));
+        $this->actingAs($student)->get(route('attempts.show', $attempt))->assertOk()->assertViewHas('draft', ['selected_option_index' => 1]);
+
+        $this->actingAs($student)
+            ->postJson(route('attempts.draft', $attempt), ['exam_question_id' => $sequence[1], 'selected_option_index' => 0])
+            ->assertStatus(409);
+
+        $this->actingAs($student)
+            ->post(route('attempts.answer', $attempt), ['exam_question_id' => $sequence[0], 'selected_option_index' => 1])
+            ->assertRedirect();
+        $this->assertNull(app(AttemptService::class)->draftFor($attempt, (int) $sequence[0]));
+    }
+
+    /**
+     * RF-EXA-049: una sola sesión activa por intento. Mientras una sesión da señal
+     * de presencia, otra sesión o dispositivo no puede abrir ni responder el
+     * intento; pasado el tiempo sin señal, sí puede retomarlo.
+     */
+    public function test_only_one_session_can_use_an_attempt_at_a_time(): void
+    {
+        $this->take()->assertOk();
+        $attempt = \App\Models\StudentAttempt::query()->where('exam_id', $this->exam->id)->firstOrFail();
+        $service = app(AttemptService::class);
+
+        $this->assertFalse($service->acquireSession($attempt, 'web:otra-sesion'));
+        $this->assertFalse($service->sessionAvailable($attempt, 'web:otra-sesion'));
+
+        $this->travel(AttemptService::SESSION_IDLE_SECONDS)->seconds();
+        $this->assertTrue($service->acquireSession($attempt, 'web:otra-sesion'));
+
+        $this->assertSame(409, $this->take()->status());
+    }
+
+    /**
+     * Hallazgo del 22/11/2026: si el servidor de tiempo real (Reverb) no responde,
+     * el examen se inicia igual.
+     */
+    public function test_the_exam_starts_even_if_realtime_broadcasting_fails(): void
+    {
+        $this->mock(\Illuminate\Contracts\Broadcasting\Factory::class, function ($mock): void {
+            $mock->shouldReceive('queue')->andThrow(new \RuntimeException('Reverb no disponible'));
+        });
+
+        $this->take()->assertOk()->assertJsonPath('data.remaining_seconds', self::LIMIT_SECONDS);
     }
 
     public function test_the_tolerance_is_three_seconds_as_the_manuals_define(): void
@@ -197,6 +290,44 @@ class ExamQuestionTimingTest extends TestCase
     // ------------------------------------------------------------------
     // Utilidades
     // ------------------------------------------------------------------
+
+    /**
+     * RF-EXA-050: la hora límite solo impide nuevos inicios; un intento iniciado
+     * antes sigue recibiendo respuestas dentro del tiempo de sus preguntas.
+     */
+    public function test_an_attempt_started_before_the_close_continues_after_it(): void
+    {
+        $this->take()->assertOk();
+        $this->travel(10)->seconds();
+        $this->answer($this->questions[0], 0)->assertOk();
+
+        $this->exam->update(['ends_at' => now()->subMinutes(5)]);
+        $this->travel(10)->seconds();
+
+        $this->answer($this->questions[1], 0)->assertOk();
+    }
+
+    /**
+     * RF-EXA-024: si el docente detiene el examen, los intentos en curso terminan
+     * y ya no aceptan respuestas.
+     */
+    public function test_stopping_the_exam_finalizes_attempts_in_progress(): void
+    {
+        $this->take()->assertOk();
+
+        app(\App\Services\ExamAssemblyService::class)->closeExamEarly($this->exam);
+
+        $this->assertDatabaseHas('acs_student_attempts', ['exam_id' => $this->exam->id, 'status' => 'expired']);
+        $this->assertSame(409, $this->answer($this->questions[0], 0)->status());
+
+        // RF-EXA-024: la causa de finalización queda identificada
+        $attempt = \App\Models\StudentAttempt::query()->where('exam_id', $this->exam->id)->firstOrFail();
+        $this->assertDatabaseHas('acs_audit_logs', [
+            'action' => \App\Models\StudentAttempt::ACTION_STOPPED_BY_TEACHER,
+            'auditable_id' => $attempt->id,
+        ]);
+        $this->assertTrue($attempt->wasStoppedByTeacher());
+    }
 
     private function take(): TestResponse
     {

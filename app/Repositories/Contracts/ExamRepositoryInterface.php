@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Proyecto:       Plataforma Evaluadora / Aplicadora de Exámenes (SaaS)
  * Archivo:        ExamRepositoryInterface.php
  * Ubicación:      app/Repositories/Contracts/ExamRepositoryInterface.php
- * Requerimiento:  RF-EXA (Armado y Aplicación de Exámenes, MPW-V2 §2.4 y §6.7)
+ * Requerimiento:  RF-EXA (Armado y Aplicación de Exámenes, MPW-V3 §2.4 y §6.7)
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        1.1.0
  * Fecha Creación: 28/10/2026
@@ -79,7 +79,7 @@ interface ExamRepositoryInterface
     public function getPublishedForStudent(int $studentId): Collection;
 
     /**
-     * Busca un examen por su identificador precargando apartados, reactivos y variantes (MPW-V2 §6.7).
+     * Busca un examen por su identificador precargando apartados, reactivos y variantes (MPW-V3 §6.7).
      *
      * @param int $examId Identificador del examen.
      * @return Exam|null
@@ -97,7 +97,7 @@ interface ExamRepositoryInterface
     public function findForTeacherWithDetails(int $examId, int $teacherId): ?Exam;
 
     /**
-     * Obtiene los exámenes publicados y vigentes dentro de su ventana horaria para un grupo (MPW-V2 §6.7).
+     * Obtiene los exámenes publicados y vigentes dentro de su ventana horaria para un grupo (MPW-V3 §6.7).
      *
      * @param int $groupId Identificador del grupo.
      * @return Collection<int, Exam>
@@ -230,7 +230,7 @@ interface ExamRepositoryInterface
     public function findAttemptForReviewWithAnswers(Exam $exam, int $attemptId): ?StudentAttempt;
 
     /**
-     * Registra de forma transaccional un intento de examen enviado por un alumno (MPW-V2 §6.7).
+     * Registra de forma transaccional un intento de examen enviado por un alumno (MPW-V3 §6.7).
      *
      * @param int                  $examId    Identificador del examen.
      * @param int                  $studentId Identificador del alumno.
