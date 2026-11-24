@@ -25,9 +25,26 @@ use Illuminate\Validation\Validator;
 
 use App\Models\Exam;
 use App\Models\StudentAttempt;
+use App\Support\AcademicNumber;
 
 class TeacherReviewStoreRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $reviews = $this->input('reviews');
+        if (! is_array($reviews)) {
+            return;
+        }
+
+        foreach ($reviews as $index => $review) {
+            if (is_array($review) && array_key_exists('score', $review)) {
+                $reviews[$index]['score'] = AcademicNumber::normalize($review['score']);
+            }
+        }
+
+        $this->merge(['reviews' => $reviews]);
+    }
+
     public function authorize(): bool
     {
         $exam = $this->route('exam');
@@ -67,7 +84,7 @@ class TeacherReviewStoreRequest extends FormRequest
             }
 
             if ($attempt->status !== 'submitted') {
-                $validator->errors()->add('attempt', 'Solo se pueden recotejar intentos en estado entregado');
+                $validator->errors()->add('attempt', 'Solo se pueden revisar intentos entregados');
 
                 return;
             }
@@ -113,7 +130,7 @@ class TeacherReviewStoreRequest extends FormRequest
                 if (! in_array($questionType, ['open', 'code'], true)) {
                     $validator->errors()->add(
                         "reviews.{$index}.answer_id",
-                        'Solo puedes recotejar reactivos abiertos o de programación'
+                        'Solo puedes revisar reactivos abiertos o de programación'
                     );
                     continue;
                 }
@@ -139,9 +156,9 @@ class TeacherReviewStoreRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'reviews.required' => 'El listado de reactivos a recotejar es obligatorio',
-            'reviews.array' => 'El listado de reactivos a recotejar debe enviarse como un arreglo',
-            'reviews.min' => 'Debes enviar al menos un reactivo para recotejar',
+            'reviews.required' => 'El listado de reactivos para revisar es obligatorio',
+            'reviews.array' => 'El listado de reactivos para revisar no tiene un formato válido',
+            'reviews.min' => 'Selecciona al menos un reactivo para revisar',
             'reviews.*.answer_id.required' => 'El identificador de la respuesta es obligatorio',
             'reviews.*.answer_id.integer' => 'El identificador de la respuesta debe ser un número entero',
             'reviews.*.answer_id.distinct' => 'No puedes enviar la misma respuesta más de una vez',

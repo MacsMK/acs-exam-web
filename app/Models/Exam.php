@@ -46,6 +46,8 @@ class Exam extends Model
     public const STATUS_ACTIVE = 'active';
     public const STATUS_CLOSED = 'closed';
 
+    public const MAX_ALLOWED_INCIDENTS = 32767;
+
     /**
      * Tabla asociada (prefijo institucional acs_, MBD-V3 §3.3).
      *
@@ -63,6 +65,7 @@ class Exam extends Model
         'title',
         'description',
         'grading_scale',
+        'free_duration_minutes',
         'randomize_question_order',
         'result_visibility_mode',
         'require_webcam',
@@ -213,10 +216,7 @@ class Exam extends Model
                 self::STATUS_CLOSED => $query
                     ->where($this->qualifyColumn('is_published'), true)
                     ->where($this->qualifyColumn('ends_at'), '<=', $now),
-                'pending_review' => $query->whereHas('studentAttempts', static function (Builder $attemptQuery): void {
-                    $attemptQuery->where('status', 'submitted')
-                        ->where('pending_ai_count', '>', 0);
-                }),
+                'pending_review' => $query->whereHas('studentAttempts', static fn (Builder $attempts) => $attempts->pendingTeacherReview()),
                 default => null,
             };
         }
@@ -284,11 +284,17 @@ class Exam extends Model
 
     /**
      * Tiempo máximo del examen para el alumno, en minutos: suma de los tiempos
-     * por pregunta (RF-EXA-013). El sistema no tiene tiempo total (RF-EXA-014).
+     * por pregunta (RF-EXA-013). En modo libre usa la duración configurada (RF-EXA-014).
      */
-    public function maxDurationMinutes(): int
+    public function maxDurationMinutes(?int $totalQuestionSeconds = null): int
     {
-        return (int) ceil(((int) $this->examQuestions()->sum('time_limit_seconds')) / 60);
+        if ($this->free_duration_minutes !== null) {
+            return (int) $this->free_duration_minutes;
+        }
+
+        $totalQuestionSeconds ??= (int) $this->examQuestions()->sum('time_limit_seconds');
+
+        return (int) ceil($totalQuestionSeconds / 60);
     }
 
     /**

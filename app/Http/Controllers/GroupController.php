@@ -17,17 +17,20 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\GroupStoreRequest;
 use App\Http\Requests\GroupUpdateRequest;
+use App\Models\AuditLog;
 use App\Models\Group;
 use App\Models\StudentAttempt;
+use App\Models\StudentPeriodGrade;
 use App\Models\User;
-use App\Services\SubscriptionLimitService;
 use App\Services\GroupEnrollmentService;
 use App\Services\GroupRetentionService;
+use App\Support\GradebookCatalogContext;
 use DomainException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class GroupController extends Controller
 {
@@ -42,16 +45,22 @@ class GroupController extends Controller
         return view('groups.index', ['groups' => $groups]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
-        return view('groups.create');
+        $catalogQuery = GradebookCatalogContext::fromReturn($request);
+
+        return view('groups.create', [
+            'catalogQuery' => $catalogQuery,
+            'catalogContext' => $catalogQuery === null ? [] : GradebookCatalogContext::returnQuery($catalogQuery),
+        ]);
     }
 
     public function store(GroupStoreRequest $request): RedirectResponse
     {
         $group = $this->groupEnrollmentService->createGroup($request->user(), $request->validated());
 
-        return redirect()->route('groups.show', $group)->with('status', 'Grupo creado.');
+        return to_route('groups.show', [$group, ...GradebookCatalogContext::destinationQuery($request)])
+            ->with('status', 'Grupo creado.');
     }
 
     /**
@@ -83,7 +92,7 @@ class GroupController extends Controller
         return redirect()->route('groups.show', $group)->with('status', 'Grupo actualizado.');
     }
 
-    public function show(Group $group, GroupRetentionService $retention): View
+    public function show(Request $request, Group $group, GroupRetentionService $retention): View
     {
         $this->authorizeOwnership($group);
 
@@ -91,12 +100,13 @@ class GroupController extends Controller
             'students',
             'exams' => static function (BelongsToMany $query) use ($group): void {
                 $query->withCount([
-                    'studentAttempts as group_attempts_count' => static function (Builder $attemptQuery) use ($group): void {
-                        $attemptQuery->where('group_id', $group->id);
+                    'studentAttempts',
+                    'studentAttempts as group_submitted_attempts_count' => static function (Builder $attemptQuery) use ($group): void {
+                        $attemptQuery->where('group_id', $group->id)->current()->where('status', 'submitted');
                     },
                 ]);
             },
-            'evaluationPeriods',
+            'evaluationPeriods.previousPeriods',
         ]);
 
         $attempts = StudentAttempt::query()
@@ -104,18 +114,52 @@ class GroupController extends Controller
             ->whereHas('exam', function ($query) use ($group) {
                 $query->where('teacher_id', $group->teacher_id);
             })
-            ->whereHas('student', function ($query) use ($group) {
-                $query->whereHas('groupsAsStudent', function ($groups) use ($group) {
-                    $groups->whereKey($group->id);
-                });
-            })
             ->with(['student', 'exam'])
             ->latest('started_at')
+            ->latest('id')
             ->get();
+
+        $currentAttemptIds = $group->studentAttempts()->current()->pluck('id')->flip();
+        $enrolledStudentIds = $group->students->pluck('id')->flip();
+        $currentEnrolledAttempts = $attempts->filter(
+            static fn (StudentAttempt $attempt): bool => $currentAttemptIds->has($attempt->id)
+                && $enrolledStudentIds->has($attempt->student_id)
+        );
+
+        $withdrawnPeriodGrades = StudentPeriodGrade::query()
+            ->whereIn('evaluation_period_id', $group->evaluationPeriods->modelKeys())
+            ->whereNotIn('student_id', $enrolledStudentIds->keys())
+            ->with(['student', 'evaluationPeriod'])
+            ->orderBy('evaluation_period_id')
+            ->get();
+
+        $withdrawnWithoutGrades = AuditLog::query()
+            ->where('auditable_type', Group::class)
+            ->where('auditable_id', $group->id)
+            ->whereIn('action', ['group.student_removed', 'group.left'])
+            ->get(['old_values'])
+            ->pluck('old_values.student_id')
+            ->filter()
+            ->unique()
+            ->diff($enrolledStudentIds->keys())
+            ->diff($attempts->pluck('student_id'))
+            ->diff($withdrawnPeriodGrades->pluck('student_id'))
+            ->values();
 
         return view('groups.show', [
             'group' => $group,
+            'catalogContext' => GradebookCatalogContext::destinationQuery($request),
+            'catalogQuery' => GradebookCatalogContext::fromReturn($request),
             'attempts' => $attempts,
+            'currentAttemptIds' => $currentAttemptIds,
+            'enrolledStudentIds' => $enrolledStudentIds,
+            'currentEnrolledAttempts' => $currentEnrolledAttempts,
+            'withdrawnPeriodGrades' => $withdrawnPeriodGrades,
+            'withdrawnStudentsWithoutGrades' => User::query()
+                ->whereKey($withdrawnWithoutGrades)
+                ->orderBy('last_name')
+                ->orderBy('first_name')
+                ->get(),
             'deletionDate' => $retention->deletionDateFor($group),
         ]);
     }
@@ -130,7 +174,7 @@ class GroupController extends Controller
             return redirect()->route('groups.show', $group)->withErrors(['group' => $e->getMessage()]);
         }
 
-        return redirect()->route('groups.show', $group)->with('status', 'Grupo cerrado (cierre semestral, RW-35).');
+        return redirect()->route('groups.show', $group)->with('status', 'Grupo cerrado.');
     }
 
     /**
@@ -151,19 +195,11 @@ class GroupController extends Controller
             ->with('status', "Se retiró a {$student->full_name} del grupo. Sus registros académicos se conservan.");
     }
 
-    public function reopen(Group $group, SubscriptionLimitService $subscriptionLimitService): RedirectResponse
+    public function reopen(Group $group): RedirectResponse
     {
         $this->authorizeOwnership($group);
 
-        abort_unless($group->is_closed, 409, 'El grupo ya está activo.');
-
-        // Reabrir vuelve a ocupar un lugar del límite de grupos activos (RF-GRU-014, ACT-WEB-051)
-        $subscriptionLimitService->ensureCanReopenGroup($group->teacher()->firstOrFail());
-
-        $group->update([
-            'is_closed' => false,
-            'closed_at' => null,
-        ]);
+        $this->groupEnrollmentService->reopenGroup($group);
 
         return redirect()
             ->route('groups.show', $group)

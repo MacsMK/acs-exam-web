@@ -24,8 +24,11 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Validation\ValidationException;
 
 use App\Http\Requests\ExamConfigurationUpdateRequest;
 use App\Http\Requests\ExamManualQuestionsStoreRequest;
@@ -34,9 +37,11 @@ use App\Http\Requests\ExamSectionUpdateRequest;
 use App\Http\Requests\ExamStoreRequest;
 use App\Http\Requests\ExamUpdateRequest;
 use App\Http\Requests\QuestionUpdateRequest;
+use App\Models\EvaluationPeriod;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
 use App\Models\ExamSection;
+use App\Models\Group;
 use App\Repositories\Contracts\ExamRepositoryInterface;
 use App\Repositories\Contracts\GroupRepositoryInterface;
 use App\Repositories\Contracts\QuestionRepositoryInterface;
@@ -64,7 +69,7 @@ class ExamController extends Controller
     /**
      * Listado paginado de exámenes del docente con KPIs y filtros en SQL.
      */
-    public function index(Request $request): View
+    public function index(Request $request): View|Response
     {
         $teacherId = (int) $request->user()->id;
         $filters = $request->only(['search', 'status', 'group_id']);
@@ -73,12 +78,19 @@ class ExamController extends Controller
         $stats = $this->examRepository->getTeacherExamStats($teacherId);
         $groups = $this->groupRepository->getForTeacher($teacherId);
 
-        return view('exams.index', [
+        $view = view('exams.index', [
             'exams' => $exams,
             'stats' => $stats,
             'groups' => $groups,
             'filters' => $filters,
         ]);
+
+        if ($request->header('X-Catalog-Fragment') === 'exam-search-results') {
+            return response($view->fragment('exam-search-results'))
+                ->header('Cache-Control', 'no-store');
+        }
+
+        return $view;
     }
 
     /**
@@ -88,14 +100,45 @@ class ExamController extends Controller
     {
         $teacherId = (int) $request->user()->id;
         $groups = $this->groupRepository->getSelectableForTeacher($teacherId);
-        $selectedGroupIds = array_map('intval', (array) old('group_ids', []));
+        $groupId = filter_var($request->query('group_id'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $defaultGroupIds = ! $request->session()->hasOldInput() && $groupId !== false ? [$groupId] : [];
+        $selectedGroupIds = array_values(array_intersect(
+            array_map('intval', (array) old('group_ids', $defaultGroupIds)),
+            $groups->modelKeys(),
+        ));
         $hasOpenGroups = $groups->where('is_closed', false)->isNotEmpty();
 
         return view('exams.create', [
             'groups' => $groups,
             'selectedGroupIds' => $selectedGroupIds,
             'hasOpenGroups' => $hasOpenGroups,
+            'examGroupScheduling' => $this->examGroupScheduling($groups),
         ]);
+    }
+
+    /**
+     * Los periodos abarcan días completos en la zona de la aplicación.
+     *
+     * @param Collection<int, Group> $groups
+     * @return array<int, array{scale: string|null, periods: list<array{id: int, name: string, startsAt: string, endsAt: string}>}>
+     */
+    private function examGroupScheduling(Collection $groups): array
+    {
+        $groups->load(['evaluationPeriods' => static fn ($query) => $query
+            ->select('id', 'group_id', 'name', 'starts_at', 'ends_at')
+            ->where('ends_at', '>=', today())
+            ->orderBy('starts_at')
+            ->orderBy('id')]);
+
+        return $groups->mapWithKeys(static fn (Group $group): array => [$group->id => [
+            'scale' => in_array($group->grading_scale, ['0-10', '0-100'], true) ? $group->grading_scale : null,
+            'periods' => $group->evaluationPeriods->map(static fn (EvaluationPeriod $period): array => [
+                'id' => $period->id,
+                'name' => $period->name,
+                'startsAt' => $period->starts_at->toDateString() . 'T00:00',
+                'endsAt' => $period->ends_at->toDateString() . 'T23:59',
+            ])->all(),
+        ]])->all();
     }
 
     /**
@@ -132,6 +175,7 @@ class ExamController extends Controller
             'groups' => $groups,
             'selectedGroupIds' => $selectedGroupIds,
             'hasOpenGroups' => $hasOpenGroups,
+            'assemblyBlockReason' => $this->assemblyBlockReason($detailedExam),
         ]);
     }
 
@@ -166,7 +210,7 @@ class ExamController extends Controller
     /**
      * Vista de armado dual (sorteo con inventario real + selección manual desde banco).
      */
-    public function assemble(Request $request, Exam $exam): View
+    public function assemble(Request $request, Exam $exam): View|Response
     {
         $this->authorizeExam($exam);
 
@@ -176,16 +220,18 @@ class ExamController extends Controller
             ->map(static fn (mixed $id): int => (int) $id)
             ->all();
 
-        $bankInventory = $this->questionRepository->getAvailableInventoryForTeacher(
+        $catalogFragment = $request->header('X-Catalog-Fragment') === 'manual-candidate-results';
+        $bankInventory = $catalogFragment ? [] : $this->questionRepository->getAvailableInventoryForTeacher(
             (int) $detailedExam->teacher_id,
-            $excludedIds
+            $excludedIds,
         );
 
         $sessionKey = "exam_section_proposal_{$detailedExam->id}";
         $proposal = $request->session()->get($sessionKey);
         $proposedQuestions = collect();
+        $proposalWarning = null;
 
-        if (is_array($proposal) && ! empty($proposal['question_ids'])) {
+        if (! $catalogFragment && is_array($proposal) && ! empty($proposal['question_ids'])) {
             $sanitizedIds = $this->questionRepository->filterAvailableQuestionIds(
                 (int) $detailedExam->teacher_id,
                 array_map('intval', $proposal['question_ids']),
@@ -195,7 +241,13 @@ class ExamController extends Controller
             if ($sanitizedIds === []) {
                 $request->session()->forget($sessionKey);
                 $proposal = null;
+                $proposalWarning = 'Ningún reactivo de la propuesta sigue disponible. Crea otra propuesta o usa la selección manual.';
             } else {
+                $requestedQuantity = (int) ($proposal['requested_quantity'] ?? count($proposal['question_ids']));
+                if (count($sanitizedIds) < $requestedQuantity) {
+                    $availableQuantity = count($sanitizedIds);
+                    $proposalWarning = "Quedan {$availableQuantity} de {$requestedQuantity} reactivos de la propuesta. Si la aceptas, solo se agregarán los que aparecen en la lista.";
+                }
                 $proposal['question_ids'] = $sanitizedIds;
                 $request->session()->put($sessionKey, $proposal);
 
@@ -219,20 +271,28 @@ class ExamController extends Controller
             12
         );
 
-        $subjects = $this->questionRepository->getDistinctSubjectsForTeacher((int) $detailedExam->teacher_id);
+        $subjects = $catalogFragment ? [] : $this->questionRepository->getDistinctSubjectsForTeacher((int) $detailedExam->teacher_id);
         $canEditStructure = $detailedExam->supportsStructuralEdit();
 
-        return view('exams.assemble', [
+        $view = view('exams.assemble', [
             'exam' => $detailedExam,
             'bankInventory' => $bankInventory,
             'proposal' => $proposal,
+            'proposalWarning' => $proposalWarning,
             'proposedQuestions' => $proposedQuestions,
             'manualCandidates' => $manualCandidates,
             'subjects' => $subjects,
             'subjectTags' => $subjects,
             'manualFilters' => $manualFilters,
             'canEditStructure' => $canEditStructure,
+            'assemblyBlockReason' => $this->assemblyBlockReason($detailedExam),
         ]);
+
+        if ($catalogFragment) {
+            return response($view->fragment('assembly-manual-results'))->header('Cache-Control', 'no-store');
+        }
+
+        return $view;
     }
 
     /**
@@ -377,7 +437,8 @@ class ExamController extends Controller
 
         return redirect()
             ->route('exams.assemble', $exam)
-            ->with('status', "Reactivos agregados correctamente al apartado \"{$section->title}\".");
+            ->with('status', "Reactivos agregados correctamente al apartado \"{$section->title}\".")
+            ->with('manual_selection_saved', true);
     }
 
     /**
@@ -392,7 +453,7 @@ class ExamController extends Controller
 
         return redirect()
             ->route('exams.assemble', $exam)
-            ->with('status', 'Reactivo sustituido (nuevo sorteo, RW-14).');
+            ->with('status', 'Reactivo sustituido. Se conservaron sus puntos y su tiempo límite.');
     }
 
     /**
@@ -413,11 +474,15 @@ class ExamController extends Controller
     /**
      * Etapa 3: configuración de ponderaciones base 100.00, tiempos, grupos y reglas.
      */
-    public function configuration(Exam $exam): View
+    public function configuration(Exam $exam): View|RedirectResponse
     {
         $this->authorizeExam($exam);
 
         $detailedExam = $this->examRepository->findForTeacherWithDetails((int) $exam->id, (int) $exam->teacher_id) ?? $exam;
+        if ($redirect = $this->redirectIfAssemblyBlocked($detailedExam)) {
+            return $redirect;
+        }
+
         $assignedGroupIds = $detailedExam->groups
             ->pluck('id')
             ->map(static fn (mixed $id): int => (int) $id)
@@ -432,6 +497,7 @@ class ExamController extends Controller
             'groups' => $groups,
             'totalPoints' => $totalPoints,
             'hasAttempts' => $hasAttempts,
+            'allowsFreeNavigation' => app(\App\Services\SubscriptionLimitService::class)->allowsFreeNavigation(request()->user()),
         ]);
     }
 
@@ -441,6 +507,10 @@ class ExamController extends Controller
     public function updateConfiguration(ExamConfigurationUpdateRequest $request, Exam $exam): RedirectResponse
     {
         $this->authorizeExam($exam);
+
+        if ($redirect = $this->redirectIfAssemblyBlocked($exam)) {
+            return $redirect;
+        }
 
         $this->examAssemblyService->updateConfiguration($exam, $request->validated());
 
@@ -452,11 +522,15 @@ class ExamController extends Controller
     /**
      * Etapa 4: checklist de verificación 5/5 previa a la publicación del examen.
      */
-    public function review(Exam $exam): View
+    public function review(Exam $exam): View|RedirectResponse
     {
         $this->authorizeExam($exam);
 
         $detailedExam = $this->examRepository->findForTeacherWithDetails((int) $exam->id, (int) $exam->teacher_id) ?? $exam;
+        if ($redirect = $this->redirectIfAssemblyBlocked($detailedExam)) {
+            return $redirect;
+        }
+
         $publishChecklist = $this->examAssemblyService->evaluatePublishReadiness($detailedExam);
         $totalPoints = (float) $publishChecklist['total_weight'];
 
@@ -473,6 +547,10 @@ class ExamController extends Controller
     public function publish(Exam $exam): RedirectResponse
     {
         $this->authorizeExam($exam);
+
+        if ($redirect = $this->redirectIfAssemblyBlocked($exam, 'publish')) {
+            return $redirect;
+        }
 
         $this->examAssemblyService->publishExam($exam, $this->examNotifications);
 
@@ -537,6 +615,7 @@ class ExamController extends Controller
         $this->examAssemblyService->ensureStructureMutable($exam);
 
         $state = $this->questionBankService->buildEditFormState($question, $request->old());
+        $returnToReview = $request->query('return_to') === 'review';
 
         return view('questions.edit', [
             'question' => $question,
@@ -549,8 +628,12 @@ class ExamController extends Controller
             'isLinkedToExam' => true,
             'isLinkedToExams' => true,
             'examContext' => $exam,
-            'formAction' => route('exams.questions.update', [$exam, $examQuestion]),
-            'cancelUrl' => route('exams.assemble', $exam),
+            'formAction' => route('exams.questions.update', [
+                'exam' => $exam,
+                'examQuestion' => $examQuestion,
+                'return_to' => $returnToReview ? 'review' : null,
+            ]),
+            'cancelUrl' => route($returnToReview ? 'exams.review' : 'exams.assemble', $exam),
         ]);
     }
 
@@ -572,12 +655,49 @@ class ExamController extends Controller
         );
 
         return redirect()
-            ->route('exams.assemble', $exam)
+            ->route($request->query('return_to') === 'review' ? 'exams.review' : 'exams.assemble', $exam)
             ->with('status', 'Reactivo actualizado solo para este examen; la versión del banco no cambió.');
     }
 
     private function authorizeExam(Exam $exam): void
     {
         abort_unless((int) $exam->teacher_id === (int) request()->user()->id, 403);
+    }
+
+    private function assemblyBlockReason(Exam $exam): ?string
+    {
+        if ($exam->is_published) {
+            return null;
+        }
+
+        $proposal = request()->session()->get("exam_section_proposal_{$exam->id}");
+        if (is_array($proposal) && ! empty($proposal['question_ids'])) {
+            return 'Acepta o cancela la propuesta de sorteo pendiente antes de continuar.';
+        }
+
+        $exam->loadMissing('sections.examQuestions');
+        if ($exam->sections->isEmpty() || $exam->sections->every(fn (ExamSection $section): bool => $section->examQuestions->isEmpty())) {
+            return 'Agrega al menos un reactivo a un apartado antes de continuar.';
+        }
+
+        if ($exam->sections->contains(fn (ExamSection $section): bool => $section->examQuestions->isEmpty())) {
+            return 'Completa o elimina los apartados vacíos antes de continuar.';
+        }
+
+        return null;
+    }
+
+    private function redirectIfAssemblyBlocked(Exam $exam, string $errorKey = 'assembly'): ?RedirectResponse
+    {
+        $reason = $this->assemblyBlockReason($exam);
+        if ($reason === null) {
+            return null;
+        }
+
+        if (request()->expectsJson()) {
+            throw ValidationException::withMessages([$errorKey => $reason]);
+        }
+
+        return redirect()->route('exams.assemble', $exam)->withErrors([$errorKey => $reason]);
     }
 }

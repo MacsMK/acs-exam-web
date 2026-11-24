@@ -16,18 +16,23 @@
 
 @section('content')
 @php
-    $submittedCount = $attempts->where('status', 'submitted')->count();
-    $inProgressCount = $attempts->where('status', 'in_progress')->count();
+    $submittedCount = $currentEnrolledAttempts->where('status', 'submitted')->count();
+    $inProgressCount = $currentEnrolledAttempts->where('status', 'in_progress')->count();
     $studentsCount = $group->students->count();
     $sortedPeriods = $group->evaluationPeriods->sortBy('starts_at');
+    $catalogUrl = $catalogQuery === null ? null : route('teacher.gradebook.hub', $catalogQuery);
+    $periodsUrl = route('groups.periods.index', [$group, ...$catalogContext]);
 @endphp
 
 <div
     x-data="{
-        activeTab: window.location.hash ? window.location.hash.substring(1) : 'students',
+        activeTab: 'students',
+        tabs: ['students', 'exams', 'grades', 'evaluation'],
         studentSearch: '',
         gradeSearch: '',
         gradeStatus: 'all',
+        copyStatus: '',
+        actionError: '',
 
         studentsIndex: @js(
             $group->students->map(fn ($student) => [
@@ -61,73 +66,70 @@
             );
         },
 
+        syncTabFromHash() {
+            const tab = window.location.hash.slice(1);
+            this.activeTab = this.tabs.includes(tab) ? tab : 'students';
+        },
+
         setActiveTab(tab) {
             this.activeTab = tab;
             window.location.hash = tab;
         },
 
-        copyFolio() {
-            const folio = @js($group->access_folio);
-            if (!folio) return;
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(folio).then(() => {
-                    if (typeof AcodeAlert !== 'undefined') {
-                        AcodeAlert.toast('Folio copiado al portapapeles con éxito', 'success');
-                    }
-                }).catch(() => {});
-            }
+        moveTab(event) {
+            const index = this.tabs.indexOf(this.activeTab);
+            const targets = {
+                ArrowLeft: (index + this.tabs.length - 1) % this.tabs.length,
+                ArrowRight: (index + 1) % this.tabs.length,
+                Home: 0,
+                End: this.tabs.length - 1,
+            };
+            const target = targets[event.key];
+            if (target === undefined) return;
+            event.preventDefault();
+            const tab = this.tabs[target];
+            this.setActiveTab(tab);
+            this.$nextTick(() => document.getElementById('group-tab-' + tab)?.focus());
         },
 
-        confirmClose() {
-            if (typeof AcodeAlert !== 'undefined') {
-                AcodeAlert.confirm({
-                    title: '¿Cerrar este grupo escolar?',
-                    text: 'El grupo dejará de aceptar nuevos intentos e incorporaciones. La información académica se conservará intacta.',
-                    confirmButtonText: 'Sí, cerrar grupo',
-                    cancelButtonText: 'Cancelar',
-                    isDanger: true,
-                    onConfirm: () => {
-                        document.getElementById('group-close-form').submit();
-                    }
-                });
-                return;
-            }
-            if (confirm('¿Cerrar este grupo escolar? Dejará de aceptar nuevos intentos e incorporaciones.')) {
-                document.getElementById('group-close-form').submit();
-            }
+        async copyFolio() {
+            this.copyStatus = '';
+            const copied = await window.copyGroupFolio?.(@js($group->access_folio));
+            this.copyStatus = copied ? 'Folio copiado' : 'No se pudo copiar el folio. Selecciónalo para copiarlo manualmente.';
         },
 
-        confirmReopen() {
-            if (typeof AcodeAlert !== 'undefined') {
-                AcodeAlert.confirm({
-                    title: '¿Reabrir este grupo escolar?',
-                    text: 'El grupo volverá a estar activo y permitirá la incorporación de alumnos y aplicación de exámenes.',
-                    confirmButtonText: 'Sí, reabrir grupo',
-                    cancelButtonText: 'Cancelar',
-                    isDanger: false,
-                    onConfirm: () => {
-                        document.getElementById('group-reopen-form').submit();
-                    }
-                });
+        confirmGroupAction(form, {title, text, confirmButtonText, isDanger}) {
+            this.actionError = '';
+            if (typeof window.AcodeAlert?.confirm !== 'function') {
+                this.actionError = 'No se pudo abrir la confirmación. Recarga la página e inténtalo de nuevo.';
                 return;
             }
-            if (confirm('¿Reabrir este grupo escolar?')) {
-                document.getElementById('group-reopen-form').submit();
-            }
+
+            window.AcodeAlert.confirm({
+                title,
+                text,
+                confirmButtonText,
+                cancelButtonText: 'Cancelar',
+                isDanger,
+                onConfirm: () => form.submit(),
+            });
         }
     }"
+    x-init="syncTabFromHash()"
+    @hashchange.window="syncTabFromHash()"
     class="space-y-6"
 >
 
+    <p x-cloak x-show="actionError" x-text="actionError" role="alert"
+       class="rounded-lg border border-acode-danger/30 bg-white px-4 py-3 text-sm text-acode-danger"></p>
+
     {{-- Nivel 1: Encabezado Institucional con Breadcrumbs, Folio Copiable y Acciones --}}
     <x-page-header
+        :institutional="true"
         :title="$group->name"
-        :subtitle="$group->description
-            ?: ($group->subject
-                ? 'Gestiona matrícula, exámenes asignados, calificaciones y periodos de evaluación de ' . $group->subject . '.'
-                : 'Gestiona matrícula, exámenes asignados, calificaciones y periodos de evaluación de este grupo escolar.')"
+        :subtitle="$group->description"
         :breadcrumbs="[
-            ['label' => 'Grupos', 'href' => route('groups.index')],
+            ['label' => $catalogUrl ? 'Calificaciones' : 'Grupos', 'href' => $catalogUrl ?? route('groups.index')],
             ['label' => $group->name],
         ]"
     >
@@ -144,74 +146,81 @@
             </span>
 
             <span class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-acode-surface/70 px-2.5 py-1">
-                <span class="font-semibold text-slate-500">Folio:</span>
+                <span class="font-semibold text-slate-700">Folio:</span>
                 <span class="font-mono font-bold text-acode-primary select-all">{{ $group->access_folio }}</span>
-                <button
-                    type="button"
-                    title="Copiar folio"
-                    aria-label="Copiar folio"
-                    x-on:click="copyFolio()"
-                    class="inline-flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-white hover:text-acode-tech focus:outline-none focus:ring-2 focus:ring-acode-tech"
-                >
-                    <x-icon name="copy" class="w-3.5 h-3.5" />
-                </button>
+                @unless ($group->is_closed)
+                    <x-button type="button" variant="neutral" size="sm" :icon-only="true"
+                              title="Copiar folio" aria-label="Copiar folio" @click="copyFolio()">
+                        <x-icon name="copy" class="w-3.5 h-3.5" />
+                    </x-button>
+                @endunless
             </span>
-
-            <span class="inline-flex items-center gap-1.5 text-slate-600">
-                <x-icon name="userGroup" class="w-3.5 h-3.5 text-acode-tech" />
-                <strong class="text-acode-primary">{{ $studentsCount }}</strong>
-                {{ $studentsCount === 1 ? 'estudiante inscrito' : 'estudiantes inscritos' }}
-            </span>
+            <span x-cloak x-show="copyStatus" x-text="copyStatus" role="status" class="text-sm text-slate-700"></span>
         </x-slot:meta>
 
         <x-slot:actions>
-            <x-button :href="route('groups.index')" variant="neutral" size="md">
-                <x-icon name="arrowLeft" class="w-4 h-4" />
-                Volver
-            </x-button>
+            <div class="flex flex-wrap items-center gap-2">
+                @if ($catalogUrl)
+                    <x-button :href="$catalogUrl" variant="neutral" size="md">
+                        <x-icon name="arrowLeft" class="w-4 h-4" />
+                        Volver a calificaciones
+                    </x-button>
+                @endif
+                <x-button :href="$periodsUrl" :variant="$group->is_closed ? 'secondary' : 'primary'" size="md">
+                    <x-icon name="clock" class="w-4 h-4" />
+                    Abrir periodos
+                </x-button>
 
-            <x-button
-                type="button"
-                @click="$dispatch('open-modal', 'group-qr-modal')"
-                variant="secondary"
-                size="md"
-            >
-                <x-icon name="qrCode" class="w-4 h-4" />
-                Abrir QR
-            </x-button>
+                @unless ($group->is_closed)
+                    <x-button type="button" @click="$dispatch('open-modal', 'group-qr-modal')" variant="secondary" size="md"
+                              aria-haspopup="dialog">
+                        <x-icon name="qrCode" class="w-4 h-4" />
+                        Ver código QR
+                    </x-button>
+                @endunless
 
-            <x-button :href="route('groups.periods.index', $group)" variant="neutral" size="md">
-                <x-icon name="clock" class="w-4 h-4" />
-                Abrir periodos
-            </x-button>
+                @if ($group->is_closed)
+                    <x-button
+                        type="button"
+                        @click="confirmGroupAction($refs.lifecycleForm, {
+                            title: '¿Reabrir este grupo?',
+                            text: 'El grupo volverá a admitir nuevas inscripciones y exámenes. Se cancelará su eliminación programada. Para reabrirlo necesitas cupo en tu plan.',
+                            confirmButtonText: 'Reabrir grupo',
+                            isDanger: false
+                        })"
+                        variant="primary"
+                        size="md"
+                        aria-haspopup="dialog"
+                    >
+                        <x-icon name="check" class="w-4 h-4" />
+                        Reabrir grupo
+                    </x-button>
+                @endif
+            </div>
 
             @unless ($group->is_closed)
-                <x-button :href="route('groups.edit', $group)" variant="neutral" size="md">
-                    <x-icon name="edit" class="w-4 h-4" />
-                    Editar grupo
-                </x-button>
+                <div role="group" aria-label="Administración del grupo"
+                     class="flex w-full flex-wrap items-center gap-2 border-t border-slate-200 pt-2 sm:w-auto sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
+                    <x-button :href="route('groups.edit', $group)" variant="neutral" size="sm">
+                        <x-icon name="edit" class="w-3.5 h-3.5" />
+                        Editar grupo
+                    </x-button>
+                    <x-button
+                        type="button"
+                        @click="confirmGroupAction($refs.lifecycleForm, {
+                            title: '¿Cerrar este grupo escolar?',
+                            text: 'El grupo dejará de aceptar inscripciones y nuevos intentos. Sus registros se conservarán durante {{ \App\Services\GroupRetentionService::RETENTION_MONTHS }} meses. Antes de su eliminación puedes exportar las calificaciones o reabrir el grupo.',
+                            confirmButtonText: 'Cerrar grupo',
+                            isDanger: true
+                        })"
+                        variant="danger"
+                        size="sm"
+                        aria-haspopup="dialog"
+                    >
+                        Cerrar grupo
+                    </x-button>
+                </div>
             @endunless
-
-            @if ($group->is_closed)
-                <x-button
-                    type="button"
-                    @click="confirmReopen()"
-                    variant="accent"
-                    size="md"
-                >
-                    <x-icon name="check" class="w-4 h-4" />
-                    Reabrir grupo
-                </x-button>
-            @else
-                <x-button
-                    type="button"
-                    @click="confirmClose()"
-                    variant="danger"
-                    size="md"
-                >
-                    Cerrar grupo
-                </x-button>
-            @endif
         </x-slot:actions>
     </x-page-header>
 
@@ -226,54 +235,20 @@
         </div>
     @endif
 
-    {{-- Formularios POST ocultos para cierre y reapertura semestral --}}
-    <form id="group-close-form" method="POST" action="{{ route('groups.close', $group) }}" class="hidden">
-        @csrf
-    </form>
-    <form id="group-reopen-form" method="POST" action="{{ route('groups.reopen', $group) }}" class="hidden">
+    <form x-ref="lifecycleForm" method="POST"
+          action="{{ route($group->is_closed ? 'groups.reopen' : 'groups.close', $group) }}" class="hidden">
         @csrf
     </form>
 
-    {{-- Nivel 2: Barra de 4 Tarjetas KPI Canónicas --}}
-    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        <x-kpi-card
-            label="Estudiantes inscritos"
-            :value="$studentsCount"
-            meta="Alumnos matriculados"
-            nav-icon="groups"
-            tone="tech"
-        />
-
-        <x-kpi-card
-            label="Exámenes asignados"
-            :value="$group->exams->count()"
-            meta="Pruebas vinculadas al grupo"
-            nav-icon="exams"
-            tone="accent"
-        />
-
-        <x-kpi-card
-            label="Entregas registradas"
-            :value="$submittedCount"
-            :meta="'De ' . $attempts->count() . ' intentos totales'"
-            icon="reportBar"
-            tone="warning"
-        />
-
-        <x-kpi-card
-            label="Periodos de evaluación"
-            :value="$group->evaluationPeriods->count()"
-            meta="Parciales configurados"
-            icon="clock"
-            tone="primary"
-        />
-    </div>
-
-    {{-- Nivel 3: Sistema de Pestañas --}}
+    {{-- Pestañas para consultar el trabajo del grupo --}}
     <div>
-        <div class="flex gap-2 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="Secciones del grupo">
+        <div class="flex gap-2 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="Secciones del grupo"
+             @keydown="moveTab($event)">
             <x-tab
                 name="students"
+                id="group-tab-students"
+                aria-controls="group-panel-students"
+                x-bind:tabindex="activeTab === 'students' ? 0 : -1"
                 label="Estudiantes"
                 icon="userGroup"
                 :count="$studentsCount"
@@ -282,6 +257,9 @@
 
             <x-tab
                 name="exams"
+                id="group-tab-exams"
+                aria-controls="group-panel-exams"
+                x-bind:tabindex="activeTab === 'exams' ? 0 : -1"
                 label="Exámenes"
                 icon="document"
                 :count="$group->exams->count()"
@@ -290,14 +268,19 @@
 
             <x-tab
                 name="grades"
+                id="group-tab-grades"
+                aria-controls="group-panel-grades"
+                x-bind:tabindex="activeTab === 'grades' ? 0 : -1"
                 label="Calificaciones"
                 icon="reportBar"
-                :count="$attempts->count()"
                 select="setActiveTab('grades')"
             />
 
             <x-tab
                 name="evaluation"
+                id="group-tab-evaluation"
+                aria-controls="group-panel-evaluation"
+                x-bind:tabindex="activeTab === 'evaluation' ? 0 : -1"
                 label="Configuración de evaluación"
                 icon="clock"
                 :count="$group->evaluationPeriods->count()"
@@ -308,6 +291,10 @@
 
     {{-- Nivel 4A: Apartado 1 - Estudiantes --}}
     <section
+        id="group-panel-students"
+        role="tabpanel"
+        aria-labelledby="group-tab-students"
+        tabindex="0"
         x-show="activeTab === 'students'"
         x-cloak
         x-transition:enter="transition ease-out duration-200"
@@ -318,51 +305,50 @@
         x-transition:leave-end="opacity-0 translate-y-1.5"
         class="space-y-4"
     >
-        <x-section-header
-            title="Censo de estudiantes"
-            :subtitle="$studentsCount . ' ' . ($studentsCount === 1 ? 'integrante matriculado' : 'integrantes matriculados') . ' en este grupo.'"
-        >
-            @if ($group->students->isNotEmpty())
-                <x-slot:actions>
-                    <div class="w-full sm:w-72">
-                        <x-form.input
-                            type="search"
-                            prefixIcon="search"
-                            x-model="studentSearch"
-                            placeholder="Buscar por nombre o correo..."
-                            aria-label="Buscar estudiante"
-                        />
-                    </div>
-                </x-slot:actions>
-            @endif
-        </x-section-header>
+        <x-section-header :institutional="true" title="Matrícula" />
 
         @if ($group->students->isEmpty())
             <x-empty-state
                 icon="userGroup"
                 title="Aún no hay estudiantes en este grupo"
-                message="Comparte el código QR o el folio de acceso con tus alumnos para que comiencen a matricularse."
-            >
-                <x-button
-                    type="button"
-                    @click="$dispatch('open-modal', 'group-qr-modal')"
-                    variant="primary"
-                    size="md"
-                >
-                    <x-icon name="qrCode" class="w-4 h-4" />
-                    Abrir QR
-                </x-button>
-            </x-empty-state>
+                :message="$group->is_closed
+                    ? 'El grupo está cerrado. Reábrelo para admitir inscripciones.'
+                    : 'Comparte el código QR o el folio de acceso para inscribir estudiantes.'"
+            />
         @else
+            <form role="search" aria-label="Matrícula" x-on:submit.prevent="studentSearch = $refs.studentSearchInput.value">
+                <x-search-panel>
+                    <x-slot:field>
+                        <x-form.input
+                            type="search"
+                            prefix-icon="search"
+                            enterkeyhint="search"
+                            x-ref="studentSearchInput"
+                            x-model.debounce.300ms="studentSearch"
+                            placeholder="Buscar por nombre o correo…"
+                            aria-label="Buscar estudiante"
+                        />
+                    </x-slot:field>
+                    <x-slot:actions>
+                        <x-button
+                            type="button" variant="secondary" x-show="studentSearch.trim() !== ''" x-cloak
+                            x-on:click="studentSearch = ''; $refs.studentSearchInput.focus()"
+                        >
+                            Limpiar búsqueda
+                        </x-button>
+                    </x-slot:actions>
+                </x-search-panel>
+            </form>
+
             <div x-show="filteredStudents.length > 0">
-                <x-table>
+                <x-table zebra="slate" scroll-label="Estudiantes inscritos">
                     <x-slot:header>
-                        <x-table.th>Estudiante</x-table.th>
-                        <x-table.th>Correo electrónico</x-table.th>
-                        <x-table.th>Fecha de incorporación</x-table.th>
+                        <x-table.th align="center">Estudiante</x-table.th>
+                        <x-table.th align="center">Correo electrónico</x-table.th>
+                        <x-table.th align="center">Fecha de incorporación</x-table.th>
                         <x-table.th align="center">Estado</x-table.th>
                         @unless ($group->is_closed)
-                            <x-table.th align="right">Acciones</x-table.th>
+                            <x-table.th align="center">Acciones</x-table.th>
                         @endunless
                     </x-slot:header>
 
@@ -377,7 +363,7 @@
                                         <p class="font-bold text-acode-primary leading-tight">
                                             {{ $student->full_name }}
                                         </p>
-                                        <p class="text-xs text-slate-400 mt-0.5 font-mono">
+                                        <p class="text-xs text-slate-500 mt-0.5 font-mono">
                                             ID #{{ $student->id }}
                                         </p>
                                     </div>
@@ -408,18 +394,24 @@
                                     <form
                                         method="POST"
                                         action="{{ route('groups.students.remove', [$group, $student]) }}"
-                                        x-on:submit.prevent="window.AcodeAlert.confirm({
-                                            title: '¿Retirar a este estudiante?',
-                                            text: @js($student->full_name . ' perderá su pertenencia al grupo y el acceso a sus recursos y resultados. Sus registros académicos se conservarán. No se puede retirar si tiene un examen en curso.'),
-                                            confirmButtonText: 'Retirar estudiante',
-                                            cancelButtonText: 'Cancelar',
-                                            isDanger: true,
-                                            onConfirm: () => $el.submit(),
-                                        })"
+                                        data-remove-message="{{ $student->full_name }} perderá su pertenencia al grupo y el acceso a sus recursos y resultados. Sus registros académicos se conservarán. No se puede retirar si tiene un examen en curso."
                                     >
                                         @csrf
                                         @method('DELETE')
-                                        <x-button type="submit" variant="danger" size="sm" class="whitespace-nowrap">
+                                        <x-button
+                                            type="button"
+                                            variant="neutral"
+                                            size="sm"
+                                            class="whitespace-nowrap"
+                                            :aria-label="'Retirar a ' . $student->full_name"
+                                            aria-haspopup="dialog"
+                                            @click="confirmGroupAction($el.form, {
+                                                title: '¿Retirar a este estudiante?',
+                                                text: $el.form.dataset.removeMessage,
+                                                confirmButtonText: 'Retirar estudiante',
+                                                isDanger: true
+                                            })"
+                                        >
                                             Retirar
                                         </x-button>
                                     </form>
@@ -447,7 +439,7 @@
                     title="No se encontraron estudiantes"
                     message="Ningún estudiante coincide con el criterio de búsqueda ingresado."
                 >
-                    <x-button type="button" variant="neutral" size="sm" @click="studentSearch = ''">
+                    <x-button type="button" variant="neutral" size="sm" @click="studentSearch = ''; $refs.studentSearchInput.focus()">
                         Limpiar búsqueda
                     </x-button>
                 </x-empty-state>
@@ -457,6 +449,10 @@
 
     {{-- Nivel 4B: Apartado 2 - Exámenes --}}
     <section
+        id="group-panel-exams"
+        role="tabpanel"
+        aria-labelledby="group-tab-exams"
+        tabindex="0"
         x-show="activeTab === 'exams'"
         x-cloak
         x-transition:enter="transition ease-out duration-200"
@@ -468,19 +464,31 @@
         class="space-y-4"
     >
         <x-section-header
+            :institutional="true"
             :title="'Exámenes asignados (' . $group->exams->count() . ')'"
-            subtitle="Administra y monitorea las pruebas asignadas a los alumnos de este grupo."
+            :subtitle="$group->is_closed ? 'Consulta los exámenes que se asignaron a este grupo.' : null"
         >
-            <x-slot:actions>
-                <x-button :href="route('exams.create')" variant="primary" size="md">
-                    <x-icon name="add" class="w-4 h-4" />
-                    Crear examen
-                </x-button>
-            </x-slot:actions>
+            @unless ($group->is_closed)
+                <x-slot:actions>
+                    <x-button :href="route('exams.create', ['group_id' => $group->id])" variant="primary" size="md">
+                        <x-icon name="add" class="w-4 h-4" />
+                        Crear examen
+                    </x-button>
+                </x-slot:actions>
+            @endunless
         </x-section-header>
 
         <div class="space-y-4">
             @forelse ($group->exams as $exam)
+                @php
+                    $examState = match ($exam->operationalStatus()) {
+                        \App\Models\Exam::STATUS_ACTIVE => ['label' => 'Activo', 'variant' => 'accent'],
+                        \App\Models\Exam::STATUS_SCHEDULED => ['label' => 'Programado', 'variant' => 'tech'],
+                        \App\Models\Exam::STATUS_CLOSED => ['label' => 'Cerrado', 'variant' => 'neutral'],
+                        default => ['label' => 'Borrador', 'variant' => 'warning'],
+                    };
+                    $canEditExam = ! $group->is_closed && $exam->supportsStructuralEdit();
+                @endphp
                 <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-acode-tech/50 hover:shadow-md">
                     <div class="flex flex-wrap items-start justify-between gap-3">
                         <div class="min-w-0 flex-1">
@@ -494,8 +502,8 @@
                             @endif
                         </div>
 
-                        <x-badge :variant="$exam->is_published ? 'accent' : 'warning'">
-                            {{ $exam->is_published ? 'Publicado' : 'Borrador' }}
+                        <x-badge :variant="$examState['variant']">
+                            {{ $examState['label'] }}
                         </x-badge>
                     </div>
 
@@ -522,17 +530,21 @@
 
                     <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
                         <div class="text-xs text-slate-500">
-                            @if ($exam->is_published)
-                                <span class="text-acode-accent font-semibold">Examen publicado en línea.</span> Los estudiantes pueden presentar según la ventana programada.
-                            @else
-                                <span class="text-acode-warning-dark font-semibold">Examen en borrador.</span> Puedes continuar preparando los reactivos y apartados.
+                            @if ($group->is_closed)
+                                Esta aplicación permanece disponible para consulta.
                             @endif
                         </div>
 
                         <div class="flex flex-wrap items-center gap-2">
-                            <x-button :href="route('exams.assemble', $exam)" variant="neutral" size="sm">
-                                Editar examen
-                            </x-button>
+                            @if ($canEditExam)
+                                <x-button :href="route('exams.assemble', $exam)" variant="neutral" size="sm">
+                                    Armar examen
+                                </x-button>
+                            @else
+                                <x-button :href="route('exams.review', $exam)" variant="neutral" size="sm">
+                                    Abrir resumen
+                                </x-button>
+                            @endif
 
                             @if ($exam->is_published)
                                 <x-button :href="route('exams.monitor', $exam)" variant="neutral" size="sm">
@@ -540,9 +552,10 @@
                                 </x-button>
                             @endif
 
-                            @if (($exam->group_attempts_count ?? 0) > 0)
-                                <x-button :href="route('exams.revision.index', $exam)" variant="primary" size="sm">
-                                    Abrir recoteje
+                            @if ($exam->group_submitted_attempts_count > 0)
+                                <x-button :href="route('exams.revision.index', ['exam' => $exam, 'group_id' => $group->id])"
+                                          variant="primary" size="sm">
+                                    Revisar entregas
                                 </x-button>
                             @endif
                         </div>
@@ -552,12 +565,14 @@
                 <x-empty-state
                     icon="document"
                     title="No hay exámenes asignados a este grupo"
-                    message="Crea un examen y asígnalo a este salón escolar para comenzar a evaluar a tus estudiantes."
+                    :message="$group->is_closed ? null : 'Puedes crear un examen para este grupo.'"
                 >
-                    <x-button :href="route('exams.create')" variant="primary" size="md">
-                        <x-icon name="add" class="w-4 h-4" />
-                        Crear examen
-                    </x-button>
+                    @unless ($group->is_closed)
+                        <x-button :href="route('exams.create', ['group_id' => $group->id])" variant="primary" size="md">
+                            <x-icon name="add" class="w-4 h-4" />
+                            Crear examen
+                        </x-button>
+                    @endunless
                 </x-empty-state>
             @endforelse
         </div>
@@ -565,6 +580,10 @@
 
     {{-- Nivel 4C: Apartado 3 - Calificaciones --}}
     <section
+        id="group-panel-grades"
+        role="tabpanel"
+        aria-labelledby="group-tab-grades"
+        tabindex="0"
         x-show="activeTab === 'grades'"
         x-cloak
         x-transition:enter="transition ease-out duration-200"
@@ -576,40 +595,27 @@
         class="space-y-4"
     >
         <x-section-header
+            :institutional="true"
             title="Calificaciones e intentos de examen"
-            subtitle="Supervisa los resultados de las evaluaciones presentadas en este grupo."
-        >
-            <x-slot:actions>
-                <x-button :href="route('groups.periods.index', $group)" variant="neutral" size="md">
-                    <x-icon name="reportBar" class="w-4 h-4" />
-                    Abrir periodos
-                </x-button>
-            </x-slot:actions>
-        </x-section-header>
+            subtitle="Los indicadores cuentan intentos vigentes de estudiantes inscritos. La tabla conserva el historial."
+        />
 
-        {{-- Resumen de métricas de entregas --}}
-        <div class="grid gap-4 sm:grid-cols-3">
-            <x-kpi-card
-                label="Intentos registrados"
-                :value="$attempts->count()"
-                icon="document"
-                tone="tech"
-            />
-
-            <x-kpi-card
-                label="Exámenes entregados"
-                :value="$submittedCount"
-                icon="success"
-                tone="accent"
-            />
-
-            <x-kpi-card
-                label="En progreso"
-                :value="$inProgressCount"
-                icon="clock"
-                tone="warning"
-            />
-        </div>
+        <x-card padding="p-3">
+            <dl class="flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-700">
+                <div class="flex gap-2">
+                    <dt>Intentos vigentes</dt>
+                    <dd class="font-semibold text-acode-primary">{{ $currentEnrolledAttempts->count() }}</dd>
+                </div>
+                <div class="flex gap-2">
+                    <dt>Entregados</dt>
+                    <dd class="font-semibold text-acode-primary">{{ $submittedCount }}</dd>
+                </div>
+                <div class="flex gap-2">
+                    <dt>En progreso</dt>
+                    <dd class="font-semibold text-acode-primary">{{ $inProgressCount }}</dd>
+                </div>
+            </dl>
+        </x-card>
 
         @if ($attempts->isEmpty())
             <x-empty-state
@@ -619,46 +625,61 @@
             />
         @else
             {{-- Filtros de Calificaciones --}}
-            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div class="grid gap-4 md:grid-cols-2">
-                    <x-form.group name="grade-search" label="Buscar estudiante o examen">
+            <form role="search" aria-label="Intentos de examen" x-on:submit.prevent="gradeSearch = $refs.gradeSearchInput.value">
+                <x-search-panel>
+                    <x-slot:field>
                         <x-form.input
                             id="grade-search"
                             type="search"
-                            prefixIcon="search"
-                            x-model="gradeSearch"
-                            placeholder="Nombre, correo o título de examen..."
+                            prefix-icon="search"
+                            enterkeyhint="search"
+                            x-ref="gradeSearchInput"
+                            x-model.debounce.300ms="gradeSearch"
+                            placeholder="Buscar por nombre, correo o título de examen…"
+                            aria-label="Buscar estudiante o examen"
                         />
-                    </x-form.group>
+                    </x-slot:field>
 
-                    <x-form.group name="grade-status" label="Estado del intento">
-                        <x-form.select
-                            id="grade-status"
-                            x-model="gradeStatus"
+                    <x-slot:actions>
+                        <x-button
+                            type="button" variant="secondary" x-show="gradeSearch.trim() !== '' || gradeStatus !== 'all'" x-cloak
+                            x-on:click="gradeSearch = ''; gradeStatus = 'all'; $refs.gradeSearchInput.focus()"
                         >
-                            <option value="all">Todos los estados</option>
-                            <option value="submitted">Entregado</option>
-                            <option value="in_progress">En progreso</option>
-                            <option value="expired">Expirado</option>
-                            <option value="cancelled_by_incident">Cancelado por incidente</option>
-                        </x-form.select>
-                    </x-form.group>
-                </div>
-            </div>
+                            Limpiar filtros
+                        </x-button>
+                    </x-slot:actions>
+
+                    <x-slot:filters>
+                        <x-form.group field-id="grade-status" label="Estado del intento" class="sm:w-52">
+                            <x-form.select id="grade-status" size="sm" x-model="gradeStatus">
+                                <option value="all">Todos los estados</option>
+                                <option value="submitted">Entregado</option>
+                                <option value="in_progress">En progreso</option>
+                                <option value="expired">Expirado</option>
+                                <option value="cancelled_by_incident">Cancelado por incidente</option>
+                            </x-form.select>
+                        </x-form.group>
+                    </x-slot:filters>
+                </x-search-panel>
+            </form>
 
             {{-- Tabla de Intentos --}}
             <div x-show="filteredAttempts.length > 0">
-                <x-table>
+                <x-table zebra="slate" scroll-label="Calificaciones e intentos de examen">
                     <x-slot:header>
-                        <x-table.th>Estudiante</x-table.th>
-                        <x-table.th>Examen</x-table.th>
+                        <x-table.th align="center">Estudiante</x-table.th>
+                        <x-table.th align="center">Examen</x-table.th>
                         <x-table.th align="center">Estado</x-table.th>
-                        <x-table.th>Calificación</x-table.th>
-                        <x-table.th>Fecha de entrega</x-table.th>
-                        <x-table.th align="right">Acciones</x-table.th>
+                        <x-table.th align="center">Calificación</x-table.th>
+                        <x-table.th align="center">Fecha de entrega</x-table.th>
+                        <x-table.th align="center">Acciones</x-table.th>
                     </x-slot:header>
 
                     @forelse ($attempts as $attempt)
+                        @php
+                            $isWithdrawn = ! $enrolledStudentIds->has($attempt->student_id);
+                            $isReplaced = ! $currentAttemptIds->has($attempt->id);
+                        @endphp
                         <tr
                             x-show="
                                 (!gradeSearch.trim() || @js(mb_strtolower(($attempt->student?->full_name ?? '') . ' ' . ($attempt->student?->email ?? '') . ' ' . ($attempt->exam?->title ?? ''))).includes(gradeSearch.toLowerCase().trim()))
@@ -668,16 +689,19 @@
                         >
                             <x-table.td>
                                 <div class="flex items-center gap-3">
-                                    <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-acode-primary text-xs font-bold text-white shadow-sm">
-                                        {{ strtoupper(substr($attempt->student?->first_name ?? $attempt->student?->full_name ?? 'E', 0, 1)) }}
+                                    <div aria-hidden="true" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-acode-primary text-xs font-bold text-white shadow-sm">
+                                        {{ mb_strtoupper(mb_substr($attempt->student?->first_name ?? $attempt->student?->full_name ?? 'E', 0, 1)) }}
                                     </div>
                                     <div>
                                         <p class="font-bold text-acode-primary leading-tight">
                                             {{ $attempt->student?->full_name ?? 'Estudiante no disponible' }}
                                         </p>
-                                        <p class="text-xs text-slate-400 mt-0.5">
+                                        <p class="text-xs text-slate-500 mt-0.5">
                                             {{ $attempt->student?->email ?? '—' }}
                                         </p>
+                                        @if ($isWithdrawn)
+                                            <x-badge variant="neutral" class="mt-1">Retirado</x-badge>
+                                        @endif
                                     </div>
                                 </div>
                             </x-table.td>
@@ -686,38 +710,41 @@
                                 <p class="font-semibold text-slate-800 text-xs sm:text-sm">
                                     {{ $attempt->exam?->title ?? 'Examen no disponible' }}
                                 </p>
-                                <p class="text-xs text-slate-400 mt-0.5 font-mono">
+                                <p class="text-xs text-slate-500 mt-0.5 font-mono">
                                     Escala {{ $attempt->exam?->grading_scale ?? '—' }}
                                 </p>
                             </x-table.td>
 
                             <x-table.td align="center">
-                                @switch($attempt->status)
-                                    @case('submitted')
-                                        <x-badge variant="accent">Entregado</x-badge>
-                                        @break
-                                    @case('in_progress')
-                                        <x-badge variant="tech">En progreso</x-badge>
-                                        @break
-                                    @case('expired')
-                                        <x-badge variant="neutral">Expirado</x-badge>
-                                        @break
-                                    @case('cancelled_by_incident')
-                                        <x-badge variant="danger">Cancelado</x-badge>
-                                        @break
-                                @endswitch
+                                @if ($isReplaced)
+                                    <x-badge variant="neutral">Reemplazado</x-badge>
+                                @else
+                                    @switch($attempt->status)
+                                        @case('submitted')
+                                            <x-badge variant="accent">Entregado</x-badge>
+                                            @break
+                                        @case('in_progress')
+                                            <x-badge variant="tech">En progreso</x-badge>
+                                            @break
+                                        @case('expired')
+                                            <x-badge variant="neutral">Expirado</x-badge>
+                                            @break
+                                        @case('cancelled_by_incident')
+                                            <x-badge variant="danger">Cancelado</x-badge>
+                                            @break
+                                    @endswitch
+                                @endif
                             </x-table.td>
 
                             <x-table.td>
                                 @if ($attempt->status === 'submitted' && $attempt->final_score !== null)
                                     <p class="font-mono font-bold text-acode-primary text-sm">
                                         {{ number_format((float) $attempt->final_score, 2) }}
-                                        <span class="text-xs font-normal text-slate-400">/ {{ $attempt->exam?->grading_scale ?? '—' }}</span>
                                     </p>
                                 @elseif ($attempt->status === 'submitted')
-                                    <span class="text-xs text-slate-500 italic">Pendiente de cálculo</span>
+                                    <span class="text-xs text-slate-600">Pendiente de revisión</span>
                                 @else
-                                    <span class="text-xs text-slate-400">—</span>
+                                    <span class="text-xs text-slate-500">—</span>
                                 @endif
                             </x-table.td>
 
@@ -730,14 +757,18 @@
                             <x-table.td align="right">
                                 @if ($attempt->status === 'submitted' && $attempt->exam)
                                     <x-button
-                                        :href="route('exams.revision.show', [$attempt->exam, $attempt])"
+                                        :href="route('exams.revision.show', [
+                                            'exam' => $attempt->exam,
+                                            'attempt' => $attempt,
+                                            'group_id' => $group->id,
+                                        ])"
                                         variant="neutral"
                                         size="sm"
                                     >
-                                        Abrir detalles
+                                        Revisar entrega
                                     </x-button>
                                 @else
-                                    <span class="text-xs text-slate-400">—</span>
+                                    <span class="text-xs text-slate-500">—</span>
                                 @endif
                             </x-table.td>
                         </tr>
@@ -762,16 +793,55 @@
                     title="No se encontraron intentos"
                     message="Ningún intento coincide con la búsqueda o el estado seleccionado."
                 >
-                    <x-button type="button" variant="neutral" size="sm" @click="gradeSearch = ''; gradeStatus = 'all'">
+                    <x-button type="button" variant="neutral" size="sm" @click="gradeSearch = ''; gradeStatus = 'all'; $refs.gradeSearchInput.focus()">
                         Limpiar filtros
                     </x-button>
                 </x-empty-state>
             </div>
         @endif
+
+        @if ($withdrawnPeriodGrades->isNotEmpty() || $withdrawnStudentsWithoutGrades->isNotEmpty())
+            <x-section-header
+                :institutional="true"
+                title="Registros de estudiantes retirados"
+                subtitle="Las calificaciones guardadas se conservan y no cuentan en la matrícula activa."
+            />
+            <x-table zebra="slate" scroll-label="Registros de estudiantes retirados">
+                <x-slot:header>
+                    <x-table.th align="center">Estudiante</x-table.th>
+                    <x-table.th align="center">Periodo de evaluación</x-table.th>
+                    <x-table.th align="center">Calificación guardada</x-table.th>
+                </x-slot:header>
+                @foreach ($withdrawnPeriodGrades as $grade)
+                    <tr>
+                        <x-table.td>
+                            {{ $grade->student?->full_name ?? 'Estudiante no disponible' }}
+                            <x-badge variant="neutral" class="ml-2">Retirado</x-badge>
+                        </x-table.td>
+                        <x-table.td>{{ $grade->evaluationPeriod?->name ?? 'Periodo no disponible' }}</x-table.td>
+                        <x-table.td align="right">{{ $group->formatGrade($grade->final_grade, 2) ?? 'Pendiente' }}</x-table.td>
+                    </tr>
+                @endforeach
+                @foreach ($withdrawnStudentsWithoutGrades as $student)
+                    <tr>
+                        <x-table.td>
+                            {{ $student->full_name }}
+                            <x-badge variant="neutral" class="ml-2">Retirado</x-badge>
+                        </x-table.td>
+                        <x-table.td>Sin periodo registrado</x-table.td>
+                        <x-table.td align="right">Sin calificación</x-table.td>
+                    </tr>
+                @endforeach
+            </x-table>
+        @endif
     </section>
 
     {{-- Nivel 4D: Apartado 4 - Configuración de Evaluación (Periodos y Fórmulas) --}}
     <section
+        id="group-panel-evaluation"
+        role="tabpanel"
+        aria-labelledby="group-tab-evaluation"
+        tabindex="0"
         x-show="activeTab === 'evaluation'"
         x-cloak
         x-transition:enter="transition ease-out duration-200"
@@ -783,11 +853,12 @@
         class="space-y-4"
     >
         <x-section-header
+            :institutional="true"
             title="Periodos y ponderaciones"
-            subtitle="Consulta y gestiona los parciales escolares, ponderaciones porcentuales y sábanas de notas."
+            subtitle="Consulta los periodos, las ponderaciones y las calificaciones del grupo."
         >
             <x-slot:actions>
-                <x-button :href="route('groups.periods.index', $group)" variant="primary" size="md">
+                <x-button :href="$periodsUrl" variant="neutral" size="md">
                     <x-icon name="clock" class="w-4 h-4" />
                     Abrir periodos
                 </x-button>
@@ -802,13 +873,13 @@
                 @endphp
                 <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-acode-tech/50">
                     <div class="flex flex-wrap items-start justify-between gap-3">
-                        <div>
+                        <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
-                                <h3 class="text-base font-bold text-acode-primary">
+                                <h3 class="min-w-0 break-words text-base font-bold text-acode-primary">
                                     {{ $period->name }}
                                 </h3>
-                                @if ($period->is_active_today)
-                                    <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-acode-accent">
+                                @if (! $group->is_closed && $period->is_active_today)
+                                    <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-acode-accent-dark">
                                         <span class="h-1.5 w-1.5 rounded-full bg-acode-accent"></span>
                                         Activo hoy
                                     </span>
@@ -846,14 +917,14 @@
                                 </div>
 
                                 <div class="rounded-lg border border-acode-accent/30 bg-acode-accent/10 p-3">
-                                    <p class="text-xs font-semibold text-acode-accent-dark">Tareas</p>
+                                    <p class="text-xs font-semibold text-slate-700">Tareas</p>
                                     <p class="mt-1 text-lg font-extrabold text-acode-primary font-mono">
                                         {{ number_format($weights['homework'] ?? 0, 1) }} %
                                     </p>
                                 </div>
 
                                 <div class="rounded-lg border border-acode-warning/40 bg-acode-warning/15 p-3">
-                                    <p class="text-xs font-semibold text-acode-warning-dark">Proyectos</p>
+                                    <p class="text-xs font-semibold text-slate-700">Proyectos</p>
                                     <p class="mt-1 text-lg font-extrabold text-acode-primary font-mono">
                                         {{ number_format($weights['project'] ?? 0, 1) }} %
                                     </p>
@@ -873,38 +944,46 @@
                         @endif
                     </div>
 
-                    <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                        <span class="text-xs text-slate-500">
-                            Ponderación validada y respaldada en base de datos.
-                        </span>
-
-                        <x-button :href="route('groups.periods.gradebook', [$group, $period])" variant="neutral" size="sm">
-                            <x-icon name="document" class="w-4 h-4" />
+                    <div class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-3">
+                        <a href="{{ route('groups.periods.gradebook', [$group, $period, ...$catalogContext]) }}"
+                           aria-label="Abrir calificaciones de {{ $period->name }} · {{ $group->name }}"
+                           class="inline-flex min-h-8 items-center whitespace-nowrap rounded-lg px-2 text-xs font-semibold text-acode-tech underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
                             Abrir calificaciones
-                        </x-button>
+                        </a>
+                        @unless ($group->is_closed)
+                            <a href="{{ route('groups.periods.edit', [$group, $period]) }}"
+                               aria-label="Editar periodo: {{ $period->name }}"
+                               class="inline-flex min-h-8 items-center whitespace-nowrap rounded-lg px-2 text-xs font-semibold text-acode-tech underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
+                                Editar periodo
+                            </a>
+                            <a href="{{ route('groups.periods.plan', [$group, $period]) }}"
+                               aria-label="Editar ponderaciones de {{ $period->name }}"
+                               class="inline-flex min-h-8 items-center whitespace-nowrap rounded-lg px-2 text-xs font-semibold text-acode-tech underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
+                                Editar ponderaciones
+                            </a>
+                        @endunless
                     </div>
                 </article>
             @empty
                 <x-empty-state
                     icon="clock"
                     title="No hay periodos de evaluación registrados"
-                    message="Configura el primer parcial del grupo escolar para definir las ponderaciones de exámenes, tareas, proyectos y otros rubros."
-                >
-                    <x-button :href="route('groups.periods.index', $group)" variant="primary" size="md">
-                        <x-icon name="add" class="w-4 h-4" />
-                        Crear periodo
-                    </x-button>
-                </x-empty-state>
+                    :message="$group->is_closed
+                        ? 'El grupo está cerrado. Reábrelo si necesitas registrar un periodo.'
+                        : 'Configura el primer periodo y sus ponderaciones.'"
+                />
             @endforelse
         </div>
     </section>
 
     {{-- Nivel 5: Modal de Código QR Institucional Oficial --}}
-    <x-group.qr-modal
-        name="group-qr-modal"
-        :groupName="$group->name"
-        :folio="$group->access_folio"
-    />
+    @unless ($group->is_closed)
+        <x-group.qr-modal
+            name="group-qr-modal"
+            :group-name="$group->name"
+            :folio="$group->access_folio"
+        />
+    @endunless
 
 </div>
 @endsection

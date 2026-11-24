@@ -217,6 +217,18 @@ class StudentResultsTest extends TestCase
         $this->fetch("/api/v1/grades/{$attempt->id}")->assertStatus(404);
     }
 
+    public function test_closing_the_group_revokes_results_and_review(): void
+    {
+        $attempt = $this->createAttempt(['final_score' => 7.5]);
+        $this->fetch("/api/v1/grades/{$attempt->id}")->assertOk();
+
+        $this->group->update(['is_closed' => true, 'closed_at' => now()]);
+        $this->fetch("/api/v1/grades/{$attempt->id}")->assertNotFound();
+        $this->fetch("/api/v1/grades/{$attempt->id}/review")->assertNotFound();
+        $this->fetch('/api/v1/grades')->assertOk()->assertJsonCount(0, 'data.data');
+        $this->assertDatabaseHas('acs_student_attempts', ['id' => $attempt->id]);
+    }
+
     // ------------------------------------------------------------------
     // RF-REP-006 · Comentarios del docente
     // ------------------------------------------------------------------

@@ -76,6 +76,8 @@ class StudentAttempt extends Model
         'paraphrase_snapshot_payload',
         'current_question_index',
         'started_at',
+        'free_edit_until',
+        'free_close_at',
         'submitted_at',
         'status',
         'objective_score',
@@ -127,11 +129,27 @@ class StudentAttempt extends Model
         return $this->hasMany(StudentAnswer::class);
     }
 
+    public function scopePendingTeacherReview(Builder $query): Builder
+    {
+        return $query->current()->where('status', 'submitted')->where('pending_ai_count', '>', 0);
+    }
+
+    public function scopeWithCurrentFinalGrade(Builder $query): Builder
+    {
+        return $query->current()->whereNotNull('final_score');
+    }
+
+    public function aiSuggestedScore(): ?float
+    {
+        $points = $this->answers->map->aiSuggestedPoints()->whereNotNull();
+
+        return $points->isEmpty() ? null : round((float) $points->sum(), 2);
+    }
+
     /**
-     * Limita los intentos a los de grupos a los que el alumno pertenece hoy.
-     * Al salir de un grupo (RF-GRU-012) sus resultados dejan de ser visibles
-     * para él, pero se conservan como evidencia académica (ADR-036) y
-     * reaparecen si vuelve a unirse.
+     * Limita los intentos a grupos abiertos de los que el alumno es miembro.
+     * Al perder el acceso (RF-GRU-011/012/019), los resultados se conservan
+     * como evidencia académica (ADR-036).
      *
      * @param Builder<StudentAttempt> $query     Constructor de la consulta Eloquent.
      * @param int                     $studentId Identificador del estudiante.
@@ -139,8 +157,8 @@ class StudentAttempt extends Model
      */
     public function scopeInCurrentGroupsOfStudent(Builder $query, int $studentId): Builder
     {
-        return $query->whereIn('group_id', static function ($sub) use ($studentId): void {
-            $sub->select('group_id')->from('acs_group_student')->where('student_id', $studentId);
+        return $query->whereHas('group', static function (Builder $group) use ($studentId): void {
+            $group->active()->whereHas('students', static fn (Builder $student) => $student->whereKey($studentId));
         });
     }
 
@@ -175,6 +193,8 @@ class StudentAttempt extends Model
             'question_sequence_payload' => 'array',
             'paraphrase_snapshot_payload' => 'array',
             'started_at' => 'datetime',
+            'free_edit_until' => 'datetime',
+            'free_close_at' => 'datetime',
             'submitted_at' => 'datetime',
             'reapplication_authorized_at' => 'datetime',
             'attempt_number' => 'integer',

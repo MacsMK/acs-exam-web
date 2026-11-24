@@ -91,6 +91,11 @@ class TeacherSubscriptionService
      *     activePackage: ?SubscriptionPackage,
      *     currentSubscription: ?TeacherSubscription,
      *     isSuspendedSubscription: bool,
+     *     isExpiredSubscription: bool,
+     *     isAwaitingRenewal: bool,
+     *     canCheckout: bool,
+     *     canUpgrade: bool,
+     *     canCancelRenewal: bool,
      *     isOnboarding: bool,
      *     activeGroupsCount: int,
      *     cumulativeGroupsCount: int,
@@ -116,15 +121,20 @@ class TeacherSubscriptionService
         }
 
         $currentSubscription = $teacher->subscription;
+        $isInGracePeriod = (bool) $currentSubscription?->isInRenewalGracePeriod();
+        $isAwaitingRenewal = $activePackage === null && (bool) $currentSubscription?->isRenewalDue();
+        $isExpiredSubscription = $activePackage === null && ! $isAwaitingRenewal
+            && ! $isSuspendedSubscription
+            && in_array($currentSubscription?->payment_status, ['paid', 'overdue'], true)
+            && $currentSubscription->expires_at?->isPast();
+        $canManageRenewal = $activePackage !== null && $currentSubscription?->renewsAutomatically();
 
         $activeGroupsCount = Group::withoutGlobalScopes()
             ->where('teacher_id', $teacher->id)
             ->where('is_closed', false)
             ->count();
 
-        $cumulativeGroupsCount = Group::withoutGlobalScopes()
-            ->where('teacher_id', $teacher->id)
-            ->count();
+        $cumulativeGroupsCount = $this->subscriptionLimitService->countHistoricalTrialGroups($teacher);
 
         $questionsQuery = Question::withoutGlobalScopes()
             ->where('teacher_id', $teacher->id);
@@ -140,9 +150,7 @@ class TeacherSubscriptionService
             ->where('is_published', true)
             ->count();
 
-        $cumulativeExamsCount = Exam::withoutGlobalScopes()
-            ->where('teacher_id', $teacher->id)
-            ->count();
+        $cumulativeExamsCount = $this->subscriptionLimitService->countHistoricalTrialExams($teacher);
 
         $packages = SubscriptionPackage::where('is_active', true)
             ->orderBy('monthly_price')
@@ -189,17 +197,23 @@ class TeacherSubscriptionService
                 : ($activePackage?->max_active_exams === null ? 'Exámenes activos ilimitados' : 'Exámenes activos simultáneos'),
         );
 
+        $aiCreditsUsed = $aiCreditSummary['used'];
+        $aiCreditsLimit = $aiCreditSummary['limit'];
+        $aiCreditsPeriod = $aiCreditSummary['tier'] === 'freemium' ? 'en la prueba gratuita' : 'en este ciclo';
         $aiCreditsMetric = [
-            'used' => $aiCreditSummary['used'],
-            'limit' => $aiCreditSummary['limit'],
+            'used' => $aiCreditsUsed,
+            'limit' => $aiCreditsLimit,
             'remaining' => $aiCreditSummary['remaining'],
             'is_unlimited' => $aiCreditSummary['is_unlimited'],
             'percent' => $aiCreditSummary['percent'],
             'variant' => $aiCreditSummary['variant'],
-            'limit_label' => $aiCreditSummary['is_unlimited'] ? 'Ilimitado' : (string) ($aiCreditSummary['limit'] ?? 0),
-            'usage_label' => $aiCreditSummary['is_unlimited']
-                ? "{$aiCreditSummary['used']} / Ilimitado"
-                : "{$aiCreditSummary['used']} / ".($aiCreditSummary['limit'] ?? 0).' evaluaciones IA',
+            'limit_label' => $aiCreditSummary['is_unlimited'] ? 'Ilimitado' : (string) ($aiCreditsLimit ?? 0),
+            'usage_label' => match (true) {
+                $aiCreditSummary['is_suspended'] => 'Sin cupo disponible',
+                $aiCreditSummary['is_unlimited'] => number_format($aiCreditsUsed).($aiCreditsUsed === 1 ? ' crédito usado' : ' créditos usados'),
+                default => number_format($aiCreditsUsed).' de '.number_format($aiCreditsLimit ?? 0)
+                    .($aiCreditsLimit === 1 ? ' crédito usado ' : ' créditos usados ').$aiCreditsPeriod,
+            },
             'description' => $aiCreditSummary['cycle_label'],
         ];
 
@@ -208,6 +222,11 @@ class TeacherSubscriptionService
             'activePackage' => $activePackage,
             'currentSubscription' => $currentSubscription,
             'isSuspendedSubscription' => $isSuspendedSubscription,
+            'isExpiredSubscription' => $isExpiredSubscription,
+            'isAwaitingRenewal' => $isAwaitingRenewal,
+            'canCheckout' => $activePackage === null && ! $isAwaitingRenewal,
+            'canUpgrade' => $canManageRenewal,
+            'canCancelRenewal' => $canManageRenewal || $isAwaitingRenewal,
             'isOnboarding' => $isOnboarding,
             'activeGroupsCount' => $activeGroupsCount,
             'cumulativeGroupsCount' => $cumulativeGroupsCount,
@@ -223,8 +242,8 @@ class TeacherSubscriptionService
             'aiCreditSummary' => $aiCreditSummary,
             'packages' => $packages,
             'transactions' => $transactions,
-            'nextChargeAt' => $activePackage !== null ? $currentSubscription?->nextChargeAt() : null,
-            'isInGracePeriod' => (bool) $currentSubscription?->isInRenewalGracePeriod(),
+            'nextChargeAt' => $activePackage !== null && ! $isInGracePeriod ? $currentSubscription?->nextChargeAt() : null,
+            'isInGracePeriod' => $isInGracePeriod,
             'whatsappNumber' => (string) config('services.acode.whatsapp_sales', '5215500000000'),
         ];
     }
@@ -257,13 +276,7 @@ class TeacherSubscriptionService
 
         return [
             'packages' => $packages,
-            'freemiumLimits' => [
-                'max_groups' => SubscriptionLimitService::FREEMIUM_MAX_CUMULATIVE_GROUPS,
-                'max_exams' => SubscriptionLimitService::FREEMIUM_MAX_CUMULATIVE_EXAMS,
-                'max_questions' => SubscriptionLimitService::FREEMIUM_MAX_QUESTIONS,
-                'max_students' => SubscriptionLimitService::FREEMIUM_MAX_STUDENTS_PER_GROUP,
-                'max_ai_evaluations' => SubscriptionLimitService::FREEMIUM_MAX_AI_EVALUATIONS,
-            ],
+            'freemiumLimits' => SubscriptionLimitService::FREEMIUM_LIMITS,
             'speiClabe' => self::SIMULATED_CLABE,
             'speiBeneficiary' => self::SIMULATED_BENEFICIARY,
             'whatsappNumber' => (string) config('services.acode.whatsapp_sales', '5215500000000'),
@@ -305,6 +318,15 @@ class TeacherSubscriptionService
         ];
     }
 
+    public function canCheckout(User $teacher): bool
+    {
+        $teacher->loadMissing('subscription');
+
+        return $teacher->subscription?->payment_status === 'suspended'
+            || (! $teacher->subscription?->isRenewalDue()
+                && $this->subscriptionLimitService->resolveActivePackage($teacher) === null);
+    }
+
     /**
      * Procesa un cobro instantáneo mediante la pasarela desacoplada y persiste la
      * transacción (aprobada o fallida) junto con la activación atómica del plan.
@@ -326,6 +348,10 @@ class TeacherSubscriptionService
         abort_unless($teacher->role === 'teacher' && $teacher->isVerifiedTeacher(), 403);
         abort_unless((bool) $package->is_active, 404);
 
+        if (! $this->canCheckout($teacher)) {
+            throw new DomainException('Ya tienes una suscripción activa.');
+        }
+
         // Ejecuta la pasarela fuera de DB::transaction() para no retener locks SQL ante I/O externo.
         $result = $this->paymentGateway->process($package, $teacher, $paymentData);
 
@@ -342,15 +368,20 @@ class TeacherSubscriptionService
             $lockedPackage = SubscriptionPackage::whereKey($package->id)->lockForUpdate()->firstOrFail();
             abort_unless((bool) $lockedPackage->is_active, 404);
 
+            $subscription = $lockedTeacher->teacherSubscriptions()
+                ->latest('id')
+                ->lockForUpdate()
+                ->first();
+            $lockedTeacher->setRelation('subscription', $subscription);
+
+            if (! $this->canCheckout($lockedTeacher)) {
+                throw new DomainException('Ya tienes una suscripción activa.');
+            }
+
             $referenceCode = $this->generateUniqueReferenceCode();
             $now = now();
 
             if ($result['approved']) {
-                $subscription = $lockedTeacher->teacherSubscriptions()
-                    ->latest('id')
-                    ->lockForUpdate()
-                    ->first();
-
                 // Solo la tarjeta autorizada se domicilia; SPEI paga un mes sin renovación (RF-SUS-002/003)
                 $isRecurringCard = $result['method'] === PaymentTransaction::METHOD_CARD
                     && filter_var($paymentData['authorize_recurring'] ?? false, FILTER_VALIDATE_BOOLEAN);
@@ -359,7 +390,7 @@ class TeacherSubscriptionService
                     'subscription_package_id' => $lockedPackage->id,
                     'payment_status' => 'paid',
                     'starts_at' => $now,
-                    'expires_at' => $now->copy()->addMonth(),
+                    'expires_at' => $now->copy()->addMonthNoOverflow(),
                     'suspended_at' => null,
                     'notes' => "Pago instantáneo simulado ({$result['method']}) · Folio {$referenceCode}",
                     'auto_renew' => $isRecurringCard,
@@ -546,23 +577,24 @@ class TeacherSubscriptionService
      */
     public function upgradePackage(User $teacher, SubscriptionPackage $package, ?string $ipAddress, ?string $userAgent): PaymentTransaction
     {
-        $currentPackage = $this->subscriptionLimitService->resolveActivePackage($teacher);
+        return DB::transaction(function () use ($teacher, $package, $ipAddress, $userAgent): PaymentTransaction {
+            $subscription = $teacher->teacherSubscriptions()->lockForUpdate()->first();
+            $teacher->setRelation('subscription', $subscription);
+            $currentPackage = $this->subscriptionLimitService->resolveActivePackage($teacher);
 
-        if ($currentPackage === null) {
-            throw new DomainException('Necesitas una suscripción activa para actualizar de nivel.');
-        }
+            if ($currentPackage === null) {
+                throw new DomainException('Necesitas una suscripción activa para actualizar de nivel.');
+            }
 
-        if (! $package->is_active || (float) $package->monthly_price <= (float) $currentPackage->monthly_price) {
-            throw new DomainException('Solo puedes actualizar a un nivel superior a tu plan actual.');
-        }
+            if (! $package->is_active || (float) $package->monthly_price <= (float) $currentPackage->monthly_price) {
+                throw new DomainException('Solo puedes actualizar a un nivel superior a tu plan actual.');
+            }
 
-        // Sin renovación activa no hay siguiente factura donde aplicar el nuevo precio (RF-SUS-011)
-        if (! $teacher->subscription?->renewsAutomatically()) {
-            throw new DomainException('Para actualizar de nivel tu suscripción debe renovarse con tarjeta. Puedes contratar el nuevo nivel al terminar tu periodo actual.');
-        }
+            // La siguiente renovación aplica el nuevo precio (RF-SUS-011).
+            if (! $subscription?->renewsAutomatically()) {
+                throw new DomainException('Para actualizar de nivel tu suscripción debe renovarse con tarjeta. Puedes contratar el nuevo nivel al terminar tu periodo actual.');
+            }
 
-        return DB::transaction(function () use ($teacher, $package, $currentPackage, $ipAddress, $userAgent): PaymentTransaction {
-            $subscription = $teacher->teacherSubscriptions()->lockForUpdate()->firstOrFail();
             $subscription->update(['subscription_package_id' => $package->id]);
 
             $transaction = PaymentTransaction::create([
@@ -605,28 +637,30 @@ class TeacherSubscriptionService
      */
     public function cancelRenewal(User $teacher, ?string $ipAddress, ?string $userAgent): TeacherSubscription
     {
-        $subscription = $teacher->subscription;
+        return DB::transaction(function () use ($teacher, $ipAddress, $userAgent): TeacherSubscription {
+            $subscription = $teacher->teacherSubscriptions()->lockForUpdate()->first();
 
-        if ($subscription === null || ! $subscription->renewsAutomatically()) {
-            throw new DomainException('Tu suscripción no tiene una renovación automática que cancelar.');
-        }
+            if ($subscription === null || ! $subscription->renewsAutomatically()) {
+                throw new DomainException('Tu suscripción no tiene una renovación automática que cancelar.');
+            }
 
-        $subscription->update([
-            'auto_renew' => false,
-            'cancelled_at' => now(),
-        ]);
+            $subscription->update([
+                'auto_renew' => false,
+                'cancelled_at' => now(),
+            ]);
 
-        AuditLog::create([
-            'user_id' => $teacher->id,
-            'action' => 'subscription.renewal_cancelled',
-            'auditable_type' => TeacherSubscription::class,
-            'auditable_id' => $subscription->id,
-            'new_values' => ['ends_at' => $subscription->expires_at?->toIso8601String()],
-            'ip_address' => $ipAddress,
-            'user_agent' => $this->truncateUserAgent($userAgent),
-        ]);
+            AuditLog::create([
+                'user_id' => $teacher->id,
+                'action' => 'subscription.renewal_cancelled',
+                'auditable_type' => TeacherSubscription::class,
+                'auditable_id' => $subscription->id,
+                'new_values' => ['ends_at' => $subscription->expires_at?->toIso8601String()],
+                'ip_address' => $ipAddress,
+                'user_agent' => $this->truncateUserAgent($userAgent),
+            ]);
 
-        return $subscription;
+            return $subscription;
+        });
     }
 
     /**
@@ -663,6 +697,17 @@ class TeacherSubscriptionService
             );
 
             DB::transaction(function () use ($subscription, $package, $result, &$counts): void {
+                $current = TeacherSubscription::whereKey($subscription->id)->lockForUpdate()->first();
+
+                if (! $current?->isRenewalDue()
+                    || $current->subscription_package_id !== $subscription->subscription_package_id
+                    || $current->card_last4 !== $subscription->card_last4
+                    || ! $current->expires_at->eq($subscription->expires_at)
+                    || $this->renewalAttemptedToday($current)) {
+                    return;
+                }
+
+                $subscription = $current;
                 $approved = (bool) $result['approved'];
                 $attempts = $approved ? 0 : $subscription->renewal_attempts + 1;
 
@@ -764,9 +809,9 @@ class TeacherSubscriptionService
         SubscriptionPackage $package,
         PaymentTransaction $transaction,
     ): void {
-        $teacher->loadMissing('subscription');
-        $renewalDate = $teacher->subscription?->expires_at?->format('d/m/Y')
-            ?? now()->addMonth()->format('d/m/Y');
+        $subscription = $transaction->loadMissing('subscription')->subscription;
+        $endsAt = $subscription?->expires_at?->format('d/m/Y');
+        $nextCharge = $subscription?->nextChargeAt()?->format('d/m/Y');
 
         $amountFormatted = number_format((float) $transaction->amount, 2);
         $subject = "Recibo de suscripción {$package->name} · Folio {$transaction->reference_code}";
@@ -779,7 +824,8 @@ class TeacherSubscriptionService
             "Plan contratado: {$package->name}",
             "Monto pagado: \${$amountFormatted} {$transaction->currency}",
             "Método de pago: {$transaction->maskedPaymentSummary()}",
-            "Próxima renovación: {$renewalDate}",
+            "Vigencia: {$endsAt}",
+            $nextCharge ? "Próximo cobro: {$nextCharge}" : 'Sin renovación automática',
             '',
             'Tu plan ya se encuentra activo. Puedes consultar el detalle en la sección Mi Suscripción.',
         ]);

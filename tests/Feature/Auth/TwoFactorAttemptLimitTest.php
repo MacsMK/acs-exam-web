@@ -55,6 +55,7 @@ class TwoFactorAttemptLimitTest extends TestCase
         }
 
         $response->assertSessionHasErrors(['code' => AuthService::TWO_FACTOR_LOCKED_MESSAGE]);
+        $this->assertSame(5, $user->fresh()->two_factor_failed_attempts);
 
         $this->webVerify($user, $user->two_factor_code)
             ->assertSessionHasErrors(['code' => AuthService::TWO_FACTOR_LOCKED_MESSAGE]);
@@ -76,6 +77,7 @@ class TwoFactorAttemptLimitTest extends TestCase
             ->assertSessionHas('status');
 
         $fresh = $user->fresh();
+        $this->assertSame(0, $fresh->two_factor_failed_attempts);
         $this->webVerify($fresh, $fresh->two_factor_code)->assertRedirect(route('dashboard'));
     }
 

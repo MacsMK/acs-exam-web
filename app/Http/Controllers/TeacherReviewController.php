@@ -27,6 +27,7 @@ use App\Http\Requests\RequestAiEvaluationRequest;
 use App\Http\Requests\TeacherReviewStoreRequest;
 use App\Models\AuditLog;
 use App\Models\Exam;
+use App\Models\Group;
 use App\Models\StudentAnswer;
 use App\Models\StudentAttempt;
 use App\Models\User;
@@ -34,10 +35,12 @@ use App\Repositories\Contracts\ExamRepositoryInterface;
 use App\Services\AiEvaluationService;
 use App\Services\AttemptService;
 use App\Services\GradeCalculatorService;
+use App\Services\GroupGradeResults;
 use App\Services\SubscriptionLimitService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use DomainException;
 use Illuminate\Validation\ValidationException;
@@ -49,17 +52,23 @@ use Illuminate\Validation\ValidationException;
  */
 class TeacherReviewController extends Controller
 {
+    private const CENTER_STATUSES = ['all', 'pending_review', 'draft', 'scheduled', 'active', 'closed'];
+
+    private const ATTEMPT_STATUSES = ['all', 'pending_recoteje', 'graded', 'cancelled'];
+
     /**
      * Inicializa el controlador con el repositorio de exámenes y servicios de dominio.
      *
      * @param ExamRepositoryInterface $examRepository Repositorio de exámenes e intentos.
      * @param GradeCalculatorService $gradeCalculator Normalizador de escala de calificaciones.
+     * @param GroupGradeResults $groupResults Calculador de resultados publicados del estudiante.
      * @param AiEvaluationService $aiEvaluationService Servicio de evaluación asistida por IA.
      * @param SubscriptionLimitService $subscriptionLimitService Gestor de cuotas y créditos IA.
      */
     public function __construct(
         private readonly ExamRepositoryInterface $examRepository,
         private readonly GradeCalculatorService $gradeCalculator,
+        private readonly GroupGradeResults $groupResults,
         private readonly AiEvaluationService $aiEvaluationService,
         private readonly SubscriptionLimitService $subscriptionLimitService,
     ) {
@@ -71,23 +80,23 @@ class TeacherReviewController extends Controller
      * @param Request $request Solicitud HTTP del docente autenticado.
      * @return View
      */
-    public function globalIndex(Request $request): View
+    public function globalIndex(Request $request): View|Response|RedirectResponse
     {
         $teacherId = (int) $request->user()->id;
-        $filters = $request->only(['search', 'status']);
+        $filters = $this->listQuery($request, self::CENTER_STATUSES);
+        $exams = $this->examRepository->paginateForTeacher($teacherId, 12, $filters, pendingFirst: true);
 
-        $exams = $this->examRepository->paginateForTeacher($teacherId, 12, $filters);
-        $exams->getCollection()->each(static function (Exam $exam): void {
-            $exam->setAttribute('pending_reviews_count', (int) ($exam->pending_recoteje_count ?? 0));
-        });
+        if ($exams->currentPage() > $exams->lastPage()) {
+            return redirect()->route('teacher.reviews.index', array_replace($filters, ['page' => $exams->lastPage()]));
+        }
 
-        $stats = $this->examRepository->getTeacherExamStats($teacherId);
-
-        return view('teacher.reviews.index', [
+        $view = view('teacher.reviews.index', [
             'exams' => $exams,
-            'stats' => $stats,
+            'stats' => $this->examRepository->getTeacherExamStats($teacherId, $filters),
             'filters' => $filters,
         ]);
+
+        return $this->catalogResponse($request, $view, 'teacher-review-exam-results');
     }
 
     /**
@@ -97,12 +106,30 @@ class TeacherReviewController extends Controller
      * @param Exam $exam Examen propiedad del docente.
      * @return View
      */
-    public function index(Request $request, Exam $exam): View
+    public function index(Request $request, Exam $exam): View|Response|RedirectResponse
     {
         abort_unless((int) $exam->teacher_id === (int) $request->user()->id, 403);
 
-        $filters = $request->only(['search', 'status']);
+        $filters = $this->listQuery($request, self::ATTEMPT_STATUSES);
+        $reviewGroup = null;
+        if ($request->query->has('group_id')) {
+            $groupId = filter_var($request->query('group_id'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            abort_if($groupId === false, 404);
+            $reviewGroup = Group::query()
+                ->whereKey($groupId)
+                ->where('teacher_id', $exam->teacher_id)
+                ->where(static fn ($query) => $query
+                    ->whereHas('exams', static fn ($exams) => $exams->whereKey($exam->id))
+                    ->orWhereHas('studentAttempts', static fn ($attempts) => $attempts->where('exam_id', $exam->id)))
+                ->firstOrFail();
+            $filters['group_id'] = $reviewGroup->id;
+        }
+        $returnListQuery = $filters + $this->centerContext($request);
         $attempts = $this->examRepository->paginateAttemptsForReview($exam, $filters, 15);
+
+        if ($attempts->currentPage() > $attempts->lastPage()) {
+            return redirect()->route('exams.revision.index', [$exam, ...array_replace($returnListQuery, ['page' => $attempts->lastPage()])]);
+        }
 
         // RF-EXA-052: número del intento más reciente de cada alumno para marcar
         // los reemplazados y ofrecer la reaplicación solo en el vigente.
@@ -112,13 +139,19 @@ class TeacherReviewController extends Controller
             ->pluck('latest_number', 'student_id')
             ->map(static fn ($number): int => (int) $number);
 
-        return view('exams.review-index', [
+        $view = view('exams.review-index', [
             'exam' => $exam,
             'attempts' => $attempts,
             'filters' => $filters,
+            'reviewGroup' => $reviewGroup,
+            'reviewStats' => $this->examRepository->getAttemptReviewStats($exam, $filters),
+            'returnListQuery' => $returnListQuery,
+            'reviewBackUrl' => $reviewGroup ? route('groups.show', $reviewGroup) . '#exams' : $this->centerUrl($request),
             'latestAttemptNumbers' => $latestAttemptNumbers,
             'reapplicationOpen' => $exam->is_published && ($exam->ends_at === null || now()->lt($exam->ends_at)),
         ]);
+
+        return $this->catalogResponse($request, $view, 'exam-review-attempt-results');
     }
 
     /**
@@ -144,16 +177,17 @@ class TeacherReviewController extends Controller
         abort_unless((int) $attempt->exam_id === (int) $exam->id, 404);
 
         $attempt->setRelation('exam', $exam);
+        $redirect = redirect()->route('exams.revision.index', [$exam, ...$this->reviewContext($request, $attempt)]);
 
         try {
             $attemptService->authorizeReapplication($attempt, $teacher);
         } catch (DomainException $e) {
-            return back()->withErrors(['reapplication' => $e->getMessage()]);
+            return $redirect->withErrors(['reapplication' => $e->getMessage()]);
         }
 
         $studentName = $attempt->student?->full_name ?? 'el alumno';
 
-        return back()->with('status', 'Reaplicación autorizada para ' . $studentName . '. Podrá presentar el examen de nuevo mientras siga abierto.');
+        return $redirect->with('status', 'Reaplicación autorizada para ' . $studentName . '. Podrá presentar el examen de nuevo mientras siga abierto.');
     }
 
     /**
@@ -175,10 +209,15 @@ class TeacherReviewController extends Controller
 
         $loadedAttempt = $this->examRepository->findAttemptForReviewWithAnswers($exam, (int) $attempt->id);
         abort_if($loadedAttempt === null, 404);
+        $context = $this->reviewContext($request, $attempt);
 
         return view('exams.review-attempt', [
             'exam' => $exam,
             'attempt' => $loadedAttempt,
+            'reviewContext' => $context,
+            'reviewBackUrl' => route('exams.revision.index', [$exam, ...$context]),
+            'reviewCenterUrl' => $this->centerUrl($request),
+            'aiSuggestedScore' => $loadedAttempt->aiSuggestedScore(),
             'aiCreditSummary' => $this->subscriptionLimitService->getAiCreditQuotaSummary($teacher),
             'skipAiReevaluationWarning' => (bool) $teacher->skip_ai_reevaluation_warning,
         ]);
@@ -202,6 +241,8 @@ class TeacherReviewController extends Controller
     ): RedirectResponse {
         /** @var User $teacher */
         $teacher = $request->user();
+        abort_unless((int) $attempt->exam_id === (int) $exam->id, 404);
+        $redirect = $this->aiReviewRedirect($request, $exam, $attempt);
 
         try {
             $result = $this->aiEvaluationService->requestEvaluationForAnswer(
@@ -213,39 +254,28 @@ class TeacherReviewController extends Controller
                 $request->boolean('dismiss_warning'),
             );
         } catch (SubscriptionLimitExceededException $e) {
-            return redirect()
-                ->route('exams.revision.show', [$exam, $attempt])
-                ->withErrors(['ai_credits' => $e->getMessage()]);
+            return $redirect->withErrors(['ai_credits' => $e->getMessage()]);
         } catch (ValidationException $e) {
-            return redirect()
-                ->route('exams.revision.show', [$exam, $attempt])
-                ->withErrors($e->errors());
+            return $redirect->withErrors($e->errors());
         }
 
         if ($result['status'] === 'empty') {
-            return redirect()
-                ->route('exams.revision.show', [$exam, $attempt])
-                ->with('status', (string) $result['message']);
+            return $redirect->with('status', (string) $result['message']);
         }
 
         if ((bool) ($result['queued'] ?? false)) {
-            return redirect()
-                ->route('exams.revision.show', [$exam, $attempt])
-                ->with('status', 'Evaluación con IA enviada a la cola. Actualiza en unos segundos para consultar la sugerencia.');
+            return $redirect->with('review_ai_queued', true)
+                ->with('status', 'Evaluación con IA en proceso. Actualiza en unos segundos para consultar la sugerencia.');
         }
 
         /** @var StudentAnswer|null $freshAnswer */
         $freshAnswer = $result['answer'] ?? null;
 
         if ($freshAnswer !== null && $freshAnswer->ai_is_fallback) {
-            return redirect()
-                ->route('exams.revision.show', [$exam, $attempt])
-                ->with('warning', 'El motor de IA no estuvo disponible y se aplicó una estimación local de contingencia. No se descontó ningún crédito de tu saldo.');
+            return $redirect->with('warning', 'La IA no estuvo disponible. Consulta la estimación de respaldo y revisa el puntaje. No se descontaron créditos.');
         }
 
-        return redirect()
-            ->route('exams.revision.show', [$exam, $attempt])
-            ->with('status', 'Evaluación con IA completada. Revisa la sugerencia generada y guarda tu recoteje definitivo.');
+        return $redirect->with('status', 'Evaluación con IA completada. Revisa la sugerencia y guarda tu revisión.');
     }
 
     /**
@@ -261,17 +291,16 @@ class TeacherReviewController extends Controller
     {
         /** @var User $teacher */
         $teacher = $request->user();
+        abort_unless((int) $exam->teacher_id === (int) $teacher->id, 403);
+        abort_unless((int) $attempt->exam_id === (int) $exam->id, 404);
+        $redirect = $this->aiReviewRedirect($request, $exam, $attempt);
 
         try {
             $result = $this->aiEvaluationService->requestBatchEvaluationForAttempt($teacher, $exam, $attempt);
         } catch (SubscriptionLimitExceededException $e) {
-            return redirect()
-                ->route('exams.revision.show', [$exam, $attempt])
-                ->withErrors(['ai_credits' => $e->getMessage()]);
+            return $redirect->withErrors(['ai_credits' => $e->getMessage()]);
         } catch (ValidationException $e) {
-            return redirect()
-                ->route('exams.revision.show', [$exam, $attempt])
-                ->withErrors($e->errors());
+            return $redirect->withErrors($e->errors());
         }
 
         if ($result['dispatched'] === 0) {
@@ -279,28 +308,24 @@ class TeacherReviewController extends Controller
                 ? "Se asignó puntaje 0 a {$result['skipped_empty']} respuesta(s) en blanco sin consumir créditos de IA; no hay reactivos pendientes por evaluar."
                 : 'No hay reactivos cualitativos pendientes de evaluación con IA en este intento.';
 
-            return redirect()
-                ->route('exams.revision.show', [$exam, $attempt])
-                ->with('status', $message);
+            return $redirect->with('status', $message);
         }
 
+        $count = $result['dispatched'];
+        $processed = $count === 1 ? '1 respuesta' : "{$count} respuestas";
+
         if ($result['queued']) {
-            return redirect()
-                ->route('exams.revision.show', [$exam, $attempt])
-                ->with('status', "Se encolaron {$result['dispatched']} reactivo(s) para evaluación con IA. Actualiza en unos segundos para ver los resultados.");
+            return $redirect->with('review_ai_queued', true)
+                ->with('status', "Evaluación con IA en proceso para {$processed}. Actualiza en unos segundos para consultar los resultados.");
         }
 
         $fallbackCount = (int) ($result['fallback_count'] ?? 0);
 
         if ($fallbackCount > 0) {
-            return redirect()
-                ->route('exams.revision.show', [$exam, $attempt])
-                ->with('warning', "Evaluación en lote finalizada ({$result['dispatched']} procesado(s); {$fallbackCount} en modo de contingencia local sin descuento de créditos).");
+            return $redirect->with('warning', "Evaluación finalizada para {$processed}. Las estimaciones de respaldo ({$fallbackCount}) no consumieron créditos.");
         }
 
-        return redirect()
-            ->route('exams.revision.show', [$exam, $attempt])
-            ->with('status', "Evaluación en lote con IA completada para {$result['dispatched']} reactivo(s).");
+        return $redirect->with('status', "Evaluación con IA completada para {$processed}.");
     }
 
     /**
@@ -322,7 +347,14 @@ class TeacherReviewController extends Controller
         $ipAddress = $request->ip();
         $userAgent = $request->userAgent() !== null ? mb_substr($request->userAgent(), 0, 255) : null;
 
-        DB::transaction(function () use ($teacher, $exam, $attempt, $reviews, $ipAddress, $userAgent): void {
+        $hasFinalScore = DB::transaction(function () use ($teacher, $exam, $attempt, $reviews, $ipAddress, $userAgent): bool {
+            $exam = Exam::whereKey($exam->id)->sharedLock()->firstOrFail();
+            $group = Group::whereKey($attempt->group_id)->lockForUpdate()->first();
+            $calculator = $this->groupResults;
+            $visible = $group && ! $group->is_closed && $exam->result_visibility_mode !== 'hidden'
+                && StudentAttempt::current()->whereKey($attempt->id)->exists()
+                && $group->students()->where('acs_users.id', $attempt->student_id)->exists();
+            $before = $visible ? $calculator->calculate($group, $attempt->student_id, true)['published'] : [];
             $lockedAttempt = StudentAttempt::query()
                 ->whereKey($attempt->id)
                 ->lockForUpdate()
@@ -330,7 +362,7 @@ class TeacherReviewController extends Controller
 
             if ($lockedAttempt->status !== 'submitted') {
                 throw ValidationException::withMessages([
-                    'attempt' => ['Solo se pueden recotejar intentos en estado entregado'],
+                    'attempt' => ['Solo se pueden revisar intentos entregados'],
                 ]);
             }
 
@@ -352,8 +384,12 @@ class TeacherReviewController extends Controller
                 $questionType = (string) ($answer->examQuestion?->question?->question_type ?? '');
                 if (! in_array($questionType, ['open', 'code'], true)) {
                     throw ValidationException::withMessages([
-                        'reviews' => ['Solo puedes recotejar reactivos abiertos o de programación'],
+                        'reviews' => ['Solo puedes revisar reactivos abiertos o de programación'],
                     ]);
+                }
+
+                if (! $answer->canBeReviewedQualitatively()) {
+                    throw ValidationException::withMessages(['reviews' => ['La respuesta en blanco conserva cero puntos']]);
                 }
 
                 $maxPoints = (float) ($answer->examQuestion?->points_weight ?? 0);
@@ -421,14 +457,103 @@ class TeacherReviewController extends Controller
                 ? $this->gradeCalculator->normalizeScoreForExam($rawTotal, $exam, $totalExamWeight)
                 : null;
 
+            $previousScore = $lockedAttempt->final_score;
             $lockedAttempt->update([
                 'final_score' => $finalScore,
                 'pending_ai_count' => $pendingAiCount,
             ]);
+            if ($visible) {
+                $after = $calculator->calculate($group, $attempt->student_id, true)['published'];
+                $before[$attempt->student_id]['attempt'] = $previousScore;
+                $after[$attempt->student_id]['attempt'] = $finalScore;
+                $calculator->notifyChanges($before, $after);
+            }
+
+            return $finalScore !== null;
         });
 
         return redirect()
-            ->route('exams.revision.show', [$exam, $attempt])
-            ->with('status', 'Recoteje docente guardado exitosamente. La calificación final ha sido actualizada.');
+            ->route('exams.revision.show', [$exam, $attempt, ...$this->reviewContext($request, $attempt)])
+            ->with('status', $hasFinalScore
+                ? 'Revisión guardada. Se actualizó la calificación final.'
+                : 'Revisión guardada. La calificación final sigue pendiente.');
+    }
+
+    private function catalogResponse(Request $request, View $view, string $fragment): View|Response
+    {
+        return $request->header('X-Catalog-Fragment') === $fragment
+            ? response($view->fragment($fragment))->header('Cache-Control', 'no-store')
+            : $view;
+    }
+
+    private function listQuery(Request $request, array $statuses, string $prefix = ''): array
+    {
+        $search = $request->query($prefix . 'search');
+        $status = $request->query($prefix . 'status');
+        $page = filter_var($request->query($prefix . 'page'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+        return array_filter([
+            'search' => is_string($search) && trim($search) !== '' ? trim($search) : null,
+            'status' => in_array($status, $statuses, true) ? $status : null,
+            'page' => $page === false ? null : $page,
+        ], static fn ($value) => $value !== null);
+    }
+
+    private function centerContext(Request $request): array
+    {
+        $context = [];
+        foreach ($this->listQuery($request, self::CENTER_STATUSES, 'center_') as $key => $value) {
+            $context['center_' . $key] = $value;
+        }
+
+        return $context;
+    }
+
+    private function centerUrl(Request $request): string
+    {
+        return route('teacher.reviews.index', $this->listQuery($request, self::CENTER_STATUSES, 'center_'));
+    }
+
+    private function reviewContext(Request $request, StudentAttempt $attempt): array
+    {
+        $context = $this->listQuery($request, self::ATTEMPT_STATUSES) + $this->centerContext($request);
+        $groupId = filter_var($request->query('group_id'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($groupId === (int) $attempt->group_id) {
+            $context['group_id'] = $groupId;
+        }
+
+        return $context;
+    }
+
+    private function aiReviewRedirect(Request $request, Exam $exam, StudentAttempt $attempt): RedirectResponse
+    {
+        $redirect = redirect()->route('exams.revision.show', [$exam, $attempt, ...$this->reviewContext($request, $attempt)]);
+        $draft = $request->input('review_draft');
+        if (! is_array($draft) || $draft === [] || $attempt->status !== 'submitted') {
+            return $redirect;
+        }
+
+        $answerIds = array_filter(array_keys($draft), static fn ($id) => is_int($id) && $id > 0);
+        $answers = $attempt->answers()->whereKey($answerIds)
+            ->whereHas('examQuestion.question', static fn ($question) => $question->whereIn('question_type', ['open', 'code']))
+            ->get();
+        $validatedDraft = [];
+
+        foreach ($answers as $answer) {
+            $fields = $draft[$answer->id];
+            if (! is_array($fields) || ! $answer->canBeReviewedQualitatively()) {
+                continue;
+            }
+
+            foreach (['score' => 32, 'notes' => 1000] as $field => $maxLength) {
+                if (array_key_exists($field, $fields) && $fields[$field] === null) {
+                    $validatedDraft[$answer->id][$field] = '';
+                } elseif (is_string($fields[$field] ?? null) && mb_strlen($fields[$field]) <= $maxLength) {
+                    $validatedDraft[$answer->id][$field] = $fields[$field];
+                }
+            }
+        }
+
+        return $redirect->withInput(['review_draft' => $validatedDraft]);
     }
 }

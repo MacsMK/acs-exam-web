@@ -46,6 +46,14 @@ class AttemptController extends Controller
             return back()->withErrors(['exam' => $e->getMessage()]);
         }
 
+        if ($attempt->status !== 'in_progress') {
+            return to_route('attempts.result', $attempt);
+        }
+
+        if (! $this->attemptService->acquireSession($attempt, $this->sessionHolder())) {
+            return redirect()->route('student.exams.index')->withErrors(['attempt' => self::OTHER_SESSION_MESSAGE]);
+        }
+
         return redirect()->route('attempts.show', $attempt);
     }
 
@@ -53,19 +61,28 @@ class AttemptController extends Controller
     {
         $this->authorizeOwnership($attempt);
 
+        $attempt = $this->attemptService->closeIfDue($attempt->refresh());
         if ($attempt->status !== 'in_progress') {
             return redirect()->route('attempts.result', $attempt);
         }
 
-        if (! $this->attemptService->sessionAvailable($attempt, $this->sessionHolder())) {
+        if (! $this->attemptService->acquireSession($attempt, $this->sessionHolder())) {
             return redirect()->route('student.exams.index')->withErrors(['attempt' => self::OTHER_SESSION_MESSAGE]);
         }
 
         $attempt->loadMissing('exam');
+        if ($attempt->free_close_at !== null) {
+            $current = $this->attemptService->currentQuestion($attempt, request()->integer('pregunta', 0));
+            abort_if($current === null, 404);
+            $answer = $attempt->answers()->where('exam_question_id', $current['exam_question_id'])->first();
+
+            return view('exams.take-exam', ['attempt' => $attempt, 'current' => $current,
+                'draft' => $answer?->answer_payload, 'revision' => (int) $answer?->free_revision]);
+        }
         $current = $this->attemptService->currentUnansweredQuestion($attempt);
 
         if ($current === null) {
-            $attempt = $this->attemptService->submitFinal($attempt);
+            $attempt = $this->attemptService->submitFinal($attempt, $this->sessionHolder());
 
             return redirect()->route('attempts.result', $attempt);
         }
@@ -92,6 +109,24 @@ class AttemptController extends Controller
         }
 
         $data = $request->validated();
+        if ($attempt->free_close_at !== null) {
+            $index = (int) ($data['next_index'] ?? 0);
+            abort_unless(array_key_exists($index, $attempt->question_sequence_payload), 404);
+            try {
+                $this->attemptService->saveFreeAnswer($attempt, (int) $data['exam_question_id'],
+                    $this->answerPayloadFrom($request), (int) ($data['revision'] ?? 0), $this->sessionHolder());
+                if ($request->boolean('finish_after_save')) {
+                    $this->attemptService->submitFinal($attempt, $this->sessionHolder());
+                    return to_route('attempts.result', $attempt);
+                }
+            } catch (DomainException $e) {
+                if ($attempt->fresh()->status !== 'in_progress') {
+                    return to_route('attempts.result', $attempt);
+                }
+                return back()->withErrors(['attempt' => $e->getMessage()]);
+            }
+            return to_route('attempts.show', ['attempt' => $attempt, 'pregunta' => $index]);
+        }
         $current = $this->attemptService->currentUnansweredQuestion($attempt);
 
         abort_if(
@@ -103,7 +138,7 @@ class AttemptController extends Controller
         $answerPayload = $this->answerPayloadFrom($request);
 
         try {
-            $isLate = $this->attemptService->submitAnswer($attempt, (int) $data['exam_question_id'], $answerPayload);
+            $isLate = $this->attemptService->submitAnswer($attempt, (int) $data['exam_question_id'], $answerPayload, $this->sessionHolder());
         } catch (DomainException $e) {
             return redirect()->route('attempts.result', $attempt)->withErrors(['attempt' => $e->getMessage()]);
         }
@@ -124,6 +159,7 @@ class AttemptController extends Controller
     {
         $this->authorizeOwnership($attempt);
 
+        $attempt = $this->attemptService->closeFreeIfDue($attempt);
         if ($attempt->status !== 'in_progress') {
             return response()->json([
                 'incidents_count' => (int) $attempt->incidents_count,
@@ -133,11 +169,16 @@ class AttemptController extends Controller
             ]);
         }
 
-        $updated = $this->attemptService->reportIncident(
-            $attempt,
-            (string) $request->validated('incident_type'),
-            (string) ($request->validated('description') ?? 'Cambio de pestaña o pérdida de foco detectada en navegador web.'),
-        );
+        try {
+            $updated = $this->attemptService->reportIncident(
+                $attempt,
+                (string) $request->validated('incident_type'),
+                (string) ($request->validated('description') ?? 'Cambio de pestaña o pérdida de foco detectada en navegador web.'),
+                $this->sessionHolder(),
+            );
+        } catch (DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
+        }
 
         return response()->json([
             'incidents_count' => (int) $updated->incidents_count,
@@ -155,8 +196,11 @@ class AttemptController extends Controller
             return redirect()->route('attempts.result', $attempt);
         }
 
+        if (! $this->attemptService->sessionAvailable($attempt, $this->sessionHolder())) {
+            return to_route('student.exams.index')->withErrors(['attempt' => self::OTHER_SESSION_MESSAGE]);
+        }
         try {
-            $attempt = $this->attemptService->submitFinal($attempt);
+            $attempt = $this->attemptService->submitFinal($attempt, $this->sessionHolder());
         } catch (DomainException $e) {
             return redirect()->route('attempts.result', $attempt)->withErrors(['attempt' => $e->getMessage()]);
         }
@@ -164,9 +208,14 @@ class AttemptController extends Controller
         return redirect()->route('attempts.result', $attempt);
     }
 
-    public function result(StudentAttempt $attempt): View
+    public function result(StudentAttempt $attempt): View|RedirectResponse
     {
         $this->authorizeOwnership($attempt);
+
+        $attempt = $this->attemptService->closeIfDue($attempt);
+        if ($attempt->status === 'in_progress') {
+            return to_route('attempts.show', $attempt);
+        }
 
         $attempt->load('exam', 'answers.examQuestion.question', 'group.teacher');
 
@@ -206,16 +255,22 @@ class AttemptController extends Controller
         }
 
         try {
-            $this->attemptService->saveDraft(
+            if ($attempt->free_close_at !== null) {
+                $revision = $this->attemptService->saveFreeAnswer($attempt, $request->integer('exam_question_id'),
+                    $this->answerPayloadFrom($request), $request->integer('revision'), $this->sessionHolder());
+                return response()->json(['saved' => true, 'revision' => $revision]);
+            }
+            $savedAt = $this->attemptService->saveDraft(
                 $attempt,
                 (int) $request->validated('exam_question_id'),
                 $this->answerPayloadFrom($request),
+                $this->sessionHolder(),
             );
         } catch (DomainException $e) {
             return response()->json(['saved' => false, 'message' => $e->getMessage()], 409);
         }
 
-        return response()->json(['saved' => true, 'saved_at' => now()->toIso8601String()]);
+        return response()->json(['saved' => true, 'saved_at' => $savedAt->toIso8601String()]);
     }
 
     /**
@@ -224,7 +279,7 @@ class AttemptController extends Controller
     private function answerPayloadFrom(AttemptAnswerWebRequest $request): mixed
     {
         return match (true) {
-            $request->has('selected_option_index') => ['selected_option_index' => (int) $request->input('selected_option_index')],
+            $request->filled('selected_option_index') => ['selected_option_index' => (int) $request->input('selected_option_index')],
             $request->has('pairs') => $request->input('pairs'),
             $request->has('given_answer') => $request->input('given_answer'),
             default => (string) ($request->input('answer_text') ?? ''),
@@ -238,6 +293,7 @@ class AttemptController extends Controller
     {
         $this->authorizeOwnership($attempt);
 
+        $attempt = $this->attemptService->closeFreeIfDue($attempt);
         if ($attempt->status !== 'in_progress') {
             return response()->json(['active' => false, 'redirect_url' => route('attempts.result', $attempt)], 409);
         }
@@ -258,8 +314,16 @@ class AttemptController extends Controller
         return 'web:' . request()->session()->getId();
     }
 
+    /**
+     * Comprueba la titularidad y el acceso vigente al grupo (RF-GRU-011/012/019).
+     *
+     * @param StudentAttempt $attempt Intento que el estudiante quiere usar.
+     * @return void
+     */
     private function authorizeOwnership(StudentAttempt $attempt): void
     {
-        abort_unless($attempt->student_id === request()->user()->id, 403);
+        $studentId = request()->user()->id;
+        abort_unless($attempt->student_id === $studentId && StudentAttempt::query()->whereKey($attempt->id)
+            ->inCurrentGroupsOfStudent($studentId)->exists(), 403);
     }
 }

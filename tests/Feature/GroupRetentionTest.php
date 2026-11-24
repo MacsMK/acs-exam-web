@@ -22,13 +22,21 @@ use App\Exceptions\SubscriptionLimitExceededException;
 use App\Models\AuditLog;
 use App\Models\EvaluationPeriod;
 use App\Models\Exam;
+use App\Models\ExamQuestion;
+use App\Models\ExamSection;
 use App\Models\Group;
+use App\Models\MultipleChoiceItem;
+use App\Models\Question;
+use App\Models\StudentAnswer;
 use App\Models\StudentAttempt;
+use App\Models\StudentPeriodGrade;
 use App\Models\User;
 use App\Services\GroupRetentionService;
 use App\Services\SubscriptionLimitService;
 use Database\Seeders\SubscriptionPackageSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class GroupRetentionTest extends TestCase
@@ -61,19 +69,93 @@ class GroupRetentionTest extends TestCase
     {
         [$teacher, $student, $group, $exam] = $this->scenario(now()->subMonths(13));
         $attempt = $this->attempt($exam, $student, $group);
+        $answer = $this->recordAnswer($attempt);
         $period = EvaluationPeriod::create(['group_id' => $group->id, 'name' => 'Parcial 1', 'formula' => 'exams*0.6+homework*0.2+project*0.1+other*0.1', 'starts_at' => now()->subYears(2), 'ends_at' => now()->subYears(2)->addMonths(2)]);
+        $nextPeriod = $period->replicate();
+        $nextPeriod->name = 'Parcial 2';
+        $nextPeriod->save();
+        DB::table('acs_period_dependencies')->insert(['period_id' => $nextPeriod->id, 'source_id' => $period->id, 'weight' => 100]);
+        DB::table('acs_period_exam_weights')->insert([
+            'application_id' => DB::table('acs_exam_group')->where('exam_id', $exam->id)->where('group_id', $group->id)->value('id'),
+            'period_id' => $period->id,
+            'weight' => 100,
+        ]);
+        $grade = StudentPeriodGrade::create(['evaluation_period_id' => $period->id, 'student_id' => $student->id]);
+        $individualLogs = [];
+        foreach ([$answer, $attempt, $grade] as $record) {
+            $individualLogs[] = AuditLog::create([
+                'user_id' => $teacher->id,
+                'action' => 'retention.test_evidence',
+                'auditable_type' => $record::class,
+                'auditable_id' => $record->id,
+            ]);
+        }
 
         $this->artisan('groups:purge-expired')->assertSuccessful();
 
         $this->assertSoftDeleted('acs_groups', ['id' => $group->id]);
         $this->assertNull(StudentAttempt::find($attempt->id));
+        $this->assertNull(StudentAnswer::find($answer->id));
         $this->assertNull(EvaluationPeriod::find($period->id));
+        $this->assertNull(EvaluationPeriod::find($nextPeriod->id));
+        foreach ($individualLogs as $log) {
+            $this->assertDatabaseMissing('acs_audit_logs', ['id' => $log->id]);
+        }
         $this->assertDatabaseMissing('acs_group_student', ['group_id' => $group->id]);
         $this->assertDatabaseMissing('acs_exam_group', ['group_id' => $group->id]);
         $this->assertNotNull(Exam::withoutGlobalScopes()->find($exam->id));
         $this->assertTrue(AuditLog::where('action', GroupRetentionService::ACTION_DELETED)->where('auditable_id', $group->id)->exists());
 
         $this->actingAs($teacher)->get(route('groups.show', $group->id))->assertNotFound();
+    }
+
+    public function test_reopened_or_newly_closed_group_is_not_purged_from_a_previous_selection(): void
+    {
+        [$teacher, $student, $group, $exam] = $this->scenario(now()->subMonths(13));
+        $attempt = $this->attempt($exam, $student, $group);
+        $candidate = $group->fresh();
+        $retention = app(GroupRetentionService::class);
+
+        $this->actingAs($teacher)->post(route('groups.reopen', $group))->assertRedirect();
+        $this->assertFalse($retention->purge($candidate));
+        $this->post(route('groups.close', $group))->assertRedirect();
+        $this->assertFalse($retention->purge($candidate));
+        $this->assertSame(0, $retention->purgeExpired());
+        $this->assertDatabaseHas('acs_student_attempts', ['id' => $attempt->id]);
+        $this->assertDatabaseMissing('acs_audit_logs', [
+            'action' => GroupRetentionService::ACTION_DELETED, 'auditable_id' => $group->id,
+        ]);
+    }
+
+    public function test_foreign_keys_preserve_evidence_when_deleting_a_parent(): void
+    {
+        [, $student, $group, $exam] = $this->scenario(null);
+        $attempt = $this->attempt($exam, $student, $group);
+        $answer = $this->recordAnswer($attempt);
+
+        foreach ([$student, $attempt] as $parent) {
+            try {
+                DB::transaction(fn () => $parent->delete());
+                $this->fail('La base debe impedir el borrado indirecto de evidencia académica.');
+            } catch (QueryException $exception) {
+                $this->assertContains($exception->getCode(), ['23001', '23503']);
+            }
+        }
+
+        $this->assertDatabaseHas('acs_student_attempts', ['id' => $attempt->id]);
+        $this->assertDatabaseHas('acs_student_answers', ['id' => $answer->id]);
+
+        $migration = require database_path('migrations/2026_11_23_000005_bd01_2026_042_restrict_academic_evidence_deletion.php');
+        $rules = DB::table('information_schema.referential_constraints')->whereIn('constraint_name', [
+            'acs_student_attempts_student_id_foreign',
+            'acs_student_answers_student_attempt_id_foreign',
+        ]);
+        $migration->down();
+        $this->assertSame(['CASCADE', 'CASCADE'], (clone $rules)->pluck('delete_rule')->all());
+        $migration->up();
+        $this->assertSame(['RESTRICT', 'RESTRICT'], $rules->pluck('delete_rule')->all());
+        $this->assertDatabaseHas('acs_student_attempts', ['id' => $attempt->id]);
+        $this->assertDatabaseHas('acs_student_answers', ['id' => $answer->id]);
     }
 
     public function test_deleting_the_trial_group_does_not_restore_the_free_benefit(): void
@@ -144,6 +226,39 @@ class GroupRetentionTest extends TestCase
             'started_at' => now()->subYears(2),
             'submitted_at' => now()->subYears(2),
             'status' => 'submitted',
+        ]);
+    }
+
+    private function recordAnswer(StudentAttempt $attempt): StudentAnswer
+    {
+        $item = MultipleChoiceItem::create([
+            'options_payload' => ['Una opción', 'Otra opción'],
+            'correct_option_index' => 0,
+        ]);
+        $question = Question::create([
+            'teacher_id' => $attempt->exam->teacher_id,
+            'title' => 'Registro sintético',
+            'stem' => 'Elige una opción.',
+            'question_type' => 'multiple_choice',
+            'default_points' => 10,
+            'default_time_seconds' => 60,
+            'questionable_type' => MultipleChoiceItem::class,
+            'questionable_id' => $item->id,
+        ]);
+        $section = ExamSection::create([
+            'exam_id' => $attempt->exam_id, 'title' => 'Apartado', 'question_type' => 'multiple_choice',
+            'requested_quantity' => 1, 'sort_order' => 0,
+        ]);
+        $examQuestion = ExamQuestion::create([
+            'exam_id' => $attempt->exam_id, 'exam_section_id' => $section->id, 'question_id' => $question->id,
+            'points_weight' => 10, 'time_limit_seconds' => 60, 'sort_order' => 0,
+        ]);
+
+        return $attempt->answers()->create([
+            'exam_question_id' => $examQuestion->id,
+            'answer_payload' => ['selected_option_index' => 0],
+            'points_awarded' => 10,
+            'answered_at' => $attempt->submitted_at,
         ]);
     }
 

@@ -1,0 +1,130 @@
+.desktop-nav .nav-roll {
+    display: block;
+    overflow: hidden;
+    line-height: 1.4;
+}
+
+.nav-roll > span {
+    display: block;
+}
+
+.button {
+    position: relative;
+}
+
+.button:active {
+    box-shadow: inset 0 2px 4px rgb(9 35 59 / 25%);
+}
+
+.demo-option[data-result="correct"] {
+    box-shadow: inset 3px 0 #267673;
+}
+
+.demo-option[data-result="incorrect"] {
+    box-shadow: inset 3px 0 #973b35;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .desktop-nav a,
+    .demo-option,
+    .demo-letter {
+        transition: background-color 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out;
+    }
+
+    /* A shadow repeats the same glyphs inside the crop, keeping one accessible label. */
+    .nav-roll > span {
+        text-shadow: 0 1.4em currentColor;
+        transition: transform 290ms cubic-bezier(.22,.72,.2,1);
+    }
+
+    .desktop-nav a:focus-visible .nav-roll > span {
+        transform: translateY(-100%);
+    }
+
+    .button {
+        transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 130ms ease;
+    }
+
+    .button::after {
+        content: "";
+        pointer-events: none;
+        position: absolute;
+        inset: auto 1.55rem .45rem;
+        height: 1px;
+        background-color: currentColor;
+        opacity: .68;
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 230ms cubic-bezier(.16,.75,.19,1);
+    }
+
+    .button:focus-visible::after {
+        transform: scaleX(1);
+    }
+
+    .demo-feedback:not(:empty) {
+        animation: landing-feedback-in 190ms ease-out;
+    }
+
+    .mobile-menu[open] nav,
+    .privacy-dialog[open] {
+        animation: landing-panel-in 175ms ease-out;
+    }
+
+    .privacy-dialog[open]::backdrop {
+        animation: landing-backdrop-in 175ms ease-out;
+    }
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .demo-question:enabled .demo-option:hover {
+        border-color: #267673;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+    .desktop-nav a:hover .nav-roll > span {
+        transform: translateY(-100%);
+    }
+
+    .button:hover::after {
+        transform: scaleX(1);
+    }
+}
+
+@media (hover: none), (pointer: coarse) {
+    .button,
+    .mobile-menu summary,
+    .demo-question:enabled .demo-option {
+        -webkit-tap-highlight-color: rgb(22 166 161 / 20%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .button {
+        transition: none;
+    }
+}
+
+@media (forced-colors: active) {
+    .desktop-nav a:is(:hover, :focus-visible) .nav-roll > span,
+    .nav-roll > span {
+        transform: none;
+        text-shadow: none;
+    }
+}
+
+@keyframes landing-panel-in {
+    from { clip-path: inset(0 0 8px); opacity: .72; }
+    to { clip-path: inset(0); opacity: 1; }
+}
+
+@keyframes landing-feedback-in {
+    from { transform: translateY(3px); opacity: .6; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes landing-backdrop-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}

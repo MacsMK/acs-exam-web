@@ -23,6 +23,7 @@ namespace App\Http\Controllers;
 
 use App\Models\PrivacyNotice;
 use App\Models\SubscriptionPackage;
+use App\Services\SubscriptionLimitService;
 use Illuminate\Contracts\View\View;
 
 /**
@@ -47,6 +48,10 @@ class LandingController extends Controller
             ->latest('published_at')
             ->first();
 
-        return view('landing', compact('packages', 'privacyNotice'));
+        return view('landing', [
+            'packages' => $packages,
+            'freemiumLimits' => SubscriptionLimitService::FREEMIUM_LIMITS,
+            'privacyNotice' => $privacyNotice,
+        ]);
     }
 }

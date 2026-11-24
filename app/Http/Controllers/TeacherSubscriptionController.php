@@ -25,7 +25,6 @@ use App\Http\Requests\ProcessSubscriptionCheckoutRequest;
 use App\Models\PaymentTransaction;
 use App\Models\SubscriptionPackage;
 use App\Models\User;
-use App\Services\SubscriptionLimitService;
 use App\Services\TeacherSubscriptionService;
 use DomainException;
 use Illuminate\Contracts\View\View;
@@ -46,7 +45,6 @@ class TeacherSubscriptionController extends Controller
      */
     public function __construct(
         private readonly TeacherSubscriptionService $teacherSubscriptionService,
-        private readonly SubscriptionLimitService $subscriptionLimitService,
     ) {
     }
 
@@ -113,13 +111,19 @@ class TeacherSubscriptionController extends Controller
         $wasOnboarding = $teacher->needsPlanOnboarding();
         $fromOverlay = $request->boolean('onboarding_overlay');
 
-        $transaction = $this->teacherSubscriptionService->processInstantCheckout(
-            $teacher,
-            $package,
-            $request->validated(),
-            $request->ip(),
-            $request->userAgent(),
-        );
+        try {
+            $transaction = $this->teacherSubscriptionService->processInstantCheckout(
+                $teacher,
+                $package,
+                $request->validated(),
+                $request->ip(),
+                $request->userAgent(),
+            );
+        } catch (DomainException $e) {
+            return redirect()
+                ->route('teacher.subscription.index')
+                ->withErrors(['subscription' => $e->getMessage()]);
+        }
 
         if ($transaction->status === PaymentTransaction::STATUS_PAID) {
             $targetRoute = ($wasOnboarding || $fromOverlay)
@@ -216,9 +220,16 @@ class TeacherSubscriptionController extends Controller
             return redirect()->route('teacher.subscription.index')->withErrors(['subscription' => $e->getMessage()]);
         }
 
+        $endsAt = $subscription->expires_at;
+        $status = match (true) {
+            $endsAt === null => 'Cancelaste la renovación automática de tu plan.',
+            $endsAt->isPast() => 'Cancelaste la renovación. Terminó el acceso a tu plan de pago y se detuvieron los reintentos de cobro.',
+            default => 'Cancelaste la renovación. No se harán más cobros y tu plan sigue vigente hasta el '.$endsAt->format('d/m/Y').'.',
+        };
+
         return redirect()
             ->route('teacher.subscription.index')
-            ->with('status', 'Cancelaste la renovación. No se harán más cobros y tu plan sigue vigente hasta el '.$subscription->expires_at?->format('d/m/Y').'.');
+            ->with('status', $status);
     }
 
     /**
@@ -226,12 +237,21 @@ class TeacherSubscriptionController extends Controller
      */
     private function redirectIfAlreadySubscribed(User $teacher): ?RedirectResponse
     {
-        if ($this->subscriptionLimitService->resolveActivePackage($teacher) === null) {
+        if ($this->teacherSubscriptionService->canCheckout($teacher)) {
             return null;
         }
 
+        $subscription = $teacher->subscription;
+        $message = match (true) {
+            $subscription?->isRenewalDue() && ! $subscription->isInRenewalGracePeriod()
+                => 'Tu renovación está pendiente. Espera el resultado o cancela la renovación para contratar otro paquete.',
+            (bool) $subscription?->renewsAutomatically()
+                => 'Ya tienes una suscripción activa. Para un nivel superior usa «Actualizar a este nivel».',
+            default => 'Ya tienes una suscripción activa. Puedes contratar otro paquete al terminar tu periodo actual.',
+        };
+
         return redirect()
             ->route('teacher.subscription.index')
-            ->withErrors(['subscription' => 'Ya tienes una suscripción activa. Para un nivel superior usa «Actualizar a este nivel».']);
+            ->withErrors(['subscription' => $message]);
     }
 }

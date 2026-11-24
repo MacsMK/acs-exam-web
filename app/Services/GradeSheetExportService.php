@@ -22,7 +22,6 @@ namespace App\Services;
 
 use App\Models\EvaluationPeriod;
 use App\Models\Group;
-use App\Models\StudentAttempt;
 use App\Models\User;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -46,7 +45,7 @@ class GradeSheetExportService
     public const COLOR_BORDER  = 'CBD5E1';   // Bordes de Retícula
 
     public function __construct(
-        private readonly GradeCalculatorService $gradeCalculator,
+        private readonly GroupGradeResults $results,
     ) {
     }
 
@@ -78,7 +77,7 @@ class GradeSheetExportService
 
         $sanitizedGroup = preg_replace('/[^A-Za-z0-9_-]/', '_', $group->name);
         $sanitizedPeriod = preg_replace('/[^A-Za-z0-9_-]/', '_', $period->name);
-        $fileName = sprintf('Sabana_%s_%s_%s.xlsx', $sanitizedGroup, $sanitizedPeriod, now()->format('Ymd_His'));
+        $fileName = sprintf('Calificaciones_%s_%s_%s.xlsx', $sanitizedGroup, $sanitizedPeriod, now()->format('Ymd_His'));
 
         return response()->streamDownload(function () use ($spreadsheet): void {
             $writer = new Xlsx($spreadsheet);
@@ -96,7 +95,7 @@ class GradeSheetExportService
     {
         // Fila 1: Título Institucional
         $sheet->mergeCells('A1:I1');
-        $sheet->setCellValue('A1', 'A-CODE SOLUTIONS — SÁBANA OFICIAL DE EVALUACIÓN ACADÉMICA');
+        $sheet->setCellValue('A1', 'A-CODE SOLUTIONS — REPORTE OFICIAL DE CALIFICACIONES');
         $sheet->getStyle('A1')->applyFromArray([
             'font' => ['bold' => true, 'size' => 14, 'color' => ['rgb' => self::COLOR_WHITE]],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => self::COLOR_PRIMARY]],
@@ -118,7 +117,7 @@ class GradeSheetExportService
         $metaData = [
             3 => sprintf('Asignatura: %s | Grupo: %s | Folio Oficial: %s', $group->subject ?? 'Tronco Común', $group->name, $group->access_folio),
             4 => sprintf('Periodo Evaluado: %s | Vigencia: %s al %s | Fórmula: %s', $period->name, $period->starts_at->format('d/m/Y'), $period->ends_at->format('d/m/Y'), $period->formula),
-            5 => 'Escala Oficial de Evaluación: 0–100 sin decimales (Aprobatoria: 60.00) (RF-REP-015, RF-CAL-028)',
+            5 => sprintf('Escala Oficial de Evaluación: %s (Aprobatoria: %s)', $group->grading_scale ?? '0–100', $group->formatGrade($group->passing_score) ?? '60.00'),
             6 => sprintf('Fecha y Hora de Emisión: %s (Hora Oficial del Servidor) (RF-REP-015)', now()->format('Y-m-d H:i:s T')),
             7 => 'Regla de Integridad: Los valores «Pendiente» indican ausencia de evaluación y no se computan como cero (RF-CAL-021).',
         ];
@@ -179,20 +178,16 @@ class GradeSheetExportService
             ->orderBy('first_name')
             ->get();
 
-        $savedGrades = $period->studentGrades->keyBy('student_id');
+        $results = $this->results->calculate($group);
+        $savedGrades = collect($results['rows'][$period->id] ?? []);
 
-        // Pre-carga agregada de promedios de exámenes reales (sin N+1)
-        $examIds = $group->exams()->pluck('acs_exams.id');
-        $examAverages = StudentAttempt::query()
-            ->current()
-            ->whereIn('exam_id', $examIds)
-            ->where('group_id', $group->id)
-            ->whereNotNull('final_score')
-            ->groupBy('student_id')
-            ->selectRaw('student_id, AVG(final_score) as avg_score')
-            ->pluck('avg_score', 'student_id')
-            ->map(fn ($score) => round((float) $score, 2));
+        $manualExams = $period->hasStarted() && ($period->parsed_weights['exams'] ?? 0) > 0
+            && ! in_array($period->id, $results['weightedPeriods'], true);
+        $examAverages = $manualExams
+            ? $this->results->examDeliveryProgress($group, $period, $students->modelKeys())['suggestedScores']
+            : collect();
 
+        $scoreFormat = $group->grading_scale === '0-100' ? '0' : '0.00';
         $currentRow = $startRow;
         $index = 1;
 
@@ -210,24 +205,24 @@ class GradeSheetExportService
             $sheet->setCellValue("C{$currentRow}", sprintf('%s, %s', $student->last_name, $student->first_name));
 
             // Componente Exámenes
-            $this->setComponentCellValue($sheet, "D{$currentRow}", $exams !== null ? (float) $exams : null);
+            $this->setComponentCellValue($sheet, "D{$currentRow}", $exams, $scoreFormat);
 
             // Componente Tareas
-            $this->setComponentCellValue($sheet, "E{$currentRow}", $hw !== null ? (float) $hw : null);
+            $this->setComponentCellValue($sheet, "E{$currentRow}", $hw, $scoreFormat);
 
             // Componente Proyectos
-            $this->setComponentCellValue($sheet, "F{$currentRow}", $proj !== null ? (float) $proj : null);
+            $this->setComponentCellValue($sheet, "F{$currentRow}", $proj, $scoreFormat);
 
             // Componente Otros
-            $this->setComponentCellValue($sheet, "G{$currentRow}", $other !== null ? (float) $other : null);
+            $this->setComponentCellValue($sheet, "G{$currentRow}", $other, $scoreFormat);
 
             // Calificación Final y Estatus
             if ($final !== null) {
                 $finalNumeric = (float) $final;
                 $sheet->setCellValue("H{$currentRow}", $finalNumeric);
-                $sheet->getStyle("H{$currentRow}")->getNumberFormat()->setFormatCode('0.00');
+                $sheet->getStyle("H{$currentRow}")->getNumberFormat()->setFormatCode($scoreFormat);
 
-                if ($finalNumeric >= 60.0) {
+                if ($finalNumeric >= ($group->passing_score ?? 60.0)) {
                     $sheet->setCellValue("I{$currentRow}", 'Aprobado');
                     $sheet->getStyle("I{$currentRow}")->getFont()->setBold(true)->getColor()->setRGB(self::COLOR_ACCENT);
                 } else {
@@ -260,11 +255,11 @@ class GradeSheetExportService
     /**
      * Inserta un valor numérico formateado o la leyenda literal «Pendiente» sin coaccionar a 0 (RF-CAL-021).
      */
-    private function setComponentCellValue($sheet, string $cellCoordinate, float|int|string|null $value): void
+    private function setComponentCellValue($sheet, string $cellCoordinate, float|int|string|null $value, string $scoreFormat): void
     {
         if ($value !== null && is_numeric($value)) {
             $sheet->setCellValue($cellCoordinate, (float) $value);
-            $sheet->getStyle($cellCoordinate)->getNumberFormat()->setFormatCode('0.00');
+            $sheet->getStyle($cellCoordinate)->getNumberFormat()->setFormatCode($scoreFormat);
         } else {
             $sheet->setCellValueExplicit($cellCoordinate, 'Pendiente', DataType::TYPE_STRING);
             $sheet->getStyle($cellCoordinate)->getFont()->setItalic(true)->getColor()->setRGB('94A3B8');

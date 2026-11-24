@@ -15,37 +15,90 @@
             'active' => ['label' => 'Activo', 'variant' => 'accent'],
             'closed' => ['label' => 'Cerrado', 'variant' => 'neutral'],
         ];
-        $pendingRecotejeExams = (int) ($stats['pending_recoteje_exams'] ?? 0);
+        $groupNameCounts = $groups->countBy('name');
+        $groupLabels = $groups->mapWithKeys(static function ($group) use ($groupNameCounts): array {
+            $label = $group->name;
+            if ($groupNameCounts->get($group->name, 0) > 1 && filled($group->access_folio)) {
+                $label .= ' · Folio ' . $group->access_folio;
+            }
+
+            return [$group->id => $label];
+        });
+        $resultCount = $exams->total();
+        $resultStatus = $resultCount === 1 ? '1 examen encontrado' : $resultCount . ' exámenes encontrados';
+        $activeExams = (int) ($stats['published_active'] ?? 0);
+        $pendingReviewExams = (int) ($stats['pending_recoteje_exams'] ?? 0);
     @endphp
 
     <div
         class="space-y-6"
         x-data="{
-            confirmExamAction(formId, title, text, confirmText, isDanger = true) {
-                if (typeof AcodeAlert !== 'undefined') {
-                    AcodeAlert.confirm({
-                        title: title,
-                        text: text,
-                        confirmButtonText: confirmText,
-                        cancelButtonText: 'Cancelar',
-                        isDanger: isDanger,
-                        onConfirm: () => {
-                            const form = document.getElementById(formId);
-                            if (form) form.submit();
-                        },
-                    });
+            pendingExamAction: null,
+            submittingDialog: null,
+            confirmationUnavailable: false,
+            requestExamAction(dialogName, action) {
+                if (this.submittingDialog) return;
+                this.pendingExamAction = { dialogName, ...action };
+                this.$dispatch('close-modal', dialogName);
+            },
+            async confirmExamAction(dialogName) {
+                if (this.pendingExamAction?.dialogName !== dialogName) return;
+
+                const { formId, title, text, label, isDanger } = this.pendingExamAction;
+                this.pendingExamAction = null;
+                this.confirmationUnavailable = false;
+
+                if (typeof window.AcodeAlert?.confirm !== 'function') {
+                    this.showConfirmationError();
                     return;
                 }
-                if (confirm(title + '\n' + text)) {
+
+                try {
+                    const result = await window.AcodeAlert.confirm({
+                        title,
+                        text,
+                        confirmButtonText: label,
+                        cancelButtonText: 'Cancelar',
+                        isDanger,
+                    });
+                    if (!result.isConfirmed) return;
+
                     const form = document.getElementById(formId);
-                    if (form) form.submit();
+                    if (!form) {
+                        this.showConfirmationError();
+                        return;
+                    }
+
+                    this.submittingDialog = dialogName;
+                    await this.$nextTick();
+                    form.submit();
+                } catch {
+                    this.submittingDialog = null;
+                    this.showConfirmationError();
                 }
-            }
+            },
+            showConfirmationError() {
+                this.confirmationUnavailable = true;
+                this.$nextTick(() => this.$refs.confirmationError.focus());
+            },
         }"
+        @modal-closed="confirmExamAction($event.detail)"
+        @pageshow.window="submittingDialog = null"
     >
+        <p
+            x-show="confirmationUnavailable"
+            x-cloak
+            x-ref="confirmationError"
+            tabindex="-1"
+            role="alert"
+            class="rounded-xl border border-acode-danger/30 bg-acode-danger/10 px-4 py-3 text-sm text-acode-danger-dark"
+        >
+            No se pudo confirmar la acción. Recarga la página e inténtalo de nuevo.
+        </p>
+
         @if ($errors->any())
-            <div class="rounded-xl border border-acode-danger/30 bg-acode-danger/10 px-4 py-3 text-sm text-acode-danger" role="alert">
-                <p class="font-semibold mb-1">Revisa lo siguiente:</p>
+            <div class="rounded-xl border border-acode-danger/30 bg-acode-danger/10 px-4 py-3 text-sm text-acode-danger-dark" role="alert">
+                <p class="mb-1 font-semibold">Revisa lo siguiente:</p>
                 <ul class="list-inside list-disc space-y-0.5">
                     @foreach ($errors->all() as $error)
                         <li>{{ $error }}</li>
@@ -54,426 +107,335 @@
             </div>
         @endif
 
-        {{-- Nivel 1: Cabecera institucional y acciones principales (MPW-V3 §7.3, §8.1, Tabla 10) --}}
-        <x-page-header
-            title="Mis exámenes"
-            subtitle="Diseña evaluaciones con sorteo inteligente o selección manual, calibra ponderaciones sobre 100.00 puntos, supervisa entregas en vivo y recoteja respuestas abiertas asistidas por IA."
-        >
+        <x-page-header title="Mis exámenes" :institutional="true">
             <x-slot:actions>
-                <x-button :href="route('exams.create')" variant="primary" size="md" title="Nuevo examen">
-                    <x-icon name="add" class="w-4 h-4" />
-                    Crear examen
-                </x-button>
-
-                <x-button :href="route('teacher.reviews.index')" variant="neutral" size="md">
-                    <x-icon name="view" class="w-4 h-4 text-acode-tech" />
-                    Abrir revisión
-                </x-button>
-            </x-slot:actions>
-        </x-page-header>
-
-        {{-- Nivel 2: 4 Tarjetas KPI canónicas --}}
-        <section class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4" aria-label="Indicadores de exámenes del docente">
-            <x-kpi-card
-                label="Total exámenes"
-                :value="(int) ($stats['total'] ?? 0)"
-                icon="document"
-                tone="tech"
-            >
-                <p class="text-xs text-slate-500">
-                    <strong class="font-semibold text-acode-primary">{{ (int) ($stats['closed'] ?? 0) }}</strong> concluidos en historial
-                </p>
-            </x-kpi-card>
-
-            <x-kpi-card
-                label="Borradores"
-                :value="(int) ($stats['drafts'] ?? 0)"
-                icon="edit"
-                tone="warning"
-            >
-                <p class="text-xs text-slate-500">
-                    En armado, ponderación o listos para publicar
-                </p>
-            </x-kpi-card>
-
-            <x-kpi-card
-                label="Activos ahora"
-                :value="(int) ($stats['published_active'] ?? 0)"
-                icon="clock"
-                tone="accent"
-            >
-                <p class="text-xs text-slate-500">
-                    <strong class="font-semibold text-acode-tech">{{ (int) ($stats['scheduled'] ?? 0) }}</strong> programados próximamente
-                </p>
-            </x-kpi-card>
-
-            <x-kpi-card
-                label="Pendientes de recoteje"
-                :value="$pendingRecotejeExams"
-                :icon="$pendingRecotejeExams > 0 ? 'warning' : 'success'"
-                :tone="$pendingRecotejeExams > 0 ? 'warning' : 'neutral'"
-                :href="$pendingRecotejeExams > 0 ? route('exams.index', ['status' => 'pending_review']) : null"
-            >
-                @if ($pendingRecotejeExams > 0)
-                    <span class="text-xs font-semibold text-acode-tech group-hover:underline">
-                        Ver pendientes →
-                    </span>
-                @else
-                    <p class="text-xs text-slate-500">
-                        Sin entregas pendientes por validar
-                    </p>
-                @endif
-            </x-kpi-card>
-        </section>
-
-        {{-- Nivel 3: Barra de Búsqueda y Filtros SQL --}}
-        <section aria-label="Filtros del listado de exámenes">
-            <x-search-filter
-                :action="route('exams.index')"
-                search-name="search"
-                :search-value="$filters['search'] ?? ''"
-                placeholder="Buscar examen por título o descripción…"
-                :clear-url="route('exams.index')"
-                :clear-keys="['search', 'status', 'group_id']"
-                :has-active-filters="$hasActiveFilters"
-            >
-                <x-slot:filters>
-                    <div class="w-full sm:w-52">
-                        <x-form.select name="status" size="md" aria-label="Filtrar por estado">
-                            <option value="all" @selected(($filters['status'] ?? 'all') === 'all')>Todos los estados</option>
-                            <option value="draft" @selected(($filters['status'] ?? '') === 'draft')>Borradores</option>
-                            <option value="scheduled" @selected(($filters['status'] ?? '') === 'scheduled')>Programados</option>
-                            <option value="active" @selected(($filters['status'] ?? '') === 'active')>Activos ahora</option>
-                            <option value="closed" @selected(($filters['status'] ?? '') === 'closed')>Cerrados</option>
-                            <option value="pending_review" @selected(($filters['status'] ?? '') === 'pending_review')>Pendientes de recoteje</option>
-                        </x-form.select>
-                    </div>
-
-                    <div class="w-full sm:w-56">
-                        <x-form.select name="group_id" size="md" aria-label="Filtrar por grupo escolar">
-                            <option value="">Todos los grupos</option>
-                            @foreach ($groups as $group)
-                                <option value="{{ $group->id }}" @selected((string) ($filters['group_id'] ?? '') === (string) $group->id)>
-                                    {{ $group->name }}
-                                </option>
-                            @endforeach
-                        </x-form.select>
-                    </div>
-                </x-slot:filters>
-            </x-search-filter>
-        </section>
-
-        {{-- Nivel 4: Tabla Paginada de Exámenes --}}
-        @if ($exams->isEmpty())
-            <x-empty-state
-                icon="document"
-                :title="$hasActiveFilters ? 'No encontramos exámenes con esos filtros' : 'Todavía no has creado exámenes'"
-                :message="$hasActiveFilters
-                    ? 'Intenta limpiar los filtros o cambiar el término de búsqueda.'
-                    : 'Crea tu primer examen para armar reactivos, definir ponderaciones sobre 100.00 puntos y asignarlo a tus grupos.'"
-            >
-                @if ($hasActiveFilters)
-                    <x-button :href="route('exams.index')" variant="neutral" size="md">
-                        Limpiar filtros
+                @if ($activeExams > 0)
+                    <x-button :href="route('exams.index', ['status' => 'active'])" variant="secondary" size="md">
+                        Ver activos ({{ $activeExams }})
                     </x-button>
                 @endif
                 <x-button :href="route('exams.create')" variant="primary" size="md" title="Nuevo examen">
                     <x-icon name="add" class="w-4 h-4" />
                     Crear examen
                 </x-button>
-            </x-empty-state>
-        @else
-            <x-table class="!overflow-visible">
-                <x-slot:header>
-                    <x-table.th>Examen</x-table.th>
-                    <x-table.th>Grupos asignados</x-table.th>
-                    <x-table.th>Estructura y escala</x-table.th>
-                    <x-table.th>Ventana de aplicación</x-table.th>
-                    <x-table.th align="center">Estado</x-table.th>
-                    <x-table.th align="right">Acciones</x-table.th>
-                </x-slot:header>
+            </x-slot:actions>
+        </x-page-header>
 
-                @forelse ($exams as $exam)
-                    @php
-                        $opStatus = $exam->operationalStatus();
-                        $badgeMeta = $statusLabels[$opStatus] ?? $statusLabels['draft'];
-                        $sectionsCount = (int) ($exam->sections_count ?? 0);
-                        $questionsCount = (int) ($exam->exam_questions_count ?? 0);
-                        $attemptsCount = (int) ($exam->student_attempts_count ?? 0);
-                        $pendingRecoteje = (int) ($exam->pending_recoteje_count ?? 0);
-                        $totalWeight = (float) ($exam->total_points_weight ?? 0);
-                    @endphp
-                    <tr>
-                        <x-table.td class="max-w-xs">
-                            <a
-                                href="{{ $opStatus === 'draft' ? route('exams.assemble', $exam) : route('exams.review', $exam) }}"
-                                class="text-sm font-semibold text-acode-primary hover:text-acode-tech transition line-clamp-1"
-                            >
-                                {{ $exam->title }}
-                            </a>
-                            <p class="text-xs text-slate-500 line-clamp-2 mt-0.5">
-                                {{ \Illuminate\Support\Str::limit($exam->description ?: 'Sin instrucciones registradas.', 90) }}
-                            </p>
-                        </x-table.td>
+        <section aria-label="Filtros del listado de exámenes">
+            <x-search-filter
+                :action="route('exams.index')"
+                search-name="search"
+                search-label="Buscar exámenes"
+                :search-value="$filters['search'] ?? ''"
+                placeholder="Buscar por título o descripción…"
+                results-id="exam-search-results"
+                :clear-url="route('exams.index')"
+                :clear-keys="['search', 'status', 'group_id']"
+                :has-active-filters="$hasActiveFilters"
+                live-clear
+            >
+                <x-slot:filters>
+                    <x-form.group name="status" label="Estado" class="min-w-0 flex-1 basis-32 sm:w-40 sm:flex-none">
+                        <x-form.select name="status" size="sm">
+                            <option value="all" @selected(($filters['status'] ?? 'all') === 'all')>Todos los estados</option>
+                            <option value="draft" @selected(($filters['status'] ?? '') === 'draft')>Borradores</option>
+                            <option value="scheduled" @selected(($filters['status'] ?? '') === 'scheduled')>Programados</option>
+                            <option value="active" @selected(($filters['status'] ?? '') === 'active')>Activos ahora</option>
+                            <option value="closed" @selected(($filters['status'] ?? '') === 'closed')>Cerrados</option>
+                            <option value="pending_review" @selected(($filters['status'] ?? '') === 'pending_review')>Pendientes de revisión</option>
+                        </x-form.select>
+                    </x-form.group>
 
-                        <x-table.td class="max-w-[14rem]">
-                            <div class="flex flex-wrap gap-1.5">
-                                @forelse ($exam->groups as $group)
-                                    <x-badge variant="info" class="max-w-[12rem] truncate" title="{{ $group->name }}">
-                                        {{ $group->name }}
-                                    </x-badge>
-                                @empty
-                                    <span class="text-xs text-slate-500 italic">Sin grupos asignados</span>
-                                @endforelse
-                            </div>
-                        </x-table.td>
+                    <x-form.group name="group_id" label="Grupo asignado" class="min-w-0 flex-1 basis-32 sm:w-52 sm:flex-none">
+                        <x-form.select name="group_id" size="sm">
+                            <option value="">Todos los grupos</option>
+                            @foreach ($groups as $group)
+                                <option value="{{ $group->id }}" @selected((string) ($filters['group_id'] ?? '') === (string) $group->id)>
+                                    {{ $groupLabels->get($group->id) }}
+                                </option>
+                            @endforeach
+                        </x-form.select>
+                    </x-form.group>
+                </x-slot:filters>
+            </x-search-filter>
+        </section>
 
-                        <x-table.td class="whitespace-nowrap">
-                            <div class="text-xs font-semibold text-acode-primary">
-                                {{ $sectionsCount }} {{ $sectionsCount === 1 ? 'apartado' : 'apartados' }} · {{ $questionsCount }} {{ $questionsCount === 1 ? 'reactivo' : 'reactivos' }}
-                            </div>
-                            <div class="mt-1 flex items-center gap-2 text-xs font-mono">
-                                <span class="{{ abs($totalWeight - 100.0) <= 0.01 ? 'text-acode-accent font-semibold' : 'text-acode-warning-dark font-semibold' }}">
-                                    {{ number_format($totalWeight, 2) }} / 100.00 pts
-                                </span>
-                                <span class="text-slate-300">·</span>
-                                <span class="text-slate-600">Escala {{ $exam->grading_scale }}</span>
-                            </div>
-                        </x-table.td>
+        @fragment('exam-search-results')
+            <section
+                id="exam-search-results"
+                aria-label="Resultados de búsqueda de exámenes"
+                tabindex="-1"
+                data-has-active-filters="{{ $hasActiveFilters ? '1' : '0' }}"
+                data-search-status="{{ $resultStatus }}"
+                class="space-y-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acode-tech"
+            >
+                <x-section-header title="Exámenes registrados" :subtitle="\App\Models\Exam::timezoneLabel()" :institutional="true">
+                    <x-slot:actions>
+                        <p class="text-sm text-slate-700">{{ $resultStatus }}</p>
+                    </x-slot:actions>
+                </x-section-header>
+                @if ($exams->isEmpty())
+                    <x-empty-state
+                        :icon="$hasActiveFilters ? 'search' : 'document'"
+                        :title="$hasActiveFilters ? 'No encontramos exámenes con esos filtros' : 'Todavía no has creado exámenes'"
+                        :message="$hasActiveFilters
+                            ? 'Cambia la búsqueda o limpia los filtros para ver más exámenes.'
+                            : 'Crea tu primer examen para armar reactivos, definir ponderaciones sobre 100.00 puntos y asignarlo a tus grupos.'"
+                    />
+                @else
+                    <div>
+                        <p class="mb-2 text-xs text-slate-700 xl:hidden">Desplaza la tabla para ver todas las columnas.</p>
+                        <x-table zebra="slate" scroll-label="Exámenes registrados" table-class="min-w-[56rem] table-fixed" class="[&_th]:px-3 [&_td]:px-3">
+                            <x-slot:columns>
+                                <colgroup>
+                                    <col class="w-1/4">
+                                    <col class="w-36">
+                                    <col>
+                                    <col class="w-48">
+                                    <col class="w-52">
+                                </colgroup>
+                            </x-slot:columns>
+                            <x-slot:header>
+                                <x-table.th align="center">Examen</x-table.th>
+                                <x-table.th align="center">Estado</x-table.th>
+                                <x-table.th align="center">Grupos asignados</x-table.th>
+                                <x-table.th align="center" class="whitespace-nowrap">Ventana de aplicación</x-table.th>
+                                <x-table.th align="center">Acciones</x-table.th>
+                            </x-slot:header>
 
-                        <x-table.td class="whitespace-nowrap text-xs text-slate-700">
-                            <div>
-                                <span class="font-semibold text-slate-500">Inicio:</span>
-                                {{ $exam->starts_at?->format('d/m/Y H:i') ?? '—' }}
-                            </div>
-                            <div class="mt-0.5">
-                                <span class="font-semibold text-slate-500">Cierre:</span>
-                                {{ $exam->ends_at?->format('d/m/Y H:i') ?? '—' }}
-                            </div>
-                        </x-table.td>
+                            @foreach ($exams as $exam)
+                                @php
+                                    $opStatus = $exam->operationalStatus();
+                                    $badgeMeta = $statusLabels[$opStatus] ?? $statusLabels['draft'];
+                                    $sectionsCount = (int) ($exam->sections_count ?? 0);
+                                    $questionsCount = (int) ($exam->exam_questions_count ?? 0);
+                                    $attemptsCount = (int) ($exam->student_attempts_count ?? 0);
+                                    $pendingReview = (int) ($exam->pending_recoteje_count ?? 0);
+                                    $totalWeight = (float) ($exam->total_points_weight ?? 0);
+                                    $summaryUrl = route('exams.review', $exam);
+                                    $assembleUrl = route('exams.assemble', $exam);
+                                    $monitorUrl = route('exams.monitor', $exam);
+                                    $reviewUrl = route('exams.revision.index', $exam);
+                                    $menuName = 'exam-actions-' . $exam->id;
+                                    $menuSubmitting = "submittingDialog === '{$menuName}'";
+                                    [$rowLabel, $rowUrl] = match ($opStatus) {
+                                        'draft' => ['Armar reactivos', $assembleUrl],
+                                        'active' => ['Monitoreo', $monitorUrl],
+                                        'closed' => ['Revisar entregas', $reviewUrl],
+                                        default => ['Abrir resumen', $summaryUrl],
+                                    };
 
-                        <x-table.td align="center" class="whitespace-nowrap">
-                            <div class="flex flex-col items-center gap-1.5">
-                                <x-badge :variant="$badgeMeta['variant']">
-                                    {{ $badgeMeta['label'] }}
-                                </x-badge>
+                                    $moreLinks = match ($opStatus) {
+                                        'draft' => [
+                                            'Editar' => route('exams.edit', $exam),
+                                            'Configurar pesos' => route('exams.configuration', $exam),
+                                            'Revisar y publicar' => $summaryUrl,
+                                        ],
+                                        'active' => [
+                                            'Revisar entregas' => $reviewUrl,
+                                            'Abrir resumen' => $summaryUrl,
+                                        ],
+                                        'closed' => [
+                                            'Abrir resumen' => $summaryUrl,
+                                            'Monitoreo' => $monitorUrl,
+                                        ],
+                                        default => [
+                                            'Monitoreo' => $monitorUrl,
+                                            'Revisar entregas' => $reviewUrl,
+                                        ],
+                                    };
 
-                                @if ($pendingRecoteje > 0)
-                                    <x-badge variant="warning">
-                                        {{ $pendingRecoteje }} por recotejar
-                                    </x-badge>
-                                @elseif ($attemptsCount > 0)
-                                    <span class="text-xs text-slate-500">
-                                        {{ $attemptsCount }} {{ $attemptsCount === 1 ? 'intento' : 'intentos' }}
-                                    </span>
-                                @endif
-                            </div>
-                        </x-table.td>
+                                    $changes = [];
+                                    if ($opStatus === 'draft' && $attemptsCount === 0) {
+                                        $changes[] = [
+                                            'formId' => 'delete-exam-' . $exam->id,
+                                            'url' => route('exams.destroy', $exam),
+                                            'method' => 'DELETE',
+                                            'title' => '¿Eliminar borrador?',
+                                            'text' => 'El examen «' . $exam->title . '» y sus apartados se eliminarán de forma permanente.',
+                                            'label' => 'Eliminar',
+                                            'isDanger' => true,
+                                        ];
+                                    }
+                                    if ($opStatus !== 'draft' && $attemptsCount === 0) {
+                                        $changes[] = [
+                                            'formId' => 'unpublish-exam-' . $exam->id,
+                                            'url' => route('exams.unpublish', $exam),
+                                            'method' => 'POST',
+                                            'title' => '¿Despublicar examen?',
+                                            'text' => 'El examen regresará a borrador porque aún no registra intentos de estudiantes.',
+                                            'label' => 'Despublicar',
+                                            'isDanger' => false,
+                                        ];
+                                    }
+                                    if ($opStatus !== 'draft' && $exam->result_visibility_mode === 'hidden') {
+                                        $changes[] = [
+                                            'formId' => 'release-exam-' . $exam->id,
+                                            'url' => route('exams.results.release', $exam),
+                                            'method' => 'PATCH',
+                                            'title' => '¿Liberar resultados?',
+                                            'text' => 'Los estudiantes podrán consultar sus calificaciones obtenidas en este examen.',
+                                            'label' => 'Liberar resultados',
+                                            'isDanger' => false,
+                                        ];
+                                    }
+                                    if (in_array($opStatus, ['active', 'scheduled'], true)) {
+                                        $changes[] = [
+                                            'formId' => 'close-exam-' . $exam->id,
+                                            'url' => route('exams.close', $exam),
+                                            'method' => 'POST',
+                                            'title' => '¿Cerrar examen anticipadamente?',
+                                            'text' => 'Ya no se podrán iniciar intentos en «' . $exam->title . '». Si hay intentos en curso, se detendrán y quedarán vencidos sin calificación final. Las respuestas guardadas se conservarán.',
+                                            'label' => 'Cerrar examen',
+                                            'isDanger' => true,
+                                        ];
+                                    }
+                                @endphp
 
-                        <x-table.td align="right" class="whitespace-nowrap">
-                            <div
-                                class="inline-flex items-center justify-end gap-1.5"
-                                x-data="{ menuOpen: false }"
-                                @click.outside="menuOpen = false"
-                                @keydown.escape.window="menuOpen = false"
-                            >
-                                @if ($opStatus === 'draft')
-                                    <x-button :href="route('exams.assemble', $exam)" variant="primary" size="sm">
-                                        Armar
-                                    </x-button>
-                                    <x-button :href="route('exams.edit', $exam)" variant="neutral" size="sm">
-                                        Editar
-                                    </x-button>
-
-                                    <div class="relative">
-                                        <x-button
-                                            type="button"
-                                            variant="neutral"
-                                            size="sm"
-                                            @click="menuOpen = !menuOpen"
-                                            x-bind:aria-expanded="menuOpen.toString()"
-                                            aria-label="Más acciones del examen"
-                                            title="Más acciones"
+                                <tr>
+                                    <th scope="row" aria-labelledby="exam-title-{{ $exam->id }}" class="px-3 py-3 text-left align-top">
+                                        <a
+                                            id="exam-title-{{ $exam->id }}"
+                                            href="{{ $opStatus === 'draft' ? $assembleUrl : $summaryUrl }}"
+                                            class="rounded-sm text-sm font-semibold text-acode-primary underline decoration-acode-tech/50 underline-offset-2 hover:text-acode-tech focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acode-tech [overflow-wrap:anywhere]"
                                         >
-                                            <span>Más</span>
-                                            <x-icon name="chevronDown" class="w-3.5 h-3.5" />
-                                        </x-button>
+                                            {{ $exam->title }}
+                                        </a>
+                                        <p class="mt-1 text-xs font-normal text-slate-600">
+                                            {{ $sectionsCount }} {{ $sectionsCount === 1 ? 'apartado' : 'apartados' }} · {{ $questionsCount }} {{ $questionsCount === 1 ? 'reactivo' : 'reactivos' }}<br>
+                                            <span class="font-semibold tabular-nums">{{ number_format($totalWeight, 2) }} / 100.00 pts</span> · Escala {{ $exam->grading_scale }}
+                                        </p>
+                                        @if (filled($filters['search'] ?? null) && filled($exam->description))
+                                            <p class="mt-1 line-clamp-2 text-xs font-normal text-slate-600 [overflow-wrap:anywhere]">
+                                                {{ \Illuminate\Support\Str::limit($exam->description, 90) }}
+                                            </p>
+                                        @endif
+                                    </th>
 
-                                        <div
-                                            x-show="menuOpen"
-                                            x-cloak
-                                            x-transition.opacity.duration.150ms
-                                            class="absolute right-0 {{ $loop->remaining < 2 && $loop->count > 2 ? 'bottom-full mb-1.5' : 'top-full mt-1.5' }} z-20 w-52 rounded-xl border border-slate-200 bg-white py-1.5 text-left shadow-lg"
-                                        >
-                                            <a
-                                                href="{{ route('exams.configuration', $exam) }}"
-                                                class="flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-acode-surface hover:text-acode-primary transition"
-                                            >
-                                                <x-icon name="reportBar" class="w-4 h-4 text-acode-tech" />
-                                                Configurar pesos
-                                            </a>
-                                            <a
-                                                href="{{ route('exams.review', $exam) }}"
-                                                class="flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-acode-surface hover:text-acode-primary transition"
-                                            >
-                                                <x-icon name="view" class="w-4 h-4 text-acode-tech" />
-                                                Revisar y publicar
-                                            </a>
-
-                                            @if ($attemptsCount === 0)
-                                                <div class="my-1 border-t border-slate-100"></div>
-                                                <button
-                                                    type="button"
-                                                    class="flex w-full items-center gap-2 px-3.5 py-2 text-xs font-semibold text-acode-danger hover:bg-acode-danger/10 transition"
-                                                    @click="menuOpen = false; confirmExamAction(
-                                                        'delete-exam-{{ $exam->id }}',
-                                                        '¿Eliminar borrador?',
-                                                        'El examen ' + {{ \Illuminate\Support\Js::from($exam->title) }} + ' y sus apartados se eliminarán de forma permanente.',
-                                                        'Eliminar',
-                                                        true
-                                                    )"
+                                    <x-table.td align="center" class="align-top">
+                                        <div class="flex flex-col items-center gap-1">
+                                            <x-badge :variant="$badgeMeta['variant']">{{ $badgeMeta['label'] }}</x-badge>
+                                            @if ($pendingReview > 0)
+                                                <a
+                                                    href="{{ route('exams.revision.index', ['exam' => $exam, 'status' => 'pending_recoteje']) }}"
+                                                    aria-label="{{ $pendingReview }} por revisar en {{ $exam->title }}"
+                                                    class="inline-flex min-h-8 items-center rounded-full underline decoration-acode-tech/50 underline-offset-2 hover:decoration-acode-tech focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acode-tech"
                                                 >
-                                                    <x-icon name="delete" class="w-4 h-4" />
-                                                    Eliminar
-                                                </button>
+                                                    <x-badge variant="warning">{{ $pendingReview }} por revisar</x-badge>
+                                                </a>
+                                            @elseif ($attemptsCount > 0)
+                                                <span class="text-xs text-slate-600">
+                                                    {{ $attemptsCount }} {{ $attemptsCount === 1 ? 'intento' : 'intentos' }}
+                                                </span>
                                             @endif
                                         </div>
-                                    </div>
+                                    </x-table.td>
 
-                                    @if ($attemptsCount === 0)
-                                        <form id="delete-exam-{{ $exam->id }}" method="POST" action="{{ route('exams.destroy', $exam) }}" class="hidden">
-                                            @csrf
-                                            @method('DELETE')
-                                        </form>
-                                    @endif
-                                @else
-                                    <x-button :href="route('exams.monitor', $exam)" variant="secondary" size="sm">
-                                        Monitoreo
-                                    </x-button>
-                                    <x-button :href="route('exams.revision.index', $exam)" variant="primary" size="sm">
-                                        Abrir recoteje
-                                    </x-button>
+                                    <x-table.td class="align-top">
+                                        <ul class="flex flex-wrap gap-1.5">
+                                            @forelse ($exam->groups as $group)
+                                                <li class="min-w-0 max-w-full">
+                                                    <x-badge variant="info">
+                                                        <span class="min-w-0 [overflow-wrap:anywhere]">
+                                                            {{ $groupLabels->get($group->id, $group->name) }}
+                                                        </span>
+                                                    </x-badge>
+                                                </li>
+                                            @empty
+                                                <li class="text-xs text-slate-600">Sin grupos asignados</li>
+                                            @endforelse
+                                        </ul>
+                                    </x-table.td>
 
-                                    <div class="relative">
-                                        <x-button
-                                            type="button"
-                                            variant="neutral"
-                                            size="sm"
-                                            @click="menuOpen = !menuOpen"
-                                            x-bind:aria-expanded="menuOpen.toString()"
-                                            aria-label="Más acciones del examen"
-                                            title="Más acciones"
-                                        >
-                                            <span>Más</span>
-                                            <x-icon name="chevronDown" class="w-3.5 h-3.5" />
-                                        </x-button>
+                                    <x-table.td class="space-y-1 whitespace-nowrap align-top text-xs tabular-nums">
+                                        <p><span class="font-semibold">Inicio:</span> {{ $exam->starts_at?->format('d/m/Y H:i') ?? '—' }}</p>
+                                        <p><span class="font-semibold">Cierre:</span> {{ $exam->ends_at?->format('d/m/Y H:i') ?? '—' }}</p>
+                                    </x-table.td>
 
-                                        <div
-                                            x-show="menuOpen"
-                                            x-cloak
-                                            x-transition.opacity.duration.150ms
-                                            class="absolute right-0 {{ $loop->remaining < 2 && $loop->count > 2 ? 'bottom-full mb-1.5' : 'top-full mt-1.5' }} z-20 w-52 rounded-xl border border-slate-200 bg-white py-1.5 text-left shadow-lg"
-                                        >
-                                            <a
-                                                href="{{ route('exams.review', $exam) }}"
-                                                class="flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-acode-surface hover:text-acode-primary transition"
+                                    <x-table.td align="center" class="align-top">
+                                        <div class="flex items-center justify-center gap-1.5 whitespace-nowrap">
+                                            <x-button :href="$rowUrl" variant="secondary" size="sm" :aria-label="$rowLabel . ' en ' . $exam->title">
+                                                {{ $rowLabel }}
+                                            </x-button>
+                                            <x-button
+                                                type="button"
+                                                variant="neutral"
+                                                size="sm"
+                                                :aria-label="'Más acciones de ' . $exam->title"
+                                                aria-haspopup="dialog"
+                                                :loading-when="$menuSubmitting"
+                                                x-bind:aria-busy="{{ $menuSubmitting }}"
+                                                class="min-w-12"
+                                                ::disabled="submittingDialog !== null"
+                                                @click="$dispatch('open-modal', '{{ $menuName }}')"
                                             >
-                                                <x-icon name="view" class="w-4 h-4 text-acode-tech" />
-                                                Abrir resumen
-                                            </a>
-
-                                            @if ($attemptsCount === 0)
-                                                <button
-                                                    type="button"
-                                                    class="flex w-full items-center gap-2 px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-acode-surface hover:text-acode-primary transition"
-                                                    @click="menuOpen = false; confirmExamAction(
-                                                        'unpublish-exam-{{ $exam->id }}',
-                                                        '¿Despublicar examen?',
-                                                        'El examen regresará a borrador porque aún no registra intentos de estudiantes.',
-                                                        'Despublicar',
-                                                        false
-                                                    )"
-                                                >
-                                                    <x-icon name="arrowLeft" class="w-4 h-4 text-slate-500" />
-                                                    Despublicar
-                                                </button>
-                                            @endif
-
-                                            @if ($exam->result_visibility_mode === 'hidden')
-                                                <button
-                                                    type="button"
-                                                    class="flex w-full items-center gap-2 px-3.5 py-2 text-xs font-semibold text-acode-accent-dark hover:bg-acode-accent/10 transition"
-                                                    @click="menuOpen = false; confirmExamAction(
-                                                        'release-exam-{{ $exam->id }}',
-                                                        '¿Liberar resultados?',
-                                                        'Los estudiantes podrán consultar sus calificaciones obtenidas en este examen.',
-                                                        'Liberar resultados',
-                                                        false
-                                                    )"
-                                                >
-                                                    <x-icon name="check" class="w-4 h-4" />
-                                                    Liberar resultados
-                                                </button>
-                                            @endif
-
-                                            @if (in_array($opStatus, ['active', 'scheduled'], true))
-                                                <div class="my-1 border-t border-slate-100"></div>
-                                                <button
-                                                    type="button"
-                                                    class="flex w-full items-center gap-2 px-3.5 py-2 text-xs font-semibold text-acode-warning-dark hover:bg-acode-warning/15 transition"
-                                                    @click="menuOpen = false; confirmExamAction(
-                                                        'close-exam-{{ $exam->id }}',
-                                                        '¿Cerrar examen anticipadamente?',
-                                                        'Los estudiantes ya no podrán iniciar ni enviar nuevos intentos en ' + {{ \Illuminate\Support\Js::from($exam->title) }} + '.',
-                                                        'Cerrar examen',
-                                                        true
-                                                    )"
-                                                >
-                                                    <x-icon name="lock" class="w-4 h-4" />
-                                                    Cerrar examen
-                                                </button>
-                                            @endif
+                                                <span x-show="!({{ $menuSubmitting }})">Más</span>
+                                                <span x-show="{{ $menuSubmitting }}" x-cloak class="sr-only">Enviando…</span>
+                                            </x-button>
                                         </div>
-                                    </div>
 
-                                    @if ($attemptsCount === 0)
-                                        <form id="unpublish-exam-{{ $exam->id }}" method="POST" action="{{ route('exams.unpublish', $exam) }}" class="hidden">
-                                            @csrf
-                                        </form>
-                                    @endif
+                                        <x-modal :name="$menuName" :title="'Más acciones de ' . $exam->title" max-width="sm">
+                                            <div class="flex flex-col gap-2">
+                                                @foreach ($moreLinks as $label => $url)
+                                                    <x-button :href="$url" variant="neutral" size="sm">{{ $label }}</x-button>
+                                                @endforeach
+                                            </div>
+                                            @if ($changes !== [])
+                                                <div class="mt-4 flex flex-col gap-2 border-t border-slate-200 pt-4">
+                                                    @foreach ($changes as $action)
+                                                        <x-button
+                                                            type="button"
+                                                            :variant="$action['isDanger'] ? 'danger' : 'neutral'"
+                                                            size="sm"
+                                                            @click="requestExamAction('{{ $menuName }}', {{ \Illuminate\Support\Js::from($action) }})"
+                                                        >
+                                                            {{ $action['label'] }}
+                                                        </x-button>
 
-                                    @if (in_array($opStatus, ['active', 'scheduled'], true))
-                                        <form id="close-exam-{{ $exam->id }}" method="POST" action="{{ route('exams.close', $exam) }}" class="hidden">
-                                            @csrf
-                                        </form>
-                                    @endif
+                                                        <form id="{{ $action['formId'] }}" method="POST" action="{{ $action['url'] }}" class="hidden">
+                                                            @csrf
+                                                            @if ($action['method'] !== 'POST')
+                                                                @method($action['method'])
+                                                            @endif
+                                                        </form>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                        </x-modal>
+                                    </x-table.td>
+                                </tr>
+                            @endforeach
+                        </x-table>
+                    </div>
 
-                                    @if ($exam->result_visibility_mode === 'hidden')
-                                        <form id="release-exam-{{ $exam->id }}" method="POST" action="{{ route('exams.results.release', $exam) }}" class="hidden">
-                                            @csrf
-                                            @method('PATCH')
-                                        </form>
-                                    @endif
-                                @endif
-                            </div>
-                        </x-table.td>
-                    </tr>
-                @empty
-                    <tr>
-                        <x-table.td colspan="6" class="py-8">
-                            <x-empty-state
-                                icon="document"
-                                title="Sin exámenes para mostrar"
-                                message="No hay exámenes registrados en esta página."
-                            />
-                        </x-table.td>
-                    </tr>
-                @endforelse
-            </x-table>
+                    @if ($exams->hasPages())
+                        <div class="flex justify-end">
+                            {{ $exams->links() }}
+                        </div>
+                    @endif
+                @endif
+            </section>
+        @endfragment
 
-            <div class="mt-6 flex justify-end">
-                {{ $exams->links() }}
-            </div>
-        @endif
+        <x-catalog-summary title="Resumen de exámenes">
+            <x-slot:actions>
+                <a href="{{ route('teacher.reviews.index') }}" class="inline-flex min-h-8 items-center rounded-sm text-xs font-semibold text-acode-tech underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acode-tech">
+                    Abrir centro de revisiones
+                </a>
+            </x-slot:actions>
+
+            <x-summary-item label="Total de exámenes" :value="(int) ($stats['total'] ?? 0)" icon="document"
+                :note="(int) ($stats['closed'] ?? 0) . ' cerrados'" />
+            <x-summary-item label="Borradores" :value="(int) ($stats['drafts'] ?? 0)" icon="edit" />
+            <x-summary-item label="Activos ahora" :value="$activeExams" icon="success"
+                :note="(int) ($stats['scheduled'] ?? 0) . ' programados'" />
+            <x-summary-item label="Exámenes pendientes de revisión" :value="$pendingReviewExams" icon="clock">
+                @if ($pendingReviewExams > 0)
+                    <a href="{{ route('exams.index', ['status' => 'pending_review']) }}" class="inline-flex min-h-8 items-center rounded-sm font-semibold text-acode-tech underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acode-tech">
+                        Ver pendientes de revisión
+                    </a>
+                @endif
+            </x-summary-item>
+        </x-catalog-summary>
     </div>
 @endsection

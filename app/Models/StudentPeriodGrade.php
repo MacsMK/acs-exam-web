@@ -29,6 +29,7 @@ class StudentPeriodGrade extends Model
         'project_component',
         'other_component',
         'final_grade',
+        'manual_comments',
     ];
 
     protected function casts(): array
@@ -39,6 +40,7 @@ class StudentPeriodGrade extends Model
             'project_component' => 'decimal:2',
             'other_component' => 'decimal:2',
             'final_grade' => 'decimal:2',
+            'manual_comments' => 'array',
         ];
     }
 

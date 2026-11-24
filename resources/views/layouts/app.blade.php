@@ -66,15 +66,26 @@
             display: none !important;
         }
 
+        html {
+            scrollbar-gutter: stable;
+        }
+
         .acode-sidebar-divider,
         .acode-brand-collapsed,
         .acode-icon-expand {
             display: none;
         }
 
-        @media (max-width: 1023px) {
+        @media (width < 1024px) {
             #acode-sidebar {
-                transition: transform 200ms ease;
+                transform: translateX(-100%);
+                visibility: hidden;
+                transition: transform 200ms ease, visibility 0s linear 200ms;
+            }
+            #acode-sidebar[data-mobile-open] {
+                transform: translateX(0);
+                visibility: visible;
+                transition-delay: 0s;
             }
         }
 
@@ -133,8 +144,58 @@
 @auth
     <div x-data="{
             sidebarOpen: false,
+            sidebarMobile: window.matchMedia('(width < 1024px)').matches,
             sidebarCollapsed: document.documentElement.classList.contains('acode-sidebar-collapsed'),
             profileOpen: false,
+            lastFocused: null,
+            openSidebar() {
+                this.profileOpen = false;
+                this.sidebarOpen = true;
+                this.$nextTick(() => {
+                    if (this.sidebarOpen) this.$refs.sidebarClose.focus();
+                });
+            },
+            closeSidebar() {
+                if (!this.sidebarOpen) return;
+
+                this.sidebarOpen = false;
+                this.$nextTick(() => {
+                    if (this.sidebarMobile && !this.sidebarOpen) this.$refs.sidebarTrigger.focus();
+                });
+            },
+            syncSidebarViewport() {
+                const mobile = window.matchMedia('(width < 1024px)').matches;
+                if (mobile === this.sidebarMobile) return;
+
+                // A breakpoint can hide the focused control before the resize event.
+                const focused = document.activeElement === document.body ? this.lastFocused : document.activeElement;
+                const sidebarHadFocus = this.$refs.sidebar.contains(focused);
+                this.sidebarMobile = mobile;
+                this.sidebarOpen = false;
+
+                this.$nextTick(() => {
+                    if (mobile !== this.sidebarMobile) return;
+
+                    if (mobile && sidebarHadFocus) {
+                        this.$refs.sidebarTrigger.focus();
+                    } else if (!mobile && (focused === this.$refs.sidebarTrigger || (sidebarHadFocus && focused.getClientRects().length === 0))) {
+                        this.$refs.sidebarToggle.focus();
+                    }
+                });
+            },
+            keepSidebarFocus(event) {
+                if (!this.sidebarOpen) return;
+
+                const targets = Array.from(this.$refs.sidebar.querySelectorAll('a[href], button:not([disabled])'))
+                    .filter(element => element.getClientRects().length > 0);
+                const from = event.shiftKey ? targets[0] : targets.at(-1);
+                const to = event.shiftKey ? targets.at(-1) : targets[0];
+
+                if (document.activeElement === from && to) {
+                    event.preventDefault();
+                    to.focus();
+                }
+            },
             toggleCollapse() {
                 const root = document.documentElement;
                 root.classList.add('acode-sidebar-animating');
@@ -144,20 +205,37 @@
                 setTimeout(() => root.classList.remove('acode-sidebar-animating'), 240);
             }
          }"
+         @resize.window="syncSidebarViewport()"
+         @focusin.window="lastFocused = $event.target"
          class="min-h-screen">
+
+            @empty($showPlanOnboardingOverlay)
+                <a href="#contenido-principal"
+                   :inert="sidebarOpen"
+                   class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:font-semibold focus:text-acode-primary focus:shadow-sm focus:outline focus:outline-2 focus:outline-acode-tech">
+                    Saltar al contenido
+                </a>
+            @endempty
 
             {{-- Fondo del menú móvil --}}
             <div x-show="sidebarOpen"
                  x-cloak
                  x-transition.opacity
-                 @click="sidebarOpen = false"
+                 @click="closeSidebar()"
                  class="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm lg:hidden">
             </div>
 
             {{-- Menú lateral institucional retráctil (zero-flicker) --}}
             <aside id="acode-sidebar"
-                   class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-acode-primary text-white -translate-x-full lg:translate-x-0"
-                   :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'">
+                   x-ref="sidebar"
+                   class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-acode-primary text-white"
+                   :data-mobile-open="sidebarOpen ? '' : null"
+                   :inert="sidebarMobile && !sidebarOpen"
+                   :role="sidebarOpen ? 'dialog' : null"
+                   :aria-modal="sidebarOpen ? 'true' : null"
+                   :aria-label="sidebarOpen ? 'Navegación principal' : null"
+                   @keydown.escape="if (sidebarOpen) { $event.stopPropagation(); closeSidebar() }"
+                   @keydown.tab="keepSidebarFocus($event)">
 
                 {{-- Cabecera del menú lateral --}}
                 <div class="acode-sidebar-header flex min-h-20 items-center justify-between gap-2 border-b border-white/10 px-4 py-4">
@@ -178,6 +256,7 @@
                     </a>
 
                     <button type="button"
+                            x-ref="sidebarToggle"
                             @click="toggleCollapse()"
                             class="hidden lg:inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/75 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-acode-accent"
                             :aria-label="sidebarCollapsed ? 'Expandir menú lateral' : 'Contraer menú lateral'"
@@ -191,8 +270,9 @@
                     </button>
 
                     <button type="button"
-                            @click="sidebarOpen = false"
-                            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/75 transition-colors hover:bg-white/10 hover:text-white lg:hidden"
+                            x-ref="sidebarClose"
+                            @click="closeSidebar()"
+                            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/75 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white lg:hidden"
                             aria-label="Cerrar menú">
                         <x-icon name="xMark" class="h-5 w-5" />
                     </button>
@@ -213,6 +293,11 @@
                             <span class="acode-sidebar-label truncate">Gestión de Docentes</span>
                         </a>
 
+                        @foreach (['admin.students.index' => 'Estudiantes', 'admin.terms.index' => 'Términos y condiciones'] as $destination => $label)
+                            <a href="{{ route($destination) }}" class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 text-white/75 hover:bg-white/10 hover:text-white" title="{{ $label }}" @if(request()->routeIs($destination)) aria-current="page" @endif>
+                                <x-nav-icon name="profile" /><span class="acode-sidebar-label">{{ $label }}</span>
+                            </a>
+                        @endforeach
                         <a href="{{ route('admin.invitations.index') }}"
                            title="Códigos de Invitación"
                            @if (request()->routeIs('admin.invitations.*')) aria-current="page" @endif
@@ -222,7 +307,7 @@
                         </a>
                     @elseif (auth()->user()->role === 'student')
                         {{-- Categoría: Principal --}}
-                        <div class="acode-sidebar-category px-3 pt-1 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
+                        <div class="acode-sidebar-category px-3 pt-1 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/60">
                             Principal
                         </div>
 
@@ -235,7 +320,7 @@
                         </a>
 
                         {{-- Categoría: Mi Aprendizaje --}}
-                        <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
+                        <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/60">
                             Mi Aprendizaje
                         </div>
                         <div class="acode-sidebar-divider my-2 mx-2 border-t border-white/10" aria-hidden="true"></div>
@@ -265,7 +350,7 @@
                         </a>
 
                         {{-- Categoría: Inscripción --}}
-                        <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
+                        <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/60">
                             Inscripción
                         </div>
                         <div class="acode-sidebar-divider my-2 mx-2 border-t border-white/10" aria-hidden="true"></div>
@@ -301,7 +386,7 @@
                             </a>
                         @elseif (auth()->user()->isVerifiedTeacher())
                             {{-- Categoría: Principal --}}
-                            <div class="acode-sidebar-category px-3 pt-1 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
+                            <div class="acode-sidebar-category px-3 pt-1 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/60">
                                 Principal
                             </div>
 
@@ -314,15 +399,15 @@
                             </a>
 
                             {{-- Categoría: Gestión Académica --}}
-                            <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
+                            <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/60">
                                 Gestión Académica
                             </div>
                             <div class="acode-sidebar-divider my-2 mx-2 border-t border-white/10" aria-hidden="true"></div>
 
                             <a href="{{ route('groups.index') }}"
                                title="Grupos"
-                               @if (request()->routeIs('groups.index', 'groups.create', 'groups.show', 'groups.periods.index')) aria-current="page" @endif
-                               class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('groups.index', 'groups.create', 'groups.show', 'groups.periods.index') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
+                               @if (request()->routeIs('groups.*') && ! request()->routeIs('groups.periods.gradebook*')) aria-current="page" @endif
+                               class="acode-sidebar-link flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-colors {{ request()->routeIs('groups.*') && ! request()->routeIs('groups.periods.gradebook*') ? 'bg-acode-tech text-white font-semibold shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white' }}">
                                 <x-nav-icon name="groups" />
                                 <span class="acode-sidebar-label truncate">Grupos</span>
                             </a>
@@ -344,7 +429,7 @@
                             </a>
 
                             {{-- Categoría: Evaluación y Resultados --}}
-                            <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
+                            <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/60">
                                 Evaluación y Resultados
                             </div>
                             <div class="acode-sidebar-divider my-2 mx-2 border-t border-white/10" aria-hidden="true"></div>
@@ -366,7 +451,7 @@
                             </a>
 
                             {{-- Categoría: Cuenta y Plan --}}
-                            <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
+                            <div class="acode-sidebar-category px-3 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/60">
                                 Cuenta y Plan
                             </div>
                             <div class="acode-sidebar-divider my-2 mx-2 border-t border-white/10" aria-hidden="true"></div>
@@ -438,15 +523,19 @@
             </aside>
 
             {{-- Contenido principal --}}
-            <div id="acode-main-shell" class="flex min-h-screen flex-col">
+            <div id="acode-main-shell" :inert="sidebarOpen" class="flex min-h-screen flex-col">
 
                 {{-- Encabezado superior --}}
                 <header class="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm sm:px-6 lg:px-8">
 
                     <div class="flex items-center gap-3 min-w-0">
                         <button type="button"
-                                @click="sidebarOpen = true"
-                                class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-acode-primary transition hover:bg-acode-surface lg:hidden"
+                                x-ref="sidebarTrigger"
+                                @click="openSidebar()"
+                                class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-acode-primary transition hover:bg-acode-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acode-tech lg:hidden"
+                                aria-controls="acode-sidebar"
+                                aria-expanded="false"
+                                :aria-expanded="sidebarOpen.toString()"
                                 aria-label="Abrir menú">
                             <x-icon name="bars3" class="h-5 w-5" />
                         </button>
@@ -462,9 +551,11 @@
                         <button type="button"
                                 @click="profileOpen = !profileOpen"
                                 :aria-expanded="profileOpen.toString()"
+                                aria-controls="acode-profile-panel"
+                                aria-label="{{ auth()->user()->full_name }}, menú de perfil"
                                 class="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-acode-tech">
 
-                            <x-avatar :user="auth()->user()" />
+                            <x-avatar :user="auth()->user()" aria-hidden="true" />
 
                             <span class="hidden text-sm font-medium text-acode-primary sm:block">
                                 {{ auth()->user()->full_name }}
@@ -476,7 +567,7 @@
                             </span>
                         </button>
 
-                        <div x-show="profileOpen"
+                        <div id="acode-profile-panel" x-show="profileOpen"
                              x-cloak
                              x-transition
                              class="absolute right-0 mt-2 w-60 rounded-xl border border-slate-200 bg-white py-2 shadow-lg">
@@ -572,7 +663,7 @@
                 </header>
 
                 {{-- Contenido --}}
-                <main class="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+                <main id="contenido-principal" tabindex="-1" class="mx-auto w-full max-w-7xl flex-1 scroll-mt-16 px-4 py-8 sm:px-6 lg:px-8">
 
                     @if (session('status') || session('success'))
                         <div x-data="{ show: true }"
@@ -586,7 +677,7 @@
                             </div>
                             <button type="button"
                                     @click="show = false"
-                                    class="rounded-lg p-1 text-acode-primary/70 transition hover:bg-acode-accent/20 hover:text-acode-primary focus:outline-none"
+                                    class="rounded-lg p-1 text-acode-primary/70 transition hover:bg-acode-accent/20 hover:text-acode-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acode-tech"
                                     aria-label="Cerrar notificación">
                                 <x-icon name="xMark" class="h-4 w-4" />
                             </button>
@@ -605,7 +696,7 @@
                             </div>
                             <button type="button"
                                     @click="show = false"
-                                    class="rounded-lg p-1 text-acode-primary/70 transition hover:bg-acode-warning/25 hover:text-acode-primary focus:outline-none"
+                                    class="rounded-lg p-1 text-acode-primary/70 transition hover:bg-acode-warning/25 hover:text-acode-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acode-tech"
                                     aria-label="Cerrar advertencia">
                                 <x-icon name="xMark" class="h-4 w-4" />
                             </button>
@@ -624,14 +715,14 @@
                             </div>
                             <button type="button"
                                     @click="show = false"
-                                    class="rounded-lg p-1 text-acode-danger/70 transition hover:bg-acode-danger/15 hover:text-acode-danger focus:outline-none"
+                                    class="rounded-lg p-1 text-acode-danger/70 transition hover:bg-acode-danger/15 hover:text-acode-danger focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acode-tech"
                                     aria-label="Cerrar alerta">
                                 <x-icon name="xMark" class="h-4 w-4" />
                             </button>
                         </div>
                     @endif
 
-                    @if ($errors->any() && empty($showPlanOnboardingOverlay) && !request()->routeIs('exams.*', 'questions.create', 'questions.edit', 'questions.batch.create'))
+                    @if ($errors->any() && empty($showPlanOnboardingOverlay) && !request()->routeIs('exams.*', 'questions.create', 'questions.edit', 'questions.batch.create', 'teacher.subscription.checkout'))
                         <div class="mb-6 rounded-xl border border-acode-danger/30 bg-acode-danger/10 px-4 py-3.5 text-sm text-acode-danger">
                             <p class="mb-1 font-semibold">Revisa lo siguiente:</p>
                             <ul class="list-inside list-disc space-y-0.5">
@@ -653,11 +744,14 @@
                             <span>Plataforma Evaluadora de Exámenes. Todos los derechos reservados.</span>
                             <span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-600">v1.0.0</span>
                         </div>
-                        <nav class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500">
-                            <a href="#" class="transition hover:text-acode-tech">Términos del Servicio</a>
-                            <a href="{{ route('privacy.show.public') }}" class="transition hover:text-acode-tech">Aviso de Privacidad</a>
-                            <a href="#" class="transition hover:text-acode-tech">Centro de Ayuda</a>
-                            <a href="#" class="transition hover:text-acode-tech">Soporte Técnico</a>
+                        <nav aria-label="Navegación secundaria" class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500">
+                            @foreach (['terms.public' => 'Términos del Servicio', 'privacy.show.public' => 'Aviso de Privacidad', 'help.index' => 'Centro de Ayuda', 'help.support' => 'Soporte Técnico'] as $routeName => $label)
+                                <a href="{{ route($routeName) }}"
+                                   @if (request()->routeIs($routeName)) aria-current="page" @endif
+                                   class="inline-flex min-h-6 items-center rounded-sm transition hover:text-acode-tech hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acode-tech">
+                                    {{ $label }}
+                                </a>
+                            @endforeach
                         </nav>
                     </div>
                 </footer>

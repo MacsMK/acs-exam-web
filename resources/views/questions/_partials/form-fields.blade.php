@@ -14,38 +14,34 @@
         'code' => 'Código fuente',
     ];
     $typeDescriptions = [
-        'multiple_choice' => 'De 2 a 6 alternativas con una única respuesta correcta.',
-        'matching' => 'De 2 a 8 pares concepto ↔ definición mezclados al estudiante.',
-        'open' => 'Respuesta argumentativa evaluada con apoyo de rúbrica e IA.',
-        'code' => 'Reto de programación o depuración con solución canónica.',
+        'multiple_choice' => 'De 2 a 6 opciones, una correcta.',
+        'matching' => 'De 2 a 8 pares con definiciones mezcladas.',
+        'open' => 'Respuesta escrita con rúbrica opcional.',
+        'code' => 'Reto de programación o depuración.',
     ];
     $typeIcons = [
-        'multiple_choice' => 'check',
-        'matching' => 'filter',
+        'multiple_choice' => 'listBullet',
+        'matching' => 'table',
         'open' => 'document',
         'code' => 'code',
     ];
 @endphp
 
 <div class="space-y-6">
-    {{-- Paso 1: Clasificación, tipo y materia --}}
-    <x-card
-        title="Paso 1: Clasificación, tipo y materia"
-        subtitle="Define el formato del reactivo, su título interno y la materia a la que pertenece."
-    >
+    <x-card title="Paso 1: Datos del reactivo">
         <div class="space-y-5">
             {{-- Tipo de reactivo --}}
             @if ($mode === 'create')
-                <div class="space-y-2">
-                    <label class="block text-sm font-medium text-slate-800">
+                <fieldset class="min-w-0 space-y-2">
+                    <legend class="block pb-2 text-[13px] font-medium text-slate-800">
                         Tipo de reactivo <span class="text-acode-danger font-bold ml-0.5" aria-hidden="true">*</span>
-                    </label>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Tipo de reactivo">
+                    </legend>
+                    <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                         @foreach ($typeLabels as $typeKey => $typeLabel)
                             <label
-                                class="relative flex items-start gap-3 rounded-xl border p-3.5 cursor-pointer transition-all"
+                                class="relative flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 transition-colors focus-within:ring-2 focus-within:ring-acode-tech focus-within:ring-offset-2"
                                 :class="type === '{{ $typeKey }}'
-                                    ? 'border-acode-tech bg-acode-tech/5 ring-2 ring-acode-tech/30 shadow-sm'
+                                    ? 'border-acode-tech bg-acode-tech/5'
                                     : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70'"
                             >
                                 <input
@@ -55,9 +51,10 @@
                                     x-model="type"
                                     @change="notifyFormChanged()"
                                     class="sr-only"
+                                    required
                                 />
                                 <span
-                                    class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors"
+                                    class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors"
                                     :class="type === '{{ $typeKey }}'
                                         ? 'bg-acode-tech text-white'
                                         : 'bg-slate-100 text-slate-500'"
@@ -66,8 +63,9 @@
                                 </span>
                                 <span class="min-w-0 flex-1">
                                     <span class="block text-sm font-semibold text-acode-primary">{{ $typeLabel }}</span>
-                                    <span class="block text-xs text-slate-500 mt-0.5 leading-snug">{{ $typeDescriptions[$typeKey] }}</span>
+                                    <span class="mt-0.5 block text-xs text-slate-600">{{ $typeDescriptions[$typeKey] }}</span>
                                 </span>
+                                <x-icon name="check" class="mt-0.5 h-4 w-4 text-acode-tech" x-show="type === '{{ $typeKey }}'" x-cloak />
                             </label>
                         @endforeach
                     </div>
@@ -77,24 +75,15 @@
                             <span>{{ $message }}</span>
                         </p>
                     @enderror
-                </div>
+                </fieldset>
             @else
                 <input type="hidden" name="question_type" value="{{ $question->question_type }}">
-                <div class="rounded-xl border border-slate-200 bg-acode-surface/60 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div class="flex items-center gap-2.5">
-                        <span class="w-8 h-8 rounded-lg bg-acode-primary text-white flex items-center justify-center shrink-0">
-                            <x-icon name="lock" class="w-4 h-4" />
-                        </span>
-                        <div>
-                            <p class="text-xs font-semibold text-acode-primary">
-                                Tipo de reactivo bloqueado: {{ $typeLabels[$question->question_type] ?? $question->question_type }}
-                            </p>
-                            <p class="text-xs text-slate-500">
-                                El tipo es inmutable tras la creación para mantener la integridad de sus respuestas e historial.
-                            </p>
-                        </div>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-acode-surface/60 px-3.5 py-2">
+                    <div class="flex items-center gap-2 text-sm text-acode-primary">
+                        <x-icon name="lock" class="h-4 w-4 shrink-0" />
+                        <span class="font-semibold">{{ $typeLabels[$question->question_type] ?? $question->question_type }}</span>
                     </div>
-                    <x-badge variant="info">{{ $typeLabels[$question->question_type] ?? $question->question_type }}</x-badge>
+                    <p class="text-xs text-slate-700">El tipo se fija al crear el reactivo.</p>
                 </div>
             @endif
 
@@ -103,7 +92,7 @@
                 name="title"
                 label="Título interno del reactivo"
                 :required="true"
-                help-text="Solo visible para ti en el banco de preguntas; nunca se muestra al estudiante."
+                help-text="Identifica el reactivo en tu banco de preguntas."
             >
                 <x-form.input
                     name="title"
@@ -115,11 +104,12 @@
                 />
             </x-form.group>
 
+            @include('questions._partials.stem-field')
+
             {{-- Combobox inteligente de materia --}}
             <x-form.group
                 name="subject_tag"
-                label="Materia o asignatura (opcional)"
-                help-text="Organiza tu banco por materia. Evita duplicados por mayúsculas o acentos."
+                label="Materia (opcional)"
             >
                 <x-form.input
                     name="subject_tag"
@@ -127,7 +117,7 @@
                     x-model="subjectTag"
                     @input="handleSubjectInput()"
                     maxlength="100"
-                    placeholder="Ej. Bases de Datos, Programación Orientada a Objetos"
+                    placeholder="Ej. Bases de Datos"
                     value="{{ old('subject_tag', $question?->subject_tag ?? ($defaultValues['subject_tag'] ?? '')) }}"
                 />
                 <datalist id="teacher-subjects-datalist">
@@ -137,19 +127,20 @@
                 </datalist>
 
                 @if ($subjects->isNotEmpty())
-                    <div class="mt-2 flex flex-wrap items-center gap-1.5">
-                        <span class="text-xs text-slate-500 mr-1">Registradas:</span>
+                    <div class="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Materias registradas">
+                        <span class="mr-1 text-xs text-slate-500" aria-hidden="true">Registradas</span>
                         @foreach ($subjects->take(8) as $quickSubject)
-                            <button
+                            <x-button
                                 type="button"
-                                @click="applySuggestedSubject(@js($quickSubject))"
-                                class="h-8 px-3 rounded-lg text-xs font-medium border transition-colors"
-                                :class="normalizeText(subjectTag) === normalizeText(@js($quickSubject))
-                                    ? 'bg-acode-tech text-white border-acode-tech'
-                                    : 'bg-white text-slate-700 border-slate-300 hover:bg-acode-surface'"
+                                variant="neutral"
+                                size="sm"
+                                data-subject="{{ $quickSubject }}"
+                                @click="applySuggestedSubject($el.dataset.subject)"
+                                x-bind:aria-pressed="normalizeText(subjectTag) === normalizeText($el.dataset.subject)"
+                                class="aria-pressed:border-acode-tech aria-pressed:bg-acode-tech/5 aria-pressed:text-acode-primary"
                             >
                                 {{ $quickSubject }}
-                            </button>
+                            </x-button>
                         @endforeach
                     </div>
                 @endif
@@ -167,9 +158,7 @@
                             <p class="font-semibold text-acode-primary">
                                 Ya existe una materia similar: «<span x-text="subjectSuggestions[0]?.name"></span>» ¿Usar esa?
                             </p>
-                            <p class="text-xs text-slate-700 mt-0.5">
-                                Seleccionarla mantiene agrupados tus reactivos bajo el mismo nombre canónico.
-                            </p>
+                            <p class="mt-0.5 text-xs text-slate-700">Usa una materia registrada para evitar duplicados.</p>
                         </div>
                     </div>
                     <div class="flex flex-wrap gap-1.5 pl-6">
@@ -185,27 +174,6 @@
                             </x-button>
                         </template>
                     </div>
-                </div>
-            </x-form.group>
-
-            {{-- Enunciado --}}
-            <x-form.group
-                name="stem"
-                label="Enunciado del reactivo"
-                :required="true"
-                help-text="Planteamiento exacto que verá el estudiante durante la evaluación (3 a 5,000 caracteres)."
-            >
-                <x-form.textarea
-                    name="stem"
-                    x-model="stem"
-                    rows="4"
-                    minlength="3"
-                    maxlength="5000"
-                    required
-                    placeholder="Redacta aquí la instrucción o planteamiento del reactivo…"
-                >{{ old('stem', $question?->stem ?? '') }}</x-form.textarea>
-                <div class="flex justify-end">
-                    <span class="text-xs font-mono text-slate-500" x-text="stem.length + ' / 5000'"></span>
                 </div>
             </x-form.group>
 
@@ -242,17 +210,20 @@
         </div>
     </x-card>
 
-    {{-- Paso 2: Contenido técnico y respuesta correcta --}}
-    <x-card
-        title="Paso 2: Contenido técnico y respuesta correcta"
-        subtitle="Configura las alternativas, pares o solución modelo según el tipo de reactivo."
-    >
+    <x-card title="Paso 2: Contenido y respuesta">
         {{-- 2A. Opción múltiple --}}
         <fieldset x-show="type === 'multiple_choice'" :disabled="type !== 'multiple_choice'" class="space-y-4">
+            <legend class="sr-only">Alternativas de respuesta</legend>
             <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
                 <div>
                     <h3 class="text-base font-semibold text-acode-primary leading-6">Alternativas de respuesta</h3>
                     <p class="text-xs text-slate-500">Agrega entre 2 y 6 opciones distintas y marca la correcta.</p>
+                    <p
+                        id="correct-option-status"
+                        role="status"
+                        class="text-xs font-medium text-acode-danger"
+                        x-text="correctOption < 0 ? 'Marca la opción correcta antes de guardar.' : ''"
+                    ></p>
                 </div>
                 <x-badge variant="info">
                     <span x-text="options.length + ' / 6 opciones'"></span>
@@ -281,23 +252,35 @@
                             : 'border-slate-200 bg-white'"
                     >
                         <div class="flex items-center gap-3">
-                            <input
-                                type="radio"
-                                name="correct_option_index"
-                                :value="i"
-                                x-model.number="correctOption"
-                                @change="notifyFormChanged()"
-                                :aria-label="'Marcar opción ' + String.fromCharCode(65 + i) + ' como correcta'"
-                                class="h-4 w-4 text-acode-accent focus:ring-acode-tech shrink-0 cursor-pointer"
-                            />
-                            <span
-                                class="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
-                                :class="correctOption === i ? 'bg-acode-accent text-white' : 'bg-slate-100 text-slate-600'"
-                                x-text="String.fromCharCode(65 + i)"
-                            ></span>
+                            <label class="inline-flex min-h-8 shrink-0 cursor-pointer items-center gap-2">
+                                {{-- Actualiza el valor cuando Alpine reutiliza una opción con un índice distinto. --}}
+                                <input
+                                    type="radio"
+                                    name="correct_option_index"
+                                    x-effect="$el.value = i"
+                                    :checked="correctOption === i"
+                                    @change="correctOption = i; notifyFormChanged()"
+                                    :aria-label="'Marcar opción ' + String.fromCharCode(65 + i) + ' como correcta'"
+                                    aria-describedby="correct-option-status"
+                                    class="h-4 w-4 shrink-0 cursor-pointer text-acode-accent focus:ring-acode-tech"
+                                    required
+                                />
+                                <span
+                                    class="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
+                                    :class="correctOption === i ? 'bg-acode-accent/15 text-acode-primary' : 'bg-slate-100 text-slate-600'"
+                                    x-text="String.fromCharCode(65 + i)"
+                                    aria-hidden="true"
+                                ></span>
+                            </label>
                             <div class="min-w-0 flex-1">
+                                <label
+                                    :for="formId + '-option-' + opt.uid"
+                                    class="sr-only"
+                                    x-text="'Texto de la opción ' + String.fromCharCode(65 + i)"
+                                ></label>
                                 <x-form.input
                                     type="text"
+                                    x-bind:id="formId + '-option-' + opt.uid"
                                     x-bind:name="'options[' + i + ']'"
                                     x-model="opt.text"
                                     maxlength="500"
@@ -318,7 +301,7 @@
                                 size="sm"
                                 @click="removeOption(i)"
                                 x-bind:disabled="options.length <= 2"
-                                aria-label="Eliminar opción"
+                                x-bind:aria-label="'Eliminar opción ' + String.fromCharCode(65 + i)"
                             >
                                 <x-icon name="delete" class="w-3.5 h-3.5" />
                                 <span class="hidden sm:inline">Eliminar</span>
@@ -335,7 +318,7 @@
                 </template>
             </div>
 
-            <div class="flex items-center justify-between pt-1">
+            <div class="pt-1">
                 <x-button
                     type="button"
                     variant="secondary"
@@ -346,7 +329,6 @@
                     <x-icon name="add" class="w-3.5 h-3.5" />
                     Agregar opción
                 </x-button>
-                <span class="text-xs text-slate-500">Máximo 6 opciones sin duplicados.</span>
             </div>
         </fieldset>
 
@@ -354,7 +336,7 @@
         <fieldset x-show="type === 'matching'" :disabled="type !== 'matching'" class="space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
                 <div>
-                    <h3 class="text-base font-semibold text-acode-primary leading-6">Pares biyectivos (Concepto ↔ Definición)</h3>
+                    <h3 class="text-base font-semibold text-acode-primary leading-6">Pares de concepto y definición</h3>
                     <p class="text-xs text-slate-500">Define de 2 a 8 pares. El examen mezclará las definiciones para el alumno.</p>
                 </div>
                 <x-badge variant="accent">
@@ -395,9 +377,12 @@
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-sm font-medium text-slate-800 mb-1">Concepto / Premisa</label>
+                                <label :for="formId + '-concept-' + pair.uid" class="block text-sm font-medium text-slate-800 mb-1">
+                                    Concepto / Premisa <span class="sr-only" x-text="'del par ' + (i + 1)"></span>
+                                </label>
                                 <x-form.input
                                     type="text"
+                                    x-bind:id="formId + '-concept-' + pair.uid"
                                     x-bind:name="'concepts[' + i + ']'"
                                     x-model="pair.concept"
                                     maxlength="500"
@@ -413,9 +398,12 @@
                                 ></p>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-slate-800 mb-1">Definición / Respuesta</label>
+                                <label :for="formId + '-definition-' + pair.uid" class="block text-sm font-medium text-slate-800 mb-1">
+                                    Definición / Respuesta <span class="sr-only" x-text="'del par ' + (i + 1)"></span>
+                                </label>
                                 <x-form.input
                                     type="text"
+                                    x-bind:id="formId + '-definition-' + pair.uid"
                                     x-bind:name="'definitions[' + i + ']'"
                                     x-model="pair.definition"
                                     maxlength="500"
@@ -608,17 +596,14 @@
     </x-card>
 
     {{-- Paso 3: Puntuación, tiempo sugerido y blindaje anti-copia --}}
-    <x-card
-        title="Paso 3: Puntuación, tiempo sugerido y blindaje anti-copia"
-        subtitle="Configura el valor predeterminado del reactivo y sus variantes para reducir copia entre alumnos."
-    >
+    <x-card title="Paso 3: Puntaje, tiempo y blindaje anti-copia">
         <div class="space-y-5">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <x-form.group
                     name="default_points"
                     label="Puntaje predeterminado"
                     :required="true"
-                    help-text="Valor entre 0.10 y 100 puntos (editable después al armar un examen)."
+                    help-text="De 0.10 a 100 puntos. Puedes ajustarlo al armar el examen."
                 >
                     <x-form.input
                         type="number"
@@ -636,7 +621,7 @@
                     name="default_time_seconds"
                     label="Tiempo límite sugerido (segundos)"
                     :required="true"
-                    help-text="Mínimo 5 seg. y máximo 3,600 seg. (60 minutos)."
+                    help-text="De 5 a 3,600 segundos (60 minutos)."
                 >
                     <x-form.input
                         type="number"
@@ -648,18 +633,18 @@
                         required
                         value="{{ old('default_time_seconds', $question?->default_time_seconds ?? ($defaultValues['default_time_seconds'] ?? 60)) }}"
                     />
-                    <div class="mt-2 flex flex-wrap gap-1.5">
-                        @foreach ([30 => '30s', 60 => '60s', 90 => '90s', 120 => '2 min', 180 => '3 min', 300 => '5 min'] as $seconds => $presetLabel)
-                            <button
+                    <div class="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Tiempos sugeridos">
+                        @foreach ([30 => '30 s', 60 => '60 s', 90 => '90 s', 120 => '2 min', 180 => '3 min', 300 => '5 min'] as $seconds => $presetLabel)
+                            <x-button
                                 type="button"
+                                variant="neutral"
+                                size="sm"
                                 @click="setTime({{ $seconds }})"
-                                class="h-8 px-3 rounded-lg border text-xs font-semibold transition-colors"
-                                :class="Number(defaultTime) === {{ $seconds }}
-                                    ? 'border-acode-tech bg-acode-tech text-white'
-                                    : 'border-slate-300 bg-white text-slate-700 hover:bg-acode-surface'"
+                                x-bind:aria-pressed="Number(defaultTime) === {{ $seconds }}"
+                                class="aria-pressed:border-acode-tech aria-pressed:bg-acode-tech/5 aria-pressed:text-acode-primary"
                             >
                                 {{ $presetLabel }}
-                            </button>
+                            </x-button>
                         @endforeach
                     </div>
                 </x-form.group>
@@ -670,12 +655,12 @@
                 <div class="rounded-xl border border-slate-200 bg-acode-surface/60 p-4 space-y-3">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
-                            <div class="flex items-center gap-2">
+                            <div class="flex flex-wrap items-center gap-2">
                                 <h3 class="text-base font-semibold text-acode-primary leading-6">Paráfrasis anti-copia iniciales (opcional)</h3>
                                 <x-badge variant="info" x-text="activeInitialParaphrases.length + ' / 3'"></x-badge>
                             </div>
-                            <p class="text-xs text-slate-500 mt-0.5">
-                                Durante el examen, el sistema alterna de forma equitativa entre el enunciado original y sus variantes para dificultar copias sin alterar la respuesta correcta.
+                            <p class="mt-0.5 text-xs text-slate-700">
+                                Redacta variantes del enunciado que conserven la misma respuesta correcta.
                             </p>
                         </div>
 
@@ -684,29 +669,33 @@
                             variant="neutral"
                             size="sm"
                             @click="showInitialParaphrases = !showInitialParaphrases"
+                            x-bind:aria-expanded="showInitialParaphrases"
+                            aria-controls="initial-paraphrases-editor"
+                            class="shrink-0 whitespace-nowrap"
                         >
-                            <span x-text="showInitialParaphrases ? 'Cerrar variantes' : 'Agregar variantes'"></span>
+                            <span x-text="showInitialParaphrases ? 'Cerrar variantes' : 'Abrir variantes'"></span>
                         </x-button>
                     </div>
 
                     @error('initial_paraphrases')
-                        <p class="text-xs text-acode-danger font-medium">{{ $message }}</p>
+                        <p class="text-xs font-medium text-acode-danger-dark">{{ $message }}</p>
                     @enderror
 
-                    <div x-show="showInitialParaphrases" x-cloak x-transition class="space-y-3 pt-1">
+                    <div id="initial-paraphrases-editor" x-show="showInitialParaphrases" x-cloak x-transition class="space-y-3 pt-1">
                         <template x-for="(para, idx) in initialParaphrases" :key="para.uid">
                             <div class="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
                                 <div class="flex items-center justify-between gap-2">
-                                    <span class="text-xs font-semibold text-acode-primary">
+                                    <label :for="formId + '-paraphrase-' + para.uid" class="text-xs font-semibold text-acode-primary">
                                         Paráfrasis #<span x-text="idx + 1"></span>
-                                    </span>
+                                    </label>
                                     <div class="flex items-center gap-3">
                                         <span
                                             class="text-xs font-mono"
                                             :class="para.text.length > 480 ? 'text-acode-danger font-bold' : 'text-slate-500'"
                                             x-text="para.text.length + ' / 500'"
                                         ></span>
-                                        <x-button type="button" variant="danger" size="sm" @click="removeInitialParaphrase(idx)">
+                                        <x-button type="button" variant="danger" size="sm" @click="removeInitialParaphrase(idx)"
+                                            x-bind:aria-label="'Eliminar paráfrasis ' + (idx + 1)">
                                             <x-icon name="delete" class="w-3.5 h-3.5" />
                                             Eliminar
                                         </x-button>
@@ -714,6 +703,7 @@
                                 </div>
                                 <x-form.textarea
                                     rows="2"
+                                    x-bind:id="formId + '-paraphrase-' + para.uid"
                                     minlength="3"
                                     maxlength="500"
                                     x-model="para.text"
@@ -741,7 +731,7 @@
                             <input type="hidden" :name="'initial_paraphrases[' + cleanIdx + ']'" :value="stemVal">
                         </template>
 
-                        <div class="flex items-center justify-between">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
                             <x-button
                                 type="button"
                                 variant="secondary"
@@ -752,28 +742,28 @@
                                 <x-icon name="add" class="w-3.5 h-3.5" />
                                 Agregar variante anti-copia
                             </x-button>
-                            <span class="text-xs text-slate-500">Máximo 3 al crear (puedes agregar hasta 10 en el detalle).</span>
+                            <span class="text-xs text-slate-700">Puedes agregar hasta 10 en el detalle.</span>
                         </div>
                     </div>
                 </div>
             @else
                 <div class="rounded-xl border border-slate-200 bg-acode-surface/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div class="space-y-1">
-                        <div class="flex items-center gap-2">
-                            <h3 class="text-base font-semibold text-acode-primary leading-6">Paráfrasis anti-copia registradas</h3>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h3 class="text-base font-semibold text-acode-primary leading-6">Paráfrasis anti-copia</h3>
                             <x-badge :variant="$question->paraphrases->count() > 0 ? 'success' : 'neutral'">
                                 {{ $question->paraphrases->count() }} registradas
                             </x-badge>
                         </div>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-slate-700">
                             @if ($isLinkedToExams)
-                                Al guardar cambios en un reactivo vinculado se creará una nueva versión; podrás agregar o depurar paráfrasis desde el detalle del reactivo resultante.
+                                Después de guardar, administra las paráfrasis desde el detalle de la nueva versión.
                             @else
-                                Administra, agrega o elimina variantes anti-copia desde la vista de detalle del reactivo.
+                                Administra las variantes desde el detalle del reactivo.
                             @endif
                         </p>
                     </div>
-                    <x-button :href="route('questions.show', $question)" variant="neutral" size="sm">
+                    <x-button :href="route('questions.show', $question)" variant="neutral" size="sm" class="shrink-0" data-cancel-form="edit-question-form">
                         <x-icon name="view" class="w-3.5 h-3.5" />
                         Ver detalles
                     </x-button>
@@ -866,13 +856,16 @@
                     },
 
                     removeOption(index) {
-                        if (this.options.length > 2) {
-                            this.options.splice(index, 1);
-                            if (this.correctOption >= this.options.length) {
-                                this.correctOption = this.options.length - 1;
-                            }
-                            this.notifyFormChanged();
-                        }
+                        if (this.options.length <= 2) return;
+
+                        const correctUid = this.options[this.correctOption]?.uid;
+                        const previewUid = this.options[this.previewSelectedOption]?.uid;
+                        this.options.splice(index, 1);
+                        this.correctOption = this.options.findIndex((option) => option.uid === correctUid);
+
+                        const previewIndex = this.options.findIndex((option) => option.uid === previewUid);
+                        this.previewSelectedOption = previewIndex < 0 ? null : previewIndex;
+                        this.notifyFormChanged();
                     },
 
                     addPair() {
@@ -922,16 +915,16 @@
                     get formattedTime() {
                         const total = Math.max(0, Number(this.defaultTime) || 0);
                         if (total < 60) {
-                            return total + 's';
+                            return total + ' s';
                         }
                         const mins = Math.floor(total / 60);
                         const rem = total % 60;
-                        return rem > 0 ? mins + 'm ' + rem + 's' : mins + 'm';
+                        return rem > 0 ? mins + ' min ' + rem + ' s' : mins + ' min';
                     },
 
                     get formattedPoints() {
                         const pts = Number(this.defaultPoints) || 0;
-                        return Number.isInteger(pts) ? String(pts) : pts.toFixed(1);
+                        return String(Number(pts.toFixed(2)));
                     },
 
                     get previewShuffledDefinitions() {

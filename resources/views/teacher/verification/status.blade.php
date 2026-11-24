@@ -109,47 +109,20 @@
                 {{-- Resumen de datos declarados --}}
                 <div>
                     <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Datos declarados en tu solicitud</h4>
-                    <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5">
-                            <dt class="text-xs text-slate-500">Institución educativa</dt>
-                            <dd class="mt-1 text-sm font-semibold text-acode-primary">
-                                {{ $verification?->institution_name ?: 'No especificada' }}
-                            </dd>
-                        </div>
+                    <x-summary-list>
+                        <x-summary-item label="Institución educativa" :value="$verification?->institution_name ?: 'No especificada'" compact />
 
                         @if ($verification?->educational_level)
-                            <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5">
-                                <dt class="text-xs text-slate-500">Nivel educativo</dt>
-                                <dd class="mt-1 text-sm font-semibold text-acode-primary">
-                                    {{ $verification->educationalLevelLabel() }}
-                                </dd>
-                            </div>
+                            <x-summary-item label="Nivel educativo" :value="$verification->educationalLevelLabel()" compact />
                         @endif
 
-                        <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5">
-                            <dt class="text-xs text-slate-500">Acreditación adjunta</dt>
-                            <dd class="mt-1 text-sm font-semibold text-acode-primary">
-                                {{ $verification?->credentialTypeLabel() ?? 'Comprobante de adscripción docente' }}
-                            </dd>
-                        </div>
-
-                        <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5">
-                            <dt class="text-xs text-slate-500">Cédula profesional SEP</dt>
-                            <dd class="mt-1 text-sm font-semibold font-mono text-acode-primary">
-                                {{ $verification?->professional_license ?: 'No proporcionada' }}
-                            </dd>
-                        </div>
-
-                        <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5">
-                            <dt class="text-xs text-slate-500">Fecha y hora de envío</dt>
-                            <dd class="mt-1 text-sm font-semibold text-acode-primary">
-                                {{ $verification?->submitted_at?->format('d/m/Y H:i') ?? 'Reciente' }}
-                            </dd>
-                        </div>
-
-                        <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5">
-                            <dt class="text-xs text-slate-500">Resguardo documental</dt>
-                            <dd class="mt-1 text-sm font-semibold text-acode-primary">
+                        <x-summary-item label="Acreditación adjunta" :value="$verification?->credentialTypeLabel() ?? 'Comprobante de adscripción docente'" compact />
+                        <x-summary-item label="Cédula profesional SEP" compact>
+                            <x-slot:valueSlot><span class="font-mono">{{ $verification?->professional_license ?: 'No proporcionada' }}</span></x-slot:valueSlot>
+                        </x-summary-item>
+                        <x-summary-item label="Fecha y hora de envío" :value="$verification?->submitted_at?->format('d/m/Y H:i') ?? 'Reciente'" compact />
+                        <x-summary-item label="Resguardo documental" compact>
+                            <x-slot:valueSlot>
                                 @if ($verification?->hasDocument())
                                     Comprobante en revisión privada
                                 @elseif ($verification?->document_purged_at)
@@ -157,9 +130,9 @@
                                 @else
                                     En proceso de validación
                                 @endif
-                            </dd>
-                        </div>
-                    </dl>
+                            </x-slot:valueSlot>
+                        </x-summary-item>
+                    </x-summary-list>
                 </div>
 
                 {{-- Aviso LFPDPPP sobre purga automática --}}

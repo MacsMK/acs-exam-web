@@ -1,0 +1,83 @@
+.figure-stage { container-type: size; }
+
+.exam-stack {
+    position: relative;
+    width: min(88%, 28rem);
+    width: min(94cqw, 92cqh);
+    aspect-ratio: 1;
+    pointer-events: none;
+}
+
+.exam-stack .stack-original {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: none;
+}
+
+.stack-pieces { display: none; }
+
+@media screen and (prefers-reduced-motion: no-preference) {
+    @supports (clip-path: url(#stack-paper-outline)) and (width: 1cqw) {
+        .motion-enabled .stack-original { opacity: 0; }
+        .motion-enabled .stack-pieces {
+            position: absolute;
+            display: block;
+            inset: 0;
+            transform: perspective(760px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+            transition: transform 160ms ease-out;
+        }
+
+        .stack-piece {
+            position: absolute;
+            inset: 0;
+            /* Percentage caps keep the relative movement in proportion on a small screen. */
+            transform: translate(
+                clamp(-3%, calc(var(--depth-x, 0px) * var(--depth)), 3%),
+                clamp(-4%, calc(var(--depth-y, 0px) * var(--depth) + var(--travel, 0px) * var(--drift)), 4%)
+            );
+            transition: transform 160ms ease-out;
+            animation: stack-assemble 860ms cubic-bezier(.22, .75, .28, 1) backwards;
+        }
+
+        .stack-piece::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: url('../images/landing/evaluation-stack.webp') center / 100% 100% no-repeat;
+        }
+
+        .stack-base {
+            --depth: -.27;
+            --drift: -.22;
+            --arrival: 2%;
+            clip-path: url(#stack-base-outline);
+            background: radial-gradient(ellipse at 50% 76%, #012337 10%, #103957 52%, #215174 80%);
+        }
+        .stack-base::after { clip-path: url(#stack-base-visible); }
+
+        .stack-glass {
+            --depth: .24;
+            --drift: .15;
+            --arrival: -1%;
+            clip-path: url(#stack-glass-outline);
+            background:
+                repeating-linear-gradient(30deg, transparent 0 3.2%, #6bc5c240 3.24%, transparent 3.36%),
+                repeating-linear-gradient(-30deg, transparent 0 3.2%, #6bc5c240 3.24%, transparent 3.36%),
+                radial-gradient(ellipse at 50% 65%, #044d5a 24%, #0d5967 49%, #2c8992 74%, #a9f4ed);
+        }
+        .stack-glass::after { clip-path: url(#stack-glass-visible); }
+
+        .stack-paper {
+            --depth: .9;
+            --drift: .62;
+            --arrival: -4%;
+            clip-path: url(#stack-paper-outline);
+        }
+
+        @keyframes stack-assemble {
+            from { translate: 0 var(--arrival); }
+            to { translate: 0 0; }
+        }
+    }
+}

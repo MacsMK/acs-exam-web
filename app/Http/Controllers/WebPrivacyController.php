@@ -20,10 +20,21 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\PrivacyNotice;
+use App\Models\TermsVersion;
 use Illuminate\Contracts\View\View;
 
 class WebPrivacyController extends Controller
 {
+    /**
+     * Muestra los términos vigentes a visitantes y usuarios autenticados.
+     *
+     * @return View Texto vigente o términos originales de ambos roles.
+     */
+    public function terms(): View
+    {
+        return view('legal.terms', ['version' => TermsVersion::current()]);
+    }
+
     /**
      * Muestra el Aviso de Privacidad vigente de A-Code Solutions.
      */

@@ -160,8 +160,10 @@ class FormRequestRulesTest extends TestCase
             'aviso de privacidad como 1' => [['accepts_privacy_notice' => 1], null],
             'nombre ausente' => [['first_name' => $unset], 'first_name'],
             'nombre vacío' => [['first_name' => ''], 'first_name'],
+            'nombre con números' => [['first_name' => 'Ana123'], 'first_name'],
             'nombre de 101 caracteres' => [['first_name' => str_repeat('a', 101)], 'first_name'],
             'apellidos ausentes' => [['last_name' => $unset], 'last_name'],
+            'apellidos con números' => [['last_name' => 'García123'], 'last_name'],
             'apellidos de 101 caracteres' => [['last_name' => str_repeat('a', 101)], 'last_name'],
             'correo ausente' => [['email' => $unset], 'email'],
             'correo vacío' => [['email' => ''], 'email'],
@@ -254,7 +256,9 @@ class FormRequestRulesTest extends TestCase
             'teléfono de 11 dígitos' => [['phone' => '55123456789'], 'phone'],
             'teléfono con letras' => [['phone' => 'cincocinco'], 'phone'],
             'aviso de privacidad rechazado' => [['accepts_privacy_notice' => false], 'accepts_privacy_notice'],
+            'nombre con números' => [['first_name' => 'Ana123'], 'first_name'],
             'nombre de 101 caracteres' => [['first_name' => str_repeat('a', 101)], 'first_name'],
+            'apellidos con números' => [['last_name' => 'García123'], 'last_name'],
             'confirmación distinta' => [['password_confirmation' => 'Otra1234'], 'password'],
             'sin institución (vía abierta)' => [['institution_name' => $unset], 'institution_name'],
             'institución vacía (vía abierta)' => [['institution_name' => ''], 'institution_name'],
@@ -551,9 +555,12 @@ class FormRequestRulesTest extends TestCase
             'incidentes ausentes' => [['max_allowed_incidents' => $unset], 'max_allowed_incidents'],
             'inicio ausente' => [['starts_at' => $unset], 'starts_at'],
             'inicio que no es fecha' => [['starts_at' => 'mañana temprano'], 'starts_at'],
+            'inicio en un minuto pasado' => [['starts_at' => '2026-11-10 07:59:59'], 'starts_at'],
+            'inicio futuro' => [['starts_at' => '2026-11-10 09:00:00'], null],
             'cierre ausente' => [['ends_at' => $unset], 'ends_at'],
             'cierre antes del inicio' => [['ends_at' => '2026-11-10 07:59:00'], 'ends_at'],
             'cierre igual al inicio' => [['ends_at' => '2026-11-10 08:00:00'], 'ends_at'],
+            'cierre posterior al inicio pero pasado' => [['ends_at' => '2026-11-10 08:00:20'], 'ends_at'],
             'cierre que no es fecha' => [['ends_at' => '31/31/2026'], 'ends_at'],
             'group_ids que no es arreglo' => [['group_ids' => 'uno'], 'group_ids'],
             'group_ids con valores no enteros' => [['group_ids' => ['abc']], 'group_ids.0'],
@@ -566,6 +573,7 @@ class FormRequestRulesTest extends TestCase
     #[DataProvider('examCases')]
     public function test_exam_store_rules(array $overrides, ?string $errorField): void
     {
+        $this->travelTo(now()->setDate(2026, 11, 10)->setTime(8, 0, 40));
         $teacher = User::factory()->teacher()->create();
         $request = ExamStoreRequest::create('/exams', 'POST');
         $request->setUserResolver(fn () => $teacher);
@@ -575,6 +583,7 @@ class FormRequestRulesTest extends TestCase
 
     public function test_exam_store_only_accepts_groups_owned_by_the_teacher(): void
     {
+        $this->travelTo(now()->setDate(2026, 11, 10)->setTime(8, 0, 40));
         $teacher = User::factory()->teacher()->create();
         $other = User::factory()->teacher()->create();
 

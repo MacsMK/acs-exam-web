@@ -5,8 +5,15 @@
 
 @section('content')
     @php
-        $hasActiveFilters = filled($filters['search'] ?? null)
-            || (filled($filters['status'] ?? null) && ($filters['status'] ?? 'all') !== 'all');
+        $search = trim((string) ($filters['search'] ?? ''));
+        $status = $filters['status'] ?? 'all';
+        $hasActiveFilters = $search !== '' || $status !== 'all';
+        $centerUrl = route('teacher.reviews.index');
+        $centerQuery = array_filter([
+            'center_search' => $search !== '' ? $search : null,
+            'center_status' => $status !== 'all' ? $status : null,
+            'center_page' => $exams->currentPage() > 1 ? $exams->currentPage() : null,
+        ], static fn ($value): bool => $value !== null);
 
         $statusBadges = [
             'draft' => ['label' => 'Borrador', 'variant' => 'warning'],
@@ -14,143 +21,151 @@
             'active' => ['label' => 'Activo', 'variant' => 'accent'],
             'closed' => ['label' => 'Cerrado', 'variant' => 'neutral'],
         ];
-        $pendingRecotejeExams = (int) ($stats['pending_recoteje_exams'] ?? 0);
+        $resultCount = $exams->total();
+        $resultStatus = $resultCount === 1 ? '1 examen encontrado' : $resultCount . ' exámenes encontrados';
     @endphp
 
     <div class="space-y-6">
         <x-page-header
             title="Centro de revisiones docentes"
-            subtitle="Recoteja y ajusta calificaciones provisionales emitidas por la IA para reactivos abiertos y de programación."
+            subtitle="Abre los intentos del examen para revisar las respuestas de tus estudiantes."
+            institutional
         >
             <x-slot:actions>
-                <x-button :href="route('exams.index')" variant="neutral" size="md">
+                <x-button :href="route('exams.index')" variant="neutral">
                     <x-icon name="document" class="w-4 h-4" />
                     Abrir exámenes
                 </x-button>
             </x-slot:actions>
         </x-page-header>
 
-        {{-- Resumen rápido --}}
-        <section class="grid grid-cols-1 sm:grid-cols-3 gap-5" aria-label="Indicadores del centro de revisiones">
-            <x-kpi-card
-                label="Exámenes totales"
-                :value="(int) ($stats['total'] ?? 0)"
-                nav-icon="exams"
-                tone="tech"
-            />
-            <x-kpi-card
-                label="Exámenes activos"
-                :value="(int) ($stats['published_active'] ?? 0)"
-                icon="clock"
-                tone="accent"
-            />
-            <x-kpi-card
-                label="Pendientes de recoteje"
-                :value="$pendingRecotejeExams"
-                :icon="$pendingRecotejeExams > 0 ? 'warning' : 'success'"
-                :tone="$pendingRecotejeExams > 0 ? 'warning' : 'neutral'"
-            />
-        </section>
-
-        {{-- Filtros --}}
         <x-search-filter
-            :action="route('teacher.reviews.index')"
-            search-name="search"
-            :search-value="$filters['search'] ?? ''"
-            placeholder="Buscar examen por título…"
-            :clear-url="route('teacher.reviews.index')"
-            :clear-keys="['search', 'status']"
+            :action="$centerUrl"
+            search-label="Buscar exámenes"
+            :search-value="$search"
+            placeholder="Buscar por título o descripción…"
+            results-id="teacher-review-exam-results"
+            :clear-url="$centerUrl"
             :has-active-filters="$hasActiveFilters"
         >
             <x-slot:filters>
-                <div class="w-full sm:w-52">
-                    <x-form.select name="status" size="md" aria-label="Filtrar por estado">
-                        <option value="all" @selected(($filters['status'] ?? 'all') === 'all')>Todos los estados</option>
-                        <option value="pending_review" @selected(($filters['status'] ?? '') === 'pending_review')>Pendientes de recoteje</option>
-                        <option value="active" @selected(($filters['status'] ?? '') === 'active')>Activos</option>
-                        <option value="closed" @selected(($filters['status'] ?? '') === 'closed')>Cerrados</option>
+                <x-form.group name="status" label="Estado" class="sm:w-56">
+                    <x-form.select name="status" size="sm">
+                        <option value="all" @selected($status === 'all')>Todos los estados</option>
+                        <option value="pending_review" @selected($status === 'pending_review')>Pendientes de revisión</option>
+                        <option value="draft" @selected($status === 'draft')>Borradores</option>
+                        <option value="scheduled" @selected($status === 'scheduled')>Programados</option>
+                        <option value="active" @selected($status === 'active')>Activos</option>
+                        <option value="closed" @selected($status === 'closed')>Cerrados</option>
                     </x-form.select>
-                </div>
+                </x-form.group>
             </x-slot:filters>
         </x-search-filter>
 
-        @if ($exams->isEmpty())
-            <x-empty-state
-                icon="document"
-                :title="$hasActiveFilters ? 'Sin exámenes para esos filtros' : 'Sin exámenes registrados'"
-                :message="$hasActiveFilters
-                    ? 'Intenta limpiar los filtros de búsqueda.'
-                    : 'Cuando crees exámenes y los alumnos comiencen a responder, aquí podrás revisar sus entregas y ajustar las ponderaciones de la IA.'"
+        @fragment('teacher-review-exam-results')
+            <section
+                id="teacher-review-exam-results"
+                class="space-y-4"
+                aria-label="Exámenes para revisión"
+                tabindex="-1"
+                data-has-active-filters="{{ $hasActiveFilters ? '1' : '0' }}"
+                data-search-status="{{ $resultStatus }}"
             >
-                <x-button variant="primary" :href="route('exams.create')">
-                    <x-icon name="add" class="w-4 h-4" />
-                    Crear examen
-                </x-button>
-            </x-empty-state>
-        @else
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                @forelse ($exams as $exam)
-                    @php
-                        $opStatus = $exam->operationalStatus();
-                        $statusInfo = $statusBadges[$opStatus] ?? $statusBadges['draft'];
-                        $pendingCount = (int) ($exam->pending_recoteje_count ?? $exam->pending_reviews_count ?? 0);
-                    @endphp
-                    <x-card class="flex flex-col justify-between hover:shadow-md transition-shadow">
-                        <div>
-                            <div class="flex items-start justify-between gap-3 mb-3">
-                                <x-badge :variant="$statusInfo['variant']">
-                                    {{ $statusInfo['label'] }}
-                                </x-badge>
-
-                                @if ($pendingCount > 0)
-                                    <x-badge variant="warning">
-                                        {{ $pendingCount }} por recotejar
-                                    </x-badge>
-                                @endif
-                            </div>
-
-                            <h2 class="text-lg font-bold text-acode-primary mb-2 line-clamp-2">
-                                {{ $exam->title }}
-                            </h2>
-
-                            <div class="text-xs text-slate-600 space-y-1.5 mb-4">
-                                <p><strong>Intentos registrados:</strong> {{ (int) ($exam->student_attempts_count ?? 0) }}</p>
-                                <p><strong>Escala:</strong> {{ $exam->grading_scale }}</p>
-                                <p>
-                                    <strong>Visibilidad:</strong>
-                                    {{ match ($exam->result_visibility_mode) {
-                                        'final_score' => 'Calificación final',
-                                        'estimated_score' => 'Calificación estimada',
-                                        'objective_only_pending' => 'Solo puntaje objetivo (pendiente)',
-                                        default => 'Oculto al alumno',
-                                    } }}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-                            <span class="text-xs text-slate-400">
-                                {{ $exam->created_at?->format('d/m/Y') }}
-                            </span>
-                            <x-button variant="secondary" size="sm" :href="route('exams.revision.index', $exam)">
-                                Abrir intentos
+                @if ($exams->isEmpty())
+                    <x-empty-state
+                        :icon="$hasActiveFilters ? 'search' : 'document'"
+                        :title="$hasActiveFilters ? 'Sin exámenes para esos filtros' : 'Sin exámenes registrados'"
+                        :message="$hasActiveFilters
+                            ? 'Cambia la búsqueda o limpia los filtros para ver los exámenes.'
+                            : 'Las entregas estarán disponibles para revisión cuando tus estudiantes presenten un examen.'"
+                    >
+                        @if ($hasActiveFilters)
+                            <x-button :href="$centerUrl" variant="secondary" size="sm">
+                                Limpiar filtros
                             </x-button>
-                        </div>
-                    </x-card>
-                @empty
-                    <div class="col-span-full">
-                        <x-empty-state
-                            icon="document"
-                            title="Sin exámenes registrados"
-                            message="Aún no hay exámenes disponibles para revisar."
-                        />
-                    </div>
-                @endforelse
-            </div>
+                        @else
+                            <x-button :href="route('exams.create')" variant="primary">
+                                <x-icon name="add" class="w-4 h-4" />
+                                Crear examen
+                            </x-button>
+                        @endif
+                    </x-empty-state>
+                @else
+                    <p class="text-sm text-slate-700">{{ $resultStatus }}</p>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        @foreach ($exams as $exam)
+                            @php
+                                $statusInfo = $statusBadges[$exam->operationalStatus()] ?? $statusBadges['draft'];
+                                $pendingCount = (int) ($exam->pending_recoteje_count ?? 0);
+                                $attemptsCount = (int) ($exam->student_attempts_count ?? 0);
+                                $attemptsLabel = $pendingCount === 1 ? '1 intento por revisar' : $pendingCount . ' intentos por revisar';
+                            @endphp
 
-            <div class="mt-6 flex justify-end">
-                {{ $exams->links() }}
-            </div>
-        @endif
+                            <x-card padding="p-4" class="flex min-w-0 flex-col [&>.card-body]:flex [&>.card-body]:flex-1 [&>.card-body]:flex-col">
+                                <div class="mb-3 space-y-2">
+                                    <h2 class="break-words text-xl font-semibold leading-7 text-acode-primary">{{ $exam->title }}</h2>
+                                    <div class="flex flex-wrap gap-1.5">
+                                        @if ($pendingCount > 0)
+                                            <x-badge variant="warning">{{ $attemptsLabel }}</x-badge>
+                                        @endif
+                                        <x-badge :variant="$statusInfo['variant']">{{ $statusInfo['label'] }}</x-badge>
+                                    </div>
+                                </div>
+
+                                <dl class="mb-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
+                                    <div>
+                                        <dt class="inline font-medium">Intentos registrados</dt>
+                                        <dd class="inline font-semibold">{{ $attemptsCount }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="inline font-medium">Escala</dt>
+                                        <dd class="inline font-semibold">{{ $exam->grading_scale }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="inline font-medium">Visibilidad</dt>
+                                        <dd class="inline font-semibold">
+                                            {{ match ($exam->result_visibility_mode) {
+                                                'final_score' => 'Calificación final',
+                                                'estimated_score' => 'Calificación estimada',
+                                                'objective_only_pending' => 'Solo puntaje objetivo (pendiente)',
+                                                default => 'Oculto al alumno',
+                                            } }}
+                                        </dd>
+                                    </div>
+                                </dl>
+
+                                <div class="mt-auto flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-3">
+                                    @if ($exam->created_at)
+                                        <span class="mr-auto text-xs text-slate-600">
+                                            Creado el <time datetime="{{ $exam->created_at->toDateString() }}">{{ $exam->created_at->format('d/m/Y') }}</time>
+                                        </span>
+                                    @endif
+                                    <x-button
+                                        :href="route('exams.revision.index', [$exam, ...$centerQuery])"
+                                        :variant="$pendingCount > 0 ? 'primary' : 'secondary'"
+                                        :aria-label="'Abrir intentos de ' . $exam->title"
+                                        size="sm"
+                                    >
+                                        Abrir intentos
+                                    </x-button>
+                                </div>
+                            </x-card>
+                        @endforeach
+                    </div>
+
+                    @if ($exams->hasPages())
+                        <div class="flex justify-end">
+                            {{ $exams->links() }}
+                        </div>
+                    @endif
+                @endif
+
+                <x-catalog-summary :title="$hasActiveFilters ? 'Resumen de los exámenes filtrados' : 'Resumen de exámenes'">
+                    <x-summary-item label="Exámenes registrados" :value="(int) ($stats['total'] ?? 0)" icon="document" />
+                    <x-summary-item label="Exámenes activos" :value="(int) ($stats['published_active'] ?? 0)" icon="success" />
+                    <x-summary-item label="Exámenes con intentos pendientes" :value="(int) ($stats['pending_recoteje_exams'] ?? 0)" icon="clock" />
+                </x-catalog-summary>
+            </section>
+        @endfragment
     </div>
 @endsection

@@ -28,9 +28,7 @@ class ExamController extends Controller
 {
     /**
      * api.v1.exams.index. Docente: todos sus exámenes (armados o no).
-     * Alumno: solo publicados y asignados a algún grupo suyo — mismo
-     * criterio que ya usaba este endpoint antes de alinearse al contrato
-     * del cliente móvil.
+     * Alumno: publicados y asignados a alguno de sus grupos activos.
      */
     public function index(Request $request): JsonResponse
     {
@@ -39,7 +37,8 @@ class ExamController extends Controller
         $exams = $user->role === 'teacher'
             ? Exam::where('teacher_id', $user->id)->latest()->get()
             : Exam::where('is_published', true)
-                ->whereHas('groups.students', fn ($query) => $query->where('acs_users.id', $user->id))
+                ->whereHas('groups', fn ($group) => $group->active()
+                    ->whereHas('students', fn ($student) => $student->whereKey($user->id)))
                 ->get();
 
         return ApiResponse::success(

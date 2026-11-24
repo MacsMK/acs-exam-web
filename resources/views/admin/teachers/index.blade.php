@@ -96,39 +96,28 @@
     </div>
 
     {{-- Filtros de búsqueda --}}
-    <x-card padding="p-4">
-        <form method="GET" action="{{ route('admin.teachers.index') }}" class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+    <x-search-filter
+        :action="route('admin.teachers.index')"
+        search-label="Buscar docentes"
+        :search-value="$filters['search'] ?? ''"
+        placeholder="Buscar por nombre, correo o institución…"
+        :clear-url="route('admin.teachers.index')"
+        :has-active-filters="! empty($filters['search']) || ! empty($filters['status']) || ! empty($filters['verification'])"
+    >
+        <x-slot:parameters>
             <input type="hidden" name="verification" value="{{ $filters['verification'] ?? '' }}">
+        </x-slot:parameters>
 
-            <div class="sm:col-span-6">
-                <x-form.input
-                    name="search"
-                    :value="$filters['search'] ?? ''"
-                    prefixIcon="search"
-                    placeholder="Buscar por nombre, correo o institución..."
-                />
-            </div>
-
-            <div class="sm:col-span-3">
-                <x-form.select name="status">
+        <x-slot:filters>
+            <x-form.group name="status" label="Estado" class="sm:w-48">
+                <x-form.select name="status" size="sm">
                     <option value="">Todos los estados</option>
                     <option value="active" @selected(($filters['status'] ?? '') === 'active')>Solo Activos</option>
                     <option value="suspended" @selected(($filters['status'] ?? '') === 'suspended')>Solo Suspendidos</option>
                 </x-form.select>
-            </div>
-
-            <div class="sm:col-span-3 flex items-center gap-2">
-                <x-button variant="secondary" size="md" type="submit" class="w-full">
-                    Buscar
-                </x-button>
-                @if (!empty($filters['search']) || !empty($filters['status']) || !empty($filters['verification']))
-                    <x-button variant="neutral" size="md" href="{{ route('admin.teachers.index') }}">
-                        Limpiar
-                    </x-button>
-                @endif
-            </div>
-        </form>
-    </x-card>
+            </x-form.group>
+        </x-slot:filters>
+    </x-search-filter>
 
     {{-- Tabla de Docentes --}}
     <x-card padding="p-0" class="overflow-hidden">
@@ -214,6 +203,7 @@
 
                             {{-- Suscripción actual --}}
                             <td class="px-5 py-4 align-top">
+                                <a class="block text-acode-tech underline" href="{{ route('admin.operations.teacher', $teacher) }}">Consultar operaciones</a>
                                 @if ($teacher->teacherSubscriptions->first()?->package)
                                     <div class="text-xs font-bold text-acode-primary">
                                         {{ $teacher->teacherSubscriptions->first()->package->name }}

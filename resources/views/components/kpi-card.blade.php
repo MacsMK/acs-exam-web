@@ -8,6 +8,7 @@
     'tone' => 'tech', // tech, accent, warning, danger, primary, neutral
     'href' => null,
     'mono' => false,
+    'radius' => '2xl',
 ])
 
 @php
@@ -15,13 +16,13 @@
         'accent' => [
             'iconBox' => 'bg-acode-accent/15 text-acode-accent',
             'hoverBorder' => 'hover:border-acode-accent',
-            'hoverText' => 'group-hover:text-acode-accent',
+            'hoverText' => 'group-hover:text-acode-accent-dark',
             'valueColor' => 'text-acode-primary',
         ],
         'warning' => [
             'iconBox' => 'bg-acode-warning/20 text-acode-warning-dark',
             'hoverBorder' => 'hover:border-acode-warning',
-            'hoverText' => 'group-hover:text-acode-warning-dark',
+            'hoverText' => 'group-hover:text-acode-primary',
             'valueColor' => 'text-acode-primary',
         ],
         'danger' => [
@@ -51,9 +52,11 @@
     };
 
     $isInteractive = filled($href);
-    $cardClasses = $isInteractive
-        ? 'group flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ' . $toneConfig['hoverBorder']
-        : 'flex flex-col justify-between h-full rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm';
+    $radiusClass = $radius === 'xl' ? 'rounded-xl' : 'rounded-2xl';
+    $cardClasses = 'flex flex-col justify-between h-full border border-slate-200 bg-white p-5 sm:p-6 shadow-sm ' . $radiusClass;
+    if ($isInteractive) {
+        $cardClasses .= ' group transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ' . $toneConfig['hoverBorder'];
+    }
 
     $valueClasses = ($mono ? 'font-mono ' : '') . 'text-3xl lg:text-4xl font-extrabold tracking-tight tabular-nums ' . $toneConfig['valueColor'];
     $hasValueSlot = isset($valueSlot) && $valueSlot->isNotEmpty();

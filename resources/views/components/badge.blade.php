@@ -4,7 +4,7 @@
 ])
 
 <span {{ $attributes->merge([
-    'class' => 'inline-flex items-center rounded-full text-xs px-2.5 py-0.5 font-semibold tracking-wide ' . match ($variant) {
+    'class' => 'inline-flex items-center rounded-full shadow-sm text-xs px-2.5 py-0.5 font-semibold tracking-wide ' . match ($variant) {
         'success', 'accent' => 'bg-acode-accent/15 text-acode-primary border border-acode-accent/40',
         'warning' => 'bg-acode-warning/25 text-acode-primary border border-acode-warning/50',
         'danger' => 'bg-acode-danger/10 text-acode-danger border border-acode-danger/30',

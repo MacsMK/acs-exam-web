@@ -20,6 +20,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Support\GradebookCatalogContext;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -30,6 +31,15 @@ class GroupStoreRequest extends FormRequest
     public function authorize(): bool
     {
         return $this->user()?->role === 'teacher';
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        $catalogContext = GradebookCatalogContext::destinationQuery($this);
+
+        return $catalogContext !== []
+            ? route('groups.create', $catalogContext)
+            : parent::getRedirectUrl();
     }
 
     /**

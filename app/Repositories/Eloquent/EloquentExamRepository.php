@@ -61,6 +61,7 @@ class EloquentExamRepository implements ExamRepositoryInterface
         'title',
         'description',
         'grading_scale',
+        'free_duration_minutes',
         'randomize_question_order',
         'result_visibility_mode',
         'require_webcam',
@@ -91,9 +92,9 @@ class EloquentExamRepository implements ExamRepositoryInterface
      * @param array<string, mixed> $filters   Filtros opcionales (search, status, group_id).
      * @return LengthAwarePaginator<Exam>
      */
-    public function paginateForTeacher(int $teacherId, int $perPage = 15, array $filters = []): LengthAwarePaginator
+    public function paginateForTeacher(int $teacherId, int $perPage = 15, array $filters = [], bool $pendingFirst = false): LengthAwarePaginator
     {
-        return Exam::query()
+        $exams = Exam::query()
             ->withoutGlobalScope(TenantTeacherScope::class)
             ->forTeacherFilter($teacherId, $filters)
             ->with(['groups'])
@@ -101,13 +102,16 @@ class EloquentExamRepository implements ExamRepositoryInterface
                 'sections',
                 'examQuestions',
                 'studentAttempts',
-                'studentAttempts as pending_recoteje_count' => static function ($query): void {
-                    $query->where('status', 'submitted')
-                        ->where('pending_ai_count', '>', 0);
-                },
+                'studentAttempts as pending_recoteje_count' => static fn (Builder $attempts) => $attempts->pendingTeacherReview(),
             ])
-            ->withSum('examQuestions as total_points_weight', 'points_weight')
-            ->latest()
+            ->withSum('examQuestions as total_points_weight', 'points_weight');
+
+        if ($pendingFirst) {
+            $exams->withExists(['studentAttempts as has_pending_teacher_review' => static fn (Builder $attempts) => $attempts->pendingTeacherReview()])
+                ->orderByDesc('has_pending_teacher_review');
+        }
+
+        return $exams->latest()->orderByDesc('id')
             ->paginate($perPage)
             ->withQueryString();
     }
@@ -142,13 +146,12 @@ class EloquentExamRepository implements ExamRepositoryInterface
      *     pending_recoteje_exams: int
      * }
      */
-    public function getTeacherExamStats(int $teacherId): array
+    public function getTeacherExamStats(int $teacherId, array $filters = []): array
     {
         $now = now();
+        $exams = Exam::query()->withoutGlobalScope(TenantTeacherScope::class)->forTeacherFilter($teacherId, $filters);
 
-        $stats = Exam::query()
-            ->withoutGlobalScope(TenantTeacherScope::class)
-            ->where('teacher_id', $teacherId)
+        $stats = (clone $exams)
             ->selectRaw(
                 'COUNT(*) as total, '
                 . 'COALESCE(SUM(CASE WHEN NOT is_published THEN 1 ELSE 0 END), 0) as drafts, '
@@ -159,13 +162,8 @@ class EloquentExamRepository implements ExamRepositoryInterface
             )
             ->first();
 
-        $pendingRecotejeExams = (int) Exam::query()
-            ->withoutGlobalScope(TenantTeacherScope::class)
-            ->where('teacher_id', $teacherId)
-            ->whereHas('studentAttempts', static function (Builder $query): void {
-                $query->where('status', 'submitted')
-                    ->where('pending_ai_count', '>', 0);
-            })
+        $pendingRecotejeExams = $exams
+            ->whereHas('studentAttempts', static fn (Builder $attempts) => $attempts->pendingTeacherReview())
             ->count();
 
         return [
@@ -319,6 +317,7 @@ class EloquentExamRepository implements ExamRepositoryInterface
             }
 
             $ownedGroupIds = $this->filterOwnedGroupIds((int) $exam->teacher_id, $groupIds);
+            $this->assertApplicationsRemovable($exam, $ownedGroupIds);
             $exam->groups()->sync($ownedGroupIds);
 
             return $exam->fresh(['groups']);
@@ -334,13 +333,31 @@ class EloquentExamRepository implements ExamRepositoryInterface
      */
     public function deleteDraftExam(Exam $exam): bool
     {
-        return DB::transaction(static function () use ($exam): bool {
+        return DB::transaction(function () use ($exam): bool {
+            $this->assertApplicationsRemovable($exam, []);
             $exam->groups()->detach();
             $exam->examQuestions()->delete();
             $exam->sections()->delete();
 
             return (bool) $exam->delete();
         });
+    }
+
+    /**
+     * Comprueba si se puede retirar una aplicación sin eliminar una ponderación vigente.
+     *
+     * @param Exam $exam Examen que cambia de asignación.
+     * @param array $retainedGroupIds Identificadores de los grupos que conservan el examen.
+     * @return void
+     * @throws \Illuminate\Validation\ValidationException Si una asignación a retirar integra un periodo.
+     */
+    private function assertApplicationsRemovable(Exam $exam, array $retainedGroupIds): void
+    {
+        $weighted = DB::table('acs_period_exam_weights as w')->join('acs_exam_group as a', 'w.application_id', '=', 'a.id')
+            ->where('a.exam_id', $exam->id)->whereNotIn('a.group_id', $retainedGroupIds)->exists();
+        if ($weighted) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['group_ids' => 'Retira primero la ponderación de la aplicación en su periodo de evaluación']);
+        }
     }
 
     /**
@@ -530,8 +547,38 @@ class EloquentExamRepository implements ExamRepositoryInterface
      */
     public function paginateAttemptsForReview(Exam $exam, array $filters = [], int $perPage = 20): LengthAwarePaginator
     {
-        $query = $exam->studentAttempts()
-            ->with(['student', 'group', 'answers.examQuestion.question']);
+        $pending = StudentAttempt::query()->where('exam_id', $exam->getKey())->pendingTeacherReview()->select('id');
+
+        return $this->attemptsForReview($exam, $filters)
+            ->with(['student', 'answers' => static fn ($answers) => $answers->whereNotNull('ai_similarity_score')->with('examQuestion.question')])
+            ->select('acs_student_attempts.*')
+            ->selectRaw("CASE WHEN id IN ({$pending->toSql()}) THEN 1 ELSE 0 END AS review_pending", $pending->getBindings())
+            ->orderByDesc('review_pending')
+            ->orderByDesc('submitted_at')
+            ->orderByDesc('id')
+            ->paginate($perPage)
+            ->withQueryString();
+    }
+
+    public function getAttemptReviewStats(Exam $exam, array $filters = []): array
+    {
+        $attempts = $this->attemptsForReview($exam, $filters);
+
+        return [
+            'registered' => (clone $attempts)->count(),
+            'pending' => (clone $attempts)->pendingTeacherReview()->count(),
+            'final' => $attempts->withCurrentFinalGrade()->count(),
+        ];
+    }
+
+    /** @return Builder<StudentAttempt> */
+    private function attemptsForReview(Exam $exam, array $filters): Builder
+    {
+        $query = StudentAttempt::query()->where('exam_id', $exam->getKey());
+
+        if (isset($filters['group_id'])) {
+            $query->where('group_id', $filters['group_id']);
+        }
 
         $search = isset($filters['search']) ? trim((string) $filters['search']) : '';
         if ($search !== '') {
@@ -539,26 +586,25 @@ class EloquentExamRepository implements ExamRepositoryInterface
             $likeOperator = $driver === 'pgsql' ? 'ilike' : 'like';
             $pattern = '%' . $search . '%';
             $normalized = Subject::normalizeName($search);
+            $fullName = $driver === 'mysql' || $driver === 'mariadb'
+                ? "CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))"
+                : "(COALESCE(first_name, '') || ' ' || COALESCE(last_name, ''))";
 
             $query->whereHas('student', static function (Builder $studentQuery) use (
                 $driver,
                 $likeOperator,
                 $pattern,
-                $normalized
+                $normalized,
+                $fullName,
             ): void {
                 $studentQuery->where('first_name', $likeOperator, $pattern)
                     ->orWhere('last_name', $likeOperator, $pattern)
-                    ->orWhere('email', $likeOperator, $pattern);
+                    ->orWhere('email', $likeOperator, $pattern)
+                    ->orWhereRaw("{$fullName} {$likeOperator} ?", [$pattern]);
 
                 if ($normalized !== '') {
                     $normalizedPattern = '%' . $normalized . '%';
-                    $studentQuery->orWhereRaw(
-                        self::foldUserFieldSqlExpression('first_name', $driver) . ' LIKE ?',
-                        [$normalizedPattern]
-                    )->orWhereRaw(
-                        self::foldUserFieldSqlExpression('last_name', $driver) . ' LIKE ?',
-                        [$normalizedPattern]
-                    );
+                    $studentQuery->orWhereRaw(self::foldUserFieldSqlExpression($fullName, $driver) . ' LIKE ?', [$normalizedPattern]);
                 }
             });
         }
@@ -566,22 +612,14 @@ class EloquentExamRepository implements ExamRepositoryInterface
         $status = isset($filters['status']) ? trim((string) $filters['status']) : 'all';
         if ($status !== '' && $status !== 'all') {
             match ($status) {
-                'pending_recoteje' => $query
-                    ->where('status', 'submitted')
-                    ->where('pending_ai_count', '>', 0),
-                'graded' => $query
-                    ->where('status', 'submitted')
-                    ->where('pending_ai_count', 0),
+                'pending_recoteje' => $query->pendingTeacherReview(),
+                'graded' => $query->withCurrentFinalGrade(),
                 'cancelled' => $query->where('status', 'cancelled_by_incident'),
                 default => null,
             };
         }
 
-        return $query
-            ->orderByDesc('submitted_at')
-            ->orderByDesc('id')
-            ->paginate($perPage)
-            ->withQueryString();
+        return $query;
     }
 
     /**

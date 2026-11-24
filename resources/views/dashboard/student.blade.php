@@ -1,239 +1,285 @@
-{{--
-    ============================================================================
-    A-CODE SOLUTIONS - ANALIZAMOS, DISEÑAMOS, TRANSFORMAMOS
-    ============================================================================
-    Archivo:     resources/views/dashboard/student.blade.php
-    Ubicación:   resources/views/dashboard/student.blade.php
-    Descripción: Panel de control del estudiante homologado al UI Kit A-Code:
-                 encabezado institucional, tarjetas KPI interactivas, asignaturas
-                 matriculadas, exámenes disponibles e historial de intentos
-                 (MPW-V3 §7.3, §7.4.2, §7.8.2, §8.1–§8.4; MC-V3 §2.4).
-    ============================================================================
---}}
+{{-- Panel del Estudiante · MPW-V3 §§5.2.2, 7.3, 7.8.2, 8.4 --}}
 @extends('layouts.app')
 
 @section('title', 'Panel del Estudiante')
 
 @section('content')
-@php
-    $attemptStatusLabels = [
-        'submitted' => ['label' => 'Finalizado', 'variant' => 'accent'],
-        'in_progress' => ['label' => 'En progreso', 'variant' => 'warning'],
-        'expired' => ['label' => 'Expirado', 'variant' => 'neutral'],
-        'cancelled_by_incident' => ['label' => 'Cancelado', 'variant' => 'danger'],
-        'graded' => ['label' => 'Calificado', 'variant' => 'accent'],
-    ];
-@endphp
-
-<div class="space-y-6">
-    {{-- Nivel 1: Encabezado Institucional --}}
+<div class="space-y-4 sm:space-y-6">
     <x-page-header
         :title="'¡Hola, ' . (auth()->user()->first_name ?? auth()->user()->full_name) . '!'"
-        subtitle="Consulta tus asignaturas matriculadas, exámenes vigentes y calificaciones registradas."
+        :institutional="true"
+        class="!gap-2 !p-4 sm:!gap-3 sm:!p-6"
     >
-        <x-slot:actions>
-            <x-button :href="route('student.exams.index')" variant="neutral" size="md">
-                <x-nav-icon name="exams" class="w-4 h-4" />
-                Abrir exámenes
-            </x-button>
-
-            <x-button :href="route('student.groups.join.form')" variant="primary" size="md">
-                <x-icon name="add" class="w-4 h-4" />
-                Unirme a un grupo
-            </x-button>
-        </x-slot:actions>
+        @if ($enrolledGroups->isNotEmpty())
+            <x-slot:actions>
+                <x-button :href="route('student.grades.index')" variant="secondary">
+                    <x-nav-icon name="grades" class="h-4 w-4" />
+                    Abrir calificaciones
+                </x-button>
+            </x-slot:actions>
+        @endif
     </x-page-header>
 
-    {{-- Nivel 2: Tarjetas KPI Interactivas --}}
-    <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
-        <x-kpi-card
-            label="Grupos Inscritos"
-            :value="$groupsCount"
-            meta="Materias matriculadas"
-            nav-icon="groups"
-            tone="tech"
-            :href="route('student.groups.index')"
-        />
-
-        <x-kpi-card
-            label="Exámenes Pendientes"
-            :value="$pendingExams->count()"
-            meta="Evaluaciones activas"
-            nav-icon="exams"
-            tone="warning"
-            :href="route('student.exams.index')"
-        />
-
-        <x-kpi-card
-            label="Evaluaciones Presentadas"
-            :value="$recentAttempts->count()"
-            meta="Intentos calificados"
-            nav-icon="grades"
-            tone="accent"
-            :href="route('student.grades.index')"
-        />
-    </div>
-
-    {{-- Nivel 3: Asignaturas y Grupos Matriculados --}}
-    @if (isset($enrolledGroups) && $enrolledGroups->isNotEmpty())
-        <div class="space-y-4">
+    @if ($enrolledGroups->isEmpty())
+        <x-empty-state
+            icon="userGroup"
+            title="Aún no tienes grupos inscritos"
+            message="Solicita el folio de tu clase a tu profesor para unirte."
+        >
+            <x-button :href="route('student.groups.join.form')" variant="primary">
+                <x-icon name="add" class="h-4 w-4" />
+                Unirme a un grupo
+            </x-button>
+        </x-empty-state>
+    @else
+        <section class="min-w-0 space-y-2 sm:space-y-3">
             <x-section-header
-                title="Mis Asignaturas Matriculadas"
-                action-label="Ver todos los grupos →"
-                :action-href="route('student.groups.index')"
+                title="Exámenes activos y programados"
+                action-label="Abrir exámenes"
+                :action-href="route('student.exams.index')"
+                :institutional="true"
             />
 
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                @forelse ($enrolledGroups->take(3) as $group)
-                    <a href="{{ route('student.grades.show', $group) }}"
-                       class="group flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-acode-tech hover:shadow-md">
-                        <div>
-                            <div class="flex items-center justify-between gap-2">
-                                <span class="text-xs font-bold uppercase tracking-wider text-acode-tech">
-                                    {{ $group->subject ?? 'Materia general' }}
-                                </span>
-                                <x-badge variant="accent">Activo</x-badge>
-                            </div>
-                            <h3 class="mt-2 text-base font-bold text-acode-primary group-hover:text-acode-tech transition-colors">
-                                {{ $group->name }}
-                            </h3>
-                            <p class="mt-1 text-xs text-slate-500">
-                                Profesor: {{ $group->teacher?->full_name ?? 'Docente titular' }}
-                            </p>
-                        </div>
-                    </a>
-                @empty
-                    <div class="col-span-full">
-                        <x-empty-state
-                            icon="userGroup"
-                            title="Aún no tienes grupos inscritos"
-                            message="Solicita el folio de tu clase a tu profesor para unirte."
-                        />
-                    </div>
-                @endforelse
-            </div>
-        </div>
-    @endif
-
-    {{-- Nivel 4: Tabla de Exámenes Disponibles --}}
-    <div class="space-y-3">
-        <x-section-header
-            title="Exámenes Disponibles"
-            action-label="Ver catálogo completo →"
-            :action-href="route('student.exams.index')"
-        />
-
-        <x-table>
-            <x-slot:header>
-                <x-table.th>Examen</x-table.th>
-                <x-table.th>Profesor</x-table.th>
-                <x-table.th align="center">Reactivos</x-table.th>
-                <x-table.th align="center">Tiempo</x-table.th>
-                <x-table.th align="right">Acción</x-table.th>
-            </x-slot:header>
-
-            @forelse ($pendingExams as $exam)
-                <tr>
-                    <x-table.td>
-                        <p class="font-semibold text-slate-900 leading-snug">{{ $exam->title }}</p>
-                        <p class="text-xs text-slate-500 mt-0.5">{{ $exam->description ?? 'Sin descripción adicional' }}</p>
-                    </x-table.td>
-                    <x-table.td>
-                        <span class="text-xs text-slate-600">{{ $exam->teacher?->full_name ?? 'Docente titular' }}</span>
-                    </x-table.td>
-                    <x-table.td align="center">
-                        <x-badge variant="neutral">{{ $exam->exam_questions_count }} reactivos</x-badge>
-                    </x-table.td>
-                    <x-table.td align="center">
-                        <span class="text-xs font-mono text-slate-600">{{ $exam->maxDurationMinutes() }} min</span>
-                    </x-table.td>
-                    <x-table.td align="right">
-                        <x-button :href="route('student.exams.instructions', $exam)" variant="primary" size="sm">
-                            Abrir examen
-                        </x-button>
-                    </x-table.td>
-                </tr>
-            @empty
-                <tr>
-                    <td colspan="5" class="p-0">
-                        <x-empty-state
-                            class="border-0 shadow-none rounded-none py-8"
-                            icon="clock"
-                            title="No tienes exámenes pendientes"
-                            message="Todos tus exámenes asignados se encuentran al corriente."
-                        />
-                    </td>
-                </tr>
-            @endforelse
-        </x-table>
-    </div>
-
-    {{-- Nivel 5: Historial de Intentos Recientes --}}
-    <div class="space-y-3">
-        <x-section-header
-            title="Historial de Intentos Recientes"
-            action-label="Ver todas las calificaciones →"
-            :action-href="route('student.grades.index')"
-        />
-
-        <x-table>
-            <x-slot:header>
-                <x-table.th>Evaluación</x-table.th>
-                <x-table.th>Grupo</x-table.th>
-                <x-table.th align="center">Calificación</x-table.th>
-                <x-table.th align="center">Estado</x-table.th>
-                <x-table.th align="right">Detalle</x-table.th>
-            </x-slot:header>
-
-            @forelse ($recentAttempts as $attempt)
+            @if ($examRows->isEmpty())
+                <x-empty-state
+                    icon="clock"
+                    title="No tienes exámenes activos ni programados"
+                    message="Puedes consultar tus demás exámenes en el catálogo."
+                />
+            @else
                 @php
-                    $statusMeta = $attemptStatusLabels[$attempt->status] ?? ['label' => 'Registrado', 'variant' => 'neutral'];
+                    $shownExamCounts = $examRows->countBy('state');
+                    $nextStart = $examRows->firstWhere('state', 'scheduled')['startsAt'] ?? null;
                 @endphp
-                <tr>
-                    <x-table.td>
-                        <p class="font-medium text-slate-900 leading-snug">{{ $attempt->exam->title }}</p>
-                        <p class="text-xs text-slate-500 mt-0.5">{{ $attempt->created_at->format('d/m/Y H:i') }}</p>
-                    </x-table.td>
-                    <x-table.td>
-                        <span class="text-xs text-slate-600">{{ $attempt->group?->name ?? 'Sin grupo' }}</span>
-                    </x-table.td>
-                    <x-table.td align="center">
-                        @if ($attempt->display_score !== null)
-                            <span class="font-bold font-mono text-sm {{ $attempt->display_score >= 6.0 ? 'text-acode-accent-dark' : 'text-acode-danger' }}">
-                                {{ number_format((float) $attempt->display_score, 1) }}
-                            </span>
-                        @else
-                            <span class="text-xs text-slate-500">Pendiente</span>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-700">
+                    @if ($inProgressExamCount > 0)
+                        <p>
+                            En progreso <strong class="font-semibold text-acode-primary">{{ $inProgressExamCount }}</strong>
+                            @if ($inProgressExamCount > $shownExamCounts->get('in_progress', 0))
+                                <span class="text-xs">(se muestran {{ $shownExamCounts->get('in_progress', 0) }})</span>
+                            @endif
+                        </p>
+                    @endif
+
+                    @if ($activeExamCount > 0)
+                        <p>
+                            Activos <strong class="font-semibold text-acode-primary">{{ $activeExamCount }}</strong>
+                            @if ($activeExamCount > $shownExamCounts->get('active', 0))
+                                <span class="text-xs">(se muestran {{ $shownExamCounts->get('active', 0) }})</span>
+                            @endif
+                        </p>
+                    @else
+                        <p>No tienes exámenes activos.</p>
+                    @endif
+
+                    @if ($scheduledExamCount > 0)
+                        <p>
+                            Programados <strong class="font-semibold text-acode-primary">{{ $scheduledExamCount }}</strong>
+                            @if ($scheduledExamCount > $shownExamCounts->get('scheduled', 0))
+                                <span class="text-xs">(se muestran {{ $shownExamCounts->get('scheduled', 0) }})</span>
+                            @endif
+                        </p>
+                        @if ($nextStart)
+                            <p>
+                                Próximo inicio
+                                <time class="whitespace-nowrap font-semibold text-acode-primary" datetime="{{ $nextStart->toAtomString() }}">
+                                    {{ $nextStart->format('d/m/Y H:i') }}
+                                </time>
+                            </p>
                         @endif
-                    </x-table.td>
-                    <x-table.td align="center">
-                        <x-badge :variant="$statusMeta['variant']">{{ $statusMeta['label'] }}</x-badge>
-                    </x-table.td>
-                    <x-table.td align="right">
-                        @if ($attempt->status === 'submitted')
-                            <a href="{{ route('attempts.result', $attempt) }}" class="text-xs font-semibold text-acode-tech hover:underline">
-                                Ver detalles →
-                            </a>
-                        @else
-                            <a href="{{ route('attempts.show', $attempt) }}" class="text-xs font-semibold text-acode-tech hover:underline">
-                                Continuar →
-                            </a>
+                    @else
+                        <p>No tienes exámenes programados.</p>
+                    @endif
+                </div>
+
+                <p class="text-xs text-slate-700">Zona horaria: {{ $examTimezone }}</p>
+
+                <div class="grid gap-3 sm:grid-cols-2 xl:hidden">
+                    @foreach ($examRows as $row)
+                        @include('exams.partials._student-exam-card', ['row' => $row, 'showDescription' => false])
+                    @endforeach
+                </div>
+
+                <x-table class="hidden xl:block" zebra="slate" scroll-label="Exámenes activos y programados">
+                    <x-slot:header>
+                        <x-table.th align="center">Examen</x-table.th>
+                        <x-table.th align="center">Estado</x-table.th>
+                        <x-table.th align="center">Fechas</x-table.th>
+                        <x-table.th align="center">Tiempo máximo</x-table.th>
+                        <x-table.th align="center">Reactivos</x-table.th>
+                        <x-table.th align="center">Acción</x-table.th>
+                    </x-slot:header>
+
+                    @foreach ($examRows as $row)
+                        <tr>
+                            <th scope="row" class="px-4 py-3 text-left text-sm">
+                                <p class="break-words font-semibold leading-snug text-acode-primary">{{ $row['exam']->title }}</p>
+                                <p class="mt-0.5 break-words text-xs font-normal text-slate-600">
+                                    {{ $row['groupNames'] }}
+                                </p>
+                            </th>
+                            <x-table.td align="center">
+                                <x-badge :variant="$row['statusVariant']">{{ $row['statusLabel'] }}</x-badge>
+                                @if ($row['reapplicationNumber'] !== null)
+                                    <p class="mt-1 text-xs text-slate-600">Reaplicación autorizada</p>
+                                @endif
+                            </x-table.td>
+                            <x-table.td align="center">
+                                <dl class="space-y-1 text-xs text-slate-600">
+                                    @if ($row['state'] === 'scheduled' && $row['startsAt'])
+                                        <div>
+                                            <dt>Fecha de inicio</dt>
+                                            <dd class="whitespace-nowrap font-semibold text-acode-primary">
+                                                <time datetime="{{ $row['startsAt']->toAtomString() }}">{{ $row['startsAt']->format('d/m/Y H:i') }}</time>
+                                            </dd>
+                                        </div>
+                                    @endif
+
+                                    @if ($row['state'] === 'in_progress')
+                                        @if ($row['attemptEndsAt'])
+                                            <div>
+                                                <dt>{{ $row['attemptHasGrace'] ? 'Fecha límite de edición' : 'Fecha límite del intento' }}</dt>
+                                                <dd class="whitespace-nowrap font-semibold text-acode-primary">
+                                                    <time datetime="{{ $row['attemptEndsAt']->toAtomString() }}">{{ $row['attemptEndsAt']->format('d/m/Y H:i') }}</time>
+                                                </dd>
+                                            </div>
+                                            @if ($row['attemptHasGrace'])
+                                                <div>
+                                                    <dt>Fecha límite de envío</dt>
+                                                    <dd class="whitespace-nowrap font-semibold text-acode-primary">
+                                                        <time datetime="{{ $row['attemptDeadline']->toAtomString() }}">{{ $row['attemptDeadline']->format('d/m/Y H:i') }}</time>
+                                                    </dd>
+                                                </div>
+                                            @endif
+                                        @else
+                                            <div><dt class="sr-only">Fecha límite del intento</dt><dd>—</dd></div>
+                                        @endif
+                                    @else
+                                        <div>
+                                            <dt>Fecha límite</dt>
+                                            <dd class="whitespace-nowrap font-semibold text-acode-primary">
+                                                @if ($row['endsAt'])
+                                                    <time datetime="{{ $row['endsAt']->toAtomString() }}">{{ $row['endsAt']->format('d/m/Y H:i') }}</time>
+                                                @else
+                                                    Sin vencimiento
+                                                @endif
+                                            </dd>
+                                        </div>
+                                    @endif
+                                </dl>
+                            </x-table.td>
+                            <x-table.td align="center" class="whitespace-nowrap">{{ $row['durationMinutes'] }} min</x-table.td>
+                            <x-table.td align="center">{{ $row['exam']->exam_questions_count }}</x-table.td>
+                            <x-table.td align="center">
+                                @if ($row['href'])
+                                    <x-button
+                                        :href="$row['href']"
+                                        :variant="$row['actionVariant']"
+                                        :aria-label="$row['actionLabel'] . ' · ' . $row['exam']->title . ($row['groupNames'] ? ', ' . $row['groupNames'] : '')"
+                                        size="sm"
+                                        class="whitespace-nowrap"
+                                    >
+                                        {{ $row['actionLabel'] }}
+                                    </x-button>
+                                @else
+                                    <span class="text-xs text-slate-600">—</span>
+                                @endif
+                            </x-table.td>
+                        </tr>
+                    @endforeach
+                </x-table>
+            @endif
+        </section>
+
+        <section class="min-w-0 space-y-3">
+            <x-section-header
+                title="Historial de intentos recientes"
+                :subtitle="$attemptRows->isNotEmpty() ? 'Hasta ' . $attemptLimit . ' intentos vigentes de tus grupos activos.' : null"
+                :institutional="true"
+            />
+
+            @if ($attemptRows->isEmpty())
+                <x-empty-state
+                    icon="reportBar"
+                    title="Aún no hay intentos recientes"
+                    message="Aquí verás el historial de tus grupos activos."
+                />
+            @else
+                <p class="text-xs text-slate-700 md:hidden">Desliza la tabla para ver las acciones.</p>
+
+                <x-table zebra="slate" scroll-label="Historial de intentos recientes">
+                    <x-slot:header>
+                        <x-table.th align="center">Evaluación</x-table.th>
+                        <x-table.th align="center">Calificación</x-table.th>
+                        <x-table.th align="center">Estado</x-table.th>
+                        <x-table.th align="center">Detalle</x-table.th>
+                    </x-slot:header>
+
+                    @foreach ($attemptRows as $row)
+                        <tr>
+                            <th scope="row" class="px-4 py-3 text-left text-sm">
+                                <p class="break-words font-semibold leading-snug text-acode-primary">{{ $row['attempt']->exam->title }}</p>
+                                <p class="mt-0.5 break-words text-xs font-normal text-slate-600">{{ $row['attempt']->group?->name ?? 'Sin grupo' }}</p>
+                                @if ($row['timestamp'])
+                                    <p class="mt-1 text-xs font-normal text-slate-600">
+                                        {{ $row['timestampLabel'] }}
+                                        <time class="whitespace-nowrap" datetime="{{ $row['timestamp']->toAtomString() }}">{{ $row['timestamp']->format('d/m/Y H:i') }}</time>
+                                    </p>
+                                @endif
+                            </th>
+                            <x-table.td align="center">
+                                <x-student.attempt-grade :grade="$row['grade']" />
+                            </x-table.td>
+                            <x-table.td align="center">
+                                <x-badge :variant="$row['statusVariant']" :class="$row['statusVariant'] === 'danger' ? '!text-acode-danger-dark' : ''">
+                                    {{ $row['statusLabel'] }}
+                                </x-badge>
+                            </x-table.td>
+                            <x-table.td align="center">
+                                @if ($row['actionHref'])
+                                    <x-button
+                                        :href="$row['actionHref']"
+                                        :aria-label="$row['actionLabel'] . ' · ' . $row['attempt']->exam->title . ($row['attempt']->group ? ', ' . $row['attempt']->group->name : '')"
+                                        variant="neutral"
+                                        size="sm"
+                                        class="whitespace-nowrap"
+                                    >
+                                        {{ $row['actionLabel'] }}
+                                    </x-button>
+                                @endif
+                            </x-table.td>
+                        </tr>
+                    @endforeach
+                </x-table>
+            @endif
+        </section>
+
+        <section class="min-w-0 space-y-3">
+            <x-section-header
+                title="Mis grupos"
+                :subtitle="$enrolledGroups->count() > 3 ? 'Se muestran 3 de tus ' . $enrolledGroups->count() . ' grupos activos.' : null"
+                action-label="Ver todos los grupos"
+                :action-href="route('student.groups.index')"
+                :institutional="true"
+            />
+
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                @foreach ($enrolledGroups->take(3) as $group)
+                    <x-card :title="$group->name" class="min-w-0 break-words" padding="p-4">
+                        @if (filled($group->subject))
+                            <p class="text-sm text-slate-700">{{ $group->subject }}</p>
                         @endif
-                    </x-table.td>
-                </tr>
-            @empty
-                <tr>
-                    <td colspan="5" class="p-0">
-                        <x-empty-state
-                            class="border-0 shadow-none rounded-none py-8"
-                            icon="reportBar"
-                            title="Aún no has presentado exámenes"
-                            message="Tus calificaciones e historial de intentos se mostrarán aquí."
-                        />
-                    </td>
-                </tr>
-            @endforelse
-        </x-table>
-    </div>
+                        @if ($group->teacher)
+                            <p class="mt-0.5 text-xs text-slate-600">Profesor: {{ $group->teacher->full_name }}</p>
+                        @endif
+                        <a href="{{ route('student.grades.show', $group) }}" aria-label="Abrir calificaciones · {{ $group->name }}"
+                           class="-ml-2 mt-1 inline-flex min-h-8 items-center rounded-lg px-2 text-xs font-semibold text-acode-tech hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
+                            Abrir calificaciones
+                        </a>
+                    </x-card>
+                @endforeach
+            </div>
+        </section>
+    @endif
 </div>
 @endsection

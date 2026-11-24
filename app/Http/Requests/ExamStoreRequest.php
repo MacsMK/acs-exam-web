@@ -21,6 +21,8 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\NormalizesExamWindow;
+use App\Models\Exam;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -29,6 +31,8 @@ use Illuminate\Validation\Rule;
  */
 class ExamStoreRequest extends FormRequest
 {
+    use NormalizesExamWindow;
+
     public function authorize(): bool
     {
         return $this->user()?->role === 'teacher';
@@ -39,6 +43,10 @@ class ExamStoreRequest extends FormRequest
      */
     public function rules(): array
     {
+        $now = now(config('app.timezone'));
+        $currentMinute = $now->copy()->startOfMinute()->toIso8601String();
+        $nextSecond = $now->copy()->addSecond()->toIso8601String();
+
         return [
             'title' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string'],
@@ -46,9 +54,9 @@ class ExamStoreRequest extends FormRequest
             'randomize_question_order' => ['sometimes', 'boolean'],
             'result_visibility_mode' => ['required', 'in:final_score,estimated_score,objective_only_pending,hidden'],
             'require_webcam' => ['nullable', 'boolean'],
-            'max_allowed_incidents' => ['required', 'integer', 'min:0'],
-            'starts_at' => ['required', 'date'],
-            'ends_at' => ['required', 'date', 'after:starts_at'],
+            'max_allowed_incidents' => ['required', 'integer', 'min:0', 'max:' . Exam::MAX_ALLOWED_INCIDENTS],
+            'starts_at' => ['bail', 'required', 'date', 'after_or_equal:' . $currentMinute],
+            'ends_at' => ['bail', 'required', 'date', 'after:starts_at', 'after_or_equal:' . $nextSecond],
             'group_ids' => ['nullable', 'array'],
             'group_ids.*' => [
                 'integer',
@@ -79,11 +87,14 @@ class ExamStoreRequest extends FormRequest
             'max_allowed_incidents.required' => 'El campo incidentes máximos permitidos es obligatorio',
             'max_allowed_incidents.integer' => 'El número de incidentes máximos permitidos debe ser un entero',
             'max_allowed_incidents.min' => 'El número de incidentes máximos permitidos debe ser mayor o igual que 0',
+            'max_allowed_incidents.max' => 'El número de incidentes permitidos no debe exceder :max',
             'starts_at.required' => 'El campo fecha de inicio es obligatorio',
             'starts_at.date' => 'La fecha de inicio no tiene un formato válido',
+            'starts_at.after_or_equal' => 'La fecha de inicio debe ser igual o posterior al minuto actual',
             'ends_at.required' => 'El campo fecha de cierre es obligatorio',
             'ends_at.date' => 'La fecha de cierre no tiene un formato válido',
             'ends_at.after' => 'La fecha de cierre debe ser posterior a la fecha de inicio',
+            'ends_at.after_or_equal' => 'La fecha de cierre debe ser posterior a la hora actual',
             'group_ids.array' => 'Los grupos seleccionados deben enviarse como un arreglo',
             'group_ids.*.integer' => 'El identificador de grupo debe ser un número entero',
             'group_ids.*.distinct' => 'No puedes asignar el mismo grupo más de una vez',

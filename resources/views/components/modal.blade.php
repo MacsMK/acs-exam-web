@@ -4,6 +4,7 @@
     'title' => null,
     'maxWidth' => 'lg', // sm, md, lg, xl, 2xl
     'show' => false,
+    'focusClose' => true,
 ])
 
 @php
@@ -17,54 +18,45 @@
 @endphp
 
 <div
-    x-data="{ show: @js($show) }"
-    x-on:open-modal.window="$event.detail === '{{ $name }}' ? show = true : null"
-    x-on:close-modal.window="$event.detail === '{{ $name }}' ? show = false : null"
-    x-on:keydown.escape.window="show = false"
-    x-show="show"
-    x-cloak
-    class="fixed inset-0 z-50 overflow-y-auto px-4 py-6 sm:px-0 flex items-center justify-center"
-    role="dialog"
-    aria-modal="true"
+    x-data="{
+        show: false,
+        opener: null,
+        init() {
+            if (@js($show)) this.$nextTick(() => this.openDialog());
+        },
+        openDialog(trigger = document.activeElement) {
+            if (this.$refs.dialog.open) return;
+            this.opener = trigger?.closest?.('button, a[href], [tabindex]') ?? document.activeElement;
+            this.$refs.dialog.showModal();
+            this.show = true;
+        },
+        closeDialog() {
+            this.$refs.dialog.close();
+        },
+        afterClose() {
+            this.show = false;
+            if (this.opener?.isConnected) this.opener.focus();
+            this.opener = null;
+            this.$dispatch('modal-closed', @js($name));
+        }
+    }"
+    @open-modal.window="if ($event.detail === @js($name)) openDialog($event.target)"
+    @close-modal.window="if ($event.detail === @js($name)) closeDialog()"
 >
-    {{-- Fondo oscurecido y desenfocado normativo --}}
-    <div
-        x-show="show"
-        x-transition:enter="ease-out duration-200"
-        x-transition:enter-start="opacity-0"
-        x-transition:enter-end="opacity-100"
-        x-transition:leave="ease-in duration-150"
-        x-transition:leave-start="opacity-100"
-        x-transition:leave-end="opacity-0"
-        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-        @click="show = false"
-        aria-hidden="true"
-    ></div>
-
-    {{-- Contenedor de la ventana modal (16px rounded-2xl, shadow-xl) --}}
-    <div
-        x-show="show"
-        x-transition:enter="ease-out duration-200"
-        x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-        x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
-        x-transition:leave="ease-in duration-150"
-        x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
-        x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-        class="relative bg-white rounded-2xl shadow-xl overflow-hidden transform transition-all w-full border border-slate-200 z-10 {{ $maxWidthClass }}"
+    <dialog
+        x-ref="dialog"
+        @close="afterClose()"
+        @click.self="closeDialog()"
+        aria-labelledby="{{ $name }}-title"
+        class="m-auto max-h-[90dvh] w-11/12 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-0 shadow-xl backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm {{ $maxWidthClass }}"
     >
-        {{-- Encabezado con título institucional y botón de cierre 'X' --}}
-        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70">
-            <h3 class="text-base font-bold text-acode-primary tracking-tight">
+        <div class="flex items-center justify-between gap-3 border-b border-acode-tech/25 bg-slate-50 px-6 py-4">
+            <h3 id="{{ $name }}-title" class="min-w-0 break-words text-base font-semibold leading-6 text-acode-primary">
                 {{ $title ?? 'Ventana informativa' }}
             </h3>
-            <button
-                type="button"
-                @click="show = false"
-                class="text-slate-400 hover:text-slate-600 rounded-lg p-1 transition focus:outline-none focus:ring-2 focus:ring-acode-tech"
-                aria-label="Cerrar modal"
-            >
-                <x-icon name="xMark" class="w-5 h-5" />
-            </button>
+            <x-button type="button" variant="neutral" size="sm" :icon-only="true" @click="closeDialog()" aria-label="Cerrar ventana" class="shrink-0" :autofocus="$focusClose">
+                <x-icon name="xMark" class="h-4 w-4" />
+            </x-button>
         </div>
 
         {{-- Cuerpo del modal --}}
@@ -78,5 +70,5 @@
                 {{ $footer }}
             </div>
         @endif
-    </div>
+    </dialog>
 </div>

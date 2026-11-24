@@ -22,7 +22,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
-use Carbon\Carbon;
+use App\Http\Requests\Concerns\ValidatesExamWindowChanges;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -33,6 +33,15 @@ use App\Models\Scopes\TenantTeacherScope;
 
 class ExamConfigurationUpdateRequest extends FormRequest
 {
+    use ValidatesExamWindowChanges;
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->boolean('group_selection_submitted') && $this->missing('group_ids')) {
+            $this->merge(['group_ids' => []]);
+        }
+    }
+
     public function authorize(): bool
     {
         $user = $this->user();
@@ -58,16 +67,18 @@ class ExamConfigurationUpdateRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string'],
+            'navigation_mode' => ['sometimes', 'required', 'in:sequential,free'],
+            'free_duration_minutes' => ['nullable', 'required_if:navigation_mode,free', 'integer', 'min:1', 'max:2147483647'],
             'grading_scale' => ['required', 'in:0-10,0-100'],
             'result_visibility_mode' => [
                 'required',
                 'in:final_score,estimated_score,objective_only_pending,hidden',
             ],
-            'max_allowed_incidents' => ['required', 'integer', 'min:0'],
+            'max_allowed_incidents' => ['required', 'integer', 'min:0', 'max:' . Exam::MAX_ALLOWED_INCIDENTS],
             'randomize_question_order' => ['required', 'boolean'],
             'require_webcam' => ['sometimes', 'nullable', 'boolean'],
-            'starts_at' => ['sometimes', 'required', 'date'],
-            'ends_at' => ['sometimes', 'required', 'date'],
+            'starts_at' => ['sometimes', 'bail', 'required', 'date'],
+            'ends_at' => ['sometimes', 'bail', 'required', 'date'],
             'group_ids' => ['nullable', 'array'],
             'group_ids.*' => [
                 'integer',
@@ -86,10 +97,10 @@ class ExamConfigurationUpdateRequest extends FormRequest
             $exam = $this->route('exam');
             $teacherId = $this->user()?->id;
 
-            // 1. Validar suma exacta de ponderaciones (100.00 ± 0.01)
+            // 1. Validar la suma en centésimas (100.00 ± 0.01).
             $questions = $this->input('questions');
             if (is_array($questions) && $questions !== []) {
-                $totalWeight = '0';
+                $totalCents = 0;
                 $allNumeric = true;
 
                 foreach ($questions as $item) {
@@ -98,13 +109,13 @@ class ExamConfigurationUpdateRequest extends FormRequest
                         break;
                     }
 
-                    $totalWeight = bcadd($totalWeight, number_format((float) $item['points_weight'], 2, '.', ''), 2);
+                    $totalCents += (int) round((float) $item['points_weight'] * 100);
                 }
 
-                if ($allNumeric && abs((float) $totalWeight - 100.0) > 0.01) {
+                if ($allNumeric && abs($totalCents - 10000) > 1) {
                     $validator->errors()->add(
                         'questions',
-                        'La suma de las ponderaciones debe ser exactamente 100.00 puntos'
+                        'La suma de ponderaciones debe ser de 100.00 puntos, con una tolerancia de 0.01 puntos'
                     );
                 }
             }
@@ -124,23 +135,20 @@ class ExamConfigurationUpdateRequest extends FormRequest
             }
 
             // 3. Validar coherencia de ventana horaria (starts_at < ends_at)
-            $effectiveStart = $this->filled('starts_at') ? $this->input('starts_at') : $exam->starts_at;
-            $effectiveEnd = $this->filled('ends_at') ? $this->input('ends_at') : $exam->ends_at;
+            if (! $validator->errors()->hasAny(['starts_at', 'ends_at'])) {
+                $effectiveStart = $this->submittedWindowDate($validator, 'starts_at') ?? $exam->starts_at;
+                $effectiveEnd = $this->submittedWindowDate($validator, 'ends_at') ?? $exam->ends_at;
 
-            if ($effectiveStart !== null && $effectiveEnd !== null) {
-                try {
-                    $startCarbon = $effectiveStart instanceof Carbon ? $effectiveStart : Carbon::parse((string) $effectiveStart);
-                    $endCarbon = $effectiveEnd instanceof Carbon ? $effectiveEnd : Carbon::parse((string) $effectiveEnd);
-
-                    if ($endCarbon->lte($startCarbon)) {
-                        $validator->errors()->add(
-                            'ends_at',
-                            'La fecha de cierre debe ser posterior a la fecha de inicio'
-                        );
-                    }
-                } catch (\Throwable) {
-                    // La regla 'date' reportará formato inválido.
+                if ($effectiveStart !== null && $effectiveEnd?->lte($effectiveStart)) {
+                    $validator->errors()->add(
+                        'ends_at',
+                        'La fecha de cierre debe ser posterior a la fecha de inicio'
+                    );
                 }
+            }
+
+            if (! ($exam->is_published && ($exam->hasStartedWindow() || $exam->isWindowClosed()))) {
+                $this->validateExamWindowChanges($validator, $exam);
             }
 
             // 4. Validar que los grupos seleccionados estén abiertos o ya asignados al examen
@@ -191,6 +199,7 @@ class ExamConfigurationUpdateRequest extends FormRequest
             'max_allowed_incidents.required' => 'El campo incidentes permitidos es obligatorio',
             'max_allowed_incidents.integer' => 'El número de incidentes permitidos debe ser un entero',
             'max_allowed_incidents.min' => 'El número de incidentes permitidos debe ser mayor o igual que 0',
+            'max_allowed_incidents.max' => 'El número de incidentes permitidos no debe exceder :max',
             'randomize_question_order.required' => 'El campo aleatorizar orden es obligatorio',
             'randomize_question_order.boolean' => 'El campo aleatorizar orden debe ser verdadero o falso',
             'require_webcam.boolean' => 'El campo cámara requerida debe ser verdadero o falso',

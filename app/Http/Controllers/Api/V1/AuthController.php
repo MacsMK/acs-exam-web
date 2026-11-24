@@ -131,34 +131,17 @@ class AuthController extends Controller
     {
         $code = $request->string('code')->toString();
 
-        $query = User::where('two_factor_code', $code)
-            ->where('two_factor_expires_at', '>', now())
-            ->whereIn('role', ['teacher', 'student']);
+        $query = User::whereIn('role', ['teacher', 'student']);
 
         if ($request->filled('email')) {
-            $query->where('email', $request->string('email')->toString());
+            $user = $query->where('email', $request->string('email')->toString())->first();
+        } else {
+            $matches = $query->where('two_factor_code', $code)
+                ->where('two_factor_expires_at', '>', now())->whereNotNull('two_factor_delivery')->limit(2)->get();
+            $user = $matches->count() === 1 ? $matches->first() : null;
         }
 
-        $user = $query->latest('two_factor_expires_at')->first();
-
         if ($user === null) {
-            // Con el correo se identifica la cuenta y el intento fallido cuenta
-            // contra su código vigente (RF-AUT-007). Sin correo solo aplica el
-            // límite de peticiones de la ruta.
-            if ($request->filled('email')) {
-                $pending = User::where('email', $request->string('email')->toString())
-                    ->whereIn('role', ['teacher', 'student'])
-                    ->first();
-
-                if ($pending !== null) {
-                    $this->authService->registerFailedTwoFactorAttempt($pending);
-
-                    if ($this->authService->twoFactorAttemptsExhausted($pending)) {
-                        throw ValidationException::withMessages(['code' => [AuthService::TWO_FACTOR_LOCKED_MESSAGE]]);
-                    }
-                }
-            }
-
             throw ValidationException::withMessages(['code' => ['El código es inválido o expiró. Solicita uno nuevo.']]);
         }
 
@@ -178,7 +161,12 @@ class AuthController extends Controller
      */
     public function resendTwoFactor(ResendTwoFactorRequest $request): JsonResponse
     {
-        $user = $this->authService->resendTwoFactorCode($request->string('email')->toString());
+        try {
+            $user = $this->authService->resendTwoFactorCode($request->string('email')->toString());
+        } catch (ValidationException) {
+            // Un fallo de entrega mantiene la misma respuesta para un correo conocido o desconocido.
+            $user = null;
+        }
 
         return ApiResponse::success(
             $user !== null ? $this->withDemoCode($user, []) : [],
@@ -218,8 +206,9 @@ class AuthController extends Controller
      */
     private function withDemoCode(User $user, array $data): array
     {
-        if (in_array(config('mail.default'), ['log', 'array'], true)) {
-            $data['demo_code'] = $user->two_factor_code;
+        $code = $this->authService->demoTwoFactorCode($user);
+        if ($code !== null) {
+            $data['demo_code'] = $code;
         }
 
         return $data;

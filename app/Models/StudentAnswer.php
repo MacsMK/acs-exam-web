@@ -61,6 +61,7 @@ class StudentAnswer extends Model
         'teacher_recoteje_score',
         'teacher_recoteje_notes',
         'answered_at',
+        'free_revision',
     ];
 
     /**
@@ -101,6 +102,52 @@ class StudentAnswer extends Model
     public function aiCreditUsages(): HasMany
     {
         return $this->hasMany(AiCreditUsage::class, 'student_answer_id');
+    }
+
+    /**
+     * Identifica si una respuesta abierta o de código admite recoteje.
+     *
+     * @return bool Si existe texto evaluable y la entrega no se registró en blanco.
+     */
+    public function canBeReviewedQualitatively(): bool
+    {
+        return $this->ai_model_used !== 'none' && self::qualitativeText($this->answer_payload) !== '';
+    }
+
+    public function aiSuggestedPoints(): ?float
+    {
+        if ($this->ai_similarity_score === null || $this->ai_model_used === 'none'
+            || ! in_array($this->examQuestion?->question?->question_type, ['open', 'code'], true)) {
+            return null;
+        }
+
+        return self::pointsForAiSimilarity((float) $this->ai_similarity_score, (float) $this->examQuestion->points_weight);
+    }
+
+    public static function pointsForAiSimilarity(float $similarity, float $weight): float
+    {
+        return round($similarity / 100 * $weight, 2);
+    }
+
+    /**
+     * Recupera el texto de las representaciones válidas de una respuesta cualitativa.
+     *
+     * @param mixed $payload Respuesta registrada en web o en la API.
+     * @return string Texto recortado o cadena vacía si no hay respuesta.
+     */
+    public static function qualitativeText(mixed $payload): string
+    {
+        $text = is_string($payload) ? $payload : '';
+        if (is_array($payload)) {
+            foreach (['text', 'code', 'answer', 'given_answer', 'raw', 'source'] as $key) {
+                if (isset($payload[$key]) && is_string($payload[$key])) {
+                    $text = $payload[$key];
+                    break;
+                }
+            }
+        }
+
+        return preg_replace('/^[\p{Z}\s]+|[\p{Z}\s]+$/u', '', $text) ?? trim($text);
     }
 
     /**

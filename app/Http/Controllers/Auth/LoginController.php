@@ -25,6 +25,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 class LoginController extends Controller
@@ -61,6 +62,7 @@ class LoginController extends Controller
 
         return view('auth.verify-2fa', [
             'user' => $user,
+            'demoCode' => $this->authService->demoTwoFactorCode($user),
             'expiresIn' => $user->two_factor_expires_at !== null
                 ? max(0, $user->two_factor_expires_at->getTimestamp() - now()->getTimestamp())
                 : 0,
@@ -83,11 +85,15 @@ class LoginController extends Controller
         abort_if($user === null, 403);
 
         try {
-            $this->authService->resendTwoFactorCodeForUser($user);
-        } catch (TooManyRequestsHttpException $exception) {
+            if ($this->authService->resendTwoFactorCodeForUser($user) === null) {
+                return redirect()->route('auth.login.show');
+            }
+        } catch (TooManyRequestsHttpException | ValidationException $exception) {
             return redirect()
                 ->route('auth.verify-2fa.show', ['user' => $user->id])
-                ->withErrors(['code' => $exception->getMessage()]);
+                ->withErrors(['code' => $exception instanceof ValidationException
+                    ? ($exception->errors()['email'][0] ?? $exception->getMessage())
+                    : $exception->getMessage()]);
         }
 
         return redirect()

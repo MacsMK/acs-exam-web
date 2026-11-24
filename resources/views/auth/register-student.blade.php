@@ -43,6 +43,8 @@
                         type="text"
                         name="first_name"
                         maxlength="100"
+                        pattern="(?=.*\p{L})[\p{L}\p{M} ]+"
+                        data-character-filter="name"
                         value="{{ old('first_name') }}"
                         required
                         autofocus
@@ -55,6 +57,8 @@
                         type="text"
                         name="last_name"
                         maxlength="100"
+                        pattern="(?=.*\p{L})[\p{L}\p{M} ]+"
+                        data-character-filter="name"
                         value="{{ old('last_name') }}"
                         required
                         placeholder="Tus apellidos"
@@ -84,6 +88,9 @@
                     maxlength="10"
                     pattern="[0-9]{10}"
                     inputmode="numeric"
+                    autocomplete="tel-national"
+                    data-character-filter="digits"
+                    data-mexican-phone
                     prefixIcon="shield"
                     placeholder="5512345678"
                 />
@@ -181,6 +188,7 @@
                 </p>
 
                 <div
+                    x-effect="if (show) $nextTick(() => { if ($el.clientHeight > 0) checkScroll({target: $el}) })"
                     @scroll="checkScroll($event)"
                     class="max-h-64 overflow-y-auto p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 space-y-3 leading-relaxed"
                 >
@@ -192,15 +200,13 @@
                         </div>
                     @endif
 
-                    <h4 class="font-bold text-acode-primary">1. Identidad y Domicilio del Responsable</h4>
-                    <p>A-Code Solutions (Equipo 4) es responsable del tratamiento y resguardo confidencial de los datos personales y académicos de los alumnos matriculados en la Plataforma Evaluadora.</p>
-
-                    <h4 class="font-bold text-acode-primary">2. Tratamiento de Evaluaciones y Actas</h4>
-                    <p>Las respuestas provistas en exámenes contrarreloj, códigos de programación e intentos de evaluación serán procesadas mediante motores de calificación deterministas e inteligentes, garantizando imparcialidad y trazabilidad histórica.</p>
-
-                    <h4 class="font-bold text-acode-primary">3. Normativa de Integridad Académica</h4>
-                    <p>El estudiante se compromete a no realizar trampas, plagios de código o suplantación de identidad. Todo evento anómalo de navegación durante las pruebas será notificado de forma automática al docente titular.</p>
-
+                    @if ($termsVersion ?? null)
+                        <h4 class="font-bold text-acode-primary">Términos y condiciones · {{ $termsVersion->version }}</h4>
+                        <p>Vigentes desde {{ $termsVersion->effective_at->format('d/m/Y H:i') }}</p>
+                        <p class="whitespace-pre-line">{{ $termsVersion->content }}</p>
+                    @else
+                        @include('legal.terms-student-original')
+                    @endif
                     <div class="p-3 bg-acode-surface border border-slate-200 rounded-lg text-center text-[11px] font-semibold text-acode-primary">
                         --- Fin del Aviso de Privacidad y Términos del Servicio ---
                     </div>
@@ -249,44 +255,11 @@
 @endsection
 
 @push('scripts')
+<script src="{{ asset('js/character-filter.js') }}"></script>
 <script>
     {{-- Validación en cliente (RF-AUT-002, RF-AUT-011): mensajes bajo cada campo, mismas frases que el servidor. --}}
     (function () {
         const form = document.getElementById('register-form');
-
-        function filterInput(field, allowedCharacters) {
-            if (!field) {
-                return;
-            }
-
-            function clean() {
-                const original = field.value;
-                const cursor = field.selectionStart;
-                const beforeCursor = original.slice(0, cursor);
-                const cleaned = original.replace(allowedCharacters, '');
-                const cleanedBeforeCursor = beforeCursor.replace(allowedCharacters, '');
-
-                if (cleaned !== original) {
-                    field.value = cleaned;
-                    field.setSelectionRange(
-                        cleanedBeforeCursor.length,
-                        cleanedBeforeCursor.length
-                    );
-                }
-            }
-
-            field.addEventListener('input', function (event) {
-                if (!event.isComposing) {
-                    clean();
-                }
-            });
-
-            field.addEventListener('compositionend', clean);
-        }
-
-        filterInput(form.querySelector('[name="first_name"]'), /[^\p{L}\p{M} ]/gu);
-        filterInput(form.querySelector('[name="last_name"]'), /[^\p{L}\p{M} ]/gu);
-        filterInput(form.querySelector('[name="phone"]'), /[^0-9]/g);
 
         const fieldNames = {
             first_name: 'nombre',
@@ -311,6 +284,14 @@
 
             if (field.validity.patternMismatch && field.name === 'phone') {
                 return 'El teléfono debe contener 10 dígitos';
+            }
+
+            if (field.validity.patternMismatch && field.name === 'first_name') {
+                return 'El nombre no tiene un formato válido';
+            }
+
+            if (field.validity.patternMismatch && field.name === 'last_name') {
+                return 'El campo apellidos no tiene un formato válido';
             }
 
             if (field.validity.tooShort) {

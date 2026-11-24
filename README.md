@@ -87,10 +87,11 @@ contraseñas de demo son **`Demo1234`**:
 | Super admin | `admin@acode-solutions.test` | Cuenta de administración |
 
 **Nota sobre el código de verificación (2FA):** el login es en dos pasos
-(correo+contraseña, luego un código de 6 dígitos). En este entorno de demo
-el código se muestra directamente en la pantalla de verificación (para
-poder probar sin bandeja de correo real) y además se escribe en
-`storage/logs/laravel.log`.
+(correo+contraseña, luego un código de 6 dígitos). En desarrollo local, puedes
+configurar `AUTH_TWO_FACTOR_DEMO=true` con `MAIL_MAILER=log` o `array` para ver
+el código en pantalla al registrarte o iniciar sesión con cualquier correo válido.
+Los códigos de demostración no se mandan al correo ni se escriben en los registros.
+En producción necesitas configurar un transporte de entrega, por ejemplo SMTP.
 
 ### Datos orgánicos (opcional, para volumen realista)
 

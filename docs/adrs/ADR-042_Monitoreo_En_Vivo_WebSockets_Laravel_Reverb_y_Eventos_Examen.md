@@ -23,6 +23,8 @@ Se aprovechó el contenedor oficial de Laravel Reverb corriendo en el puerto 808
 2. [`App\Events\ExamAttemptIncidentReported`](file:///home/laambws/Escritorio/acs-exam-web/app/Events/ExamAttemptIncidentReported.php): Emitido ante cualquier irregularidad detectada por el cliente web o móvil, indicando el tipo de falta, contador acumulado y bandera `is_cancelled`.
 3. [`App\Events\ExamAttemptSubmitted`](file:///home/laambws/Escritorio/acs-exam-web/app/Events/ExamAttemptSubmitted.php): Emitido al momento en que un alumno entrega el examen o se agota su tiempo, reportando calificación preliminar y estatus de entrega.
 
+En Sail, Laravel publica por la red interna de Docker en `reverb:8080`. El navegador recibe el host, puerto y esquema públicos de `REVERB_HOST`, `REVERB_PORT` y `REVERB_SCHEME`. Los despliegues pueden configurar la publicación por separado con `REVERB_PUBLISH_HOST`, `REVERB_PUBLISH_PORT` y `REVERB_PUBLISH_SCHEME`.
+
 ### 2.2. Blindaje de Canales Privados (`routes/channels.php`)
 Los eventos se transmiten únicamente sobre el canal privado `private-exam.{examId}`:
 ```php
@@ -46,12 +48,12 @@ En [`App\Services\AttemptService::reportIncident`](file:///home/laambws/Escritor
 - Si el total supera el umbral del examen (`incidents_count > exam->max_allowed_incidents`), el estatus del intento cambia de inmediato a `'cancelled_by_incident'`, se sella la fecha de entrega y se fija la calificación final en `0.00`.
 - El evento emitido viaja con `is_cancelled = true`, permitiendo que el panel del docente marque al estudiante en rojo intenso y emita una alerta visual inmediata.
 
-### 2.4. Tablero Web Reactivo ([monitor.blade.php](file:///home/laambws/Escritorio/acs-exam-web/resources/views/exams/monitor.blade.php))
-Construido con componentes atómicos del UI Kit A-Code, Alpine.js y cliente WebSocket nativo:
-- **Indicador de Conectividad:** Muestra en tiempo real el estado del WebSocket (Reverb conectado / Reconectando).
-- **Tarjetas Resumen:** Alumnos convocados, en curso, entregados e incidentes anti-fraude acumulados.
-- **Feed de Alertas Dinámicas:** Banner interactivo que despliega en vivo los incidentes conforme ocurren, con opción de descarte.
-- **Tabla de Estudiantes en Vivo:** Lista ordenada alfabéticamente que actualiza en tiempo real el avance (`Pregunta X / N`), contador de incidentes con código de colores (verde, ámbar, rojo) y estado final.
+### 2.4. Tablero web reactivo
+
+- Blade sirve el listado inicial, los totales y los filtros. Alpine mantiene la búsqueda por nombre, correo y estado sin recargar la vista.
+- El indicador muestra «En vivo» después de confirmar la suscripción y recuperar el estado vigente desde el servidor. Durante una interrupción conserva los últimos datos y muestra la hora de actualización. Las consultas periódicas también permiten reflejar expiraciones.
+- Las tarjetas muestran totales del examen. La tabla identifica el intento vigente de cada estudiante y muestra su estado, incidentes reportados, horas y calificación con la escala del examen. La posición de navegación puede cambiar en modo libre y queda fuera de la supervisión.
+- Alcanzar el límite configurado genera una advertencia. La cancelación confirmada queda en la fila y se anuncia con un aviso descartable en línea. El docente puede seguir supervisando sin perder el foco.
 
 ---
 

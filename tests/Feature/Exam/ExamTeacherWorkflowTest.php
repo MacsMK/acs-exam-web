@@ -141,12 +141,31 @@ class ExamTeacherWorkflowTest extends TestCase
         $response->assertSee($draftExam->title);
         $response->assertSee($activeExam->title);
         $response->assertDontSee('Examen Secreto Otro Docente');
+        $response->assertSeeInOrder(['id="exam-search-results"', '<colgroup>', 'Resumen de exámenes'], false);
 
         // Filtro por search (sin acentos y case-insensitive).
         $searchRes = $this->actingAs($teacher)->get(route('exams.index', ['search' => 'algebra']));
         $searchRes->assertOk();
         $searchRes->assertSee($activeExam->title);
         $searchRes->assertDontSee($draftExam->title);
+
+        $fragment = $this->actingAs($teacher)->get(route('exams.index', [
+            'search' => 'algebra',
+            'status' => 'active',
+            'group_id' => $groupA->id,
+        ]), ['X-Catalog-Fragment' => 'exam-search-results']);
+
+        $fragment->assertOk()
+            ->assertSee('id="exam-search-results"', false)
+            ->assertSee('table-fixed', false)
+            ->assertSee('<colgroup>', false)
+            ->assertSee($activeExam->title)
+            ->assertSee(route('exams.monitor', $activeExam))
+            ->assertDontSee($draftExam->title)
+            ->assertDontSee($scheduledExam->title)
+            ->assertDontSee('Examen Secreto Otro Docente')
+            ->assertDontSee('Resumen de exámenes')
+            ->assertDontSee('<html', false);
 
         // Filtros por status.
         $this->actingAs($teacher)->get(route('exams.index', ['status' => 'draft']))
@@ -180,6 +199,117 @@ class ExamTeacherWorkflowTest extends TestCase
             ->assertSee($draftExam->title)
             ->assertSee($activeExam->title)
             ->assertDontSee($scheduledExam->title);
+    }
+
+    public function test_exam_creation_from_group_preselects_only_open_groups_owned_by_the_teacher(): void
+    {
+        $teacher = $this->createTeacherWithProSubscription();
+        $otherTeacher = $this->createTeacherWithProSubscription();
+        $open = $this->createGroup($teacher, 'Grupo activo', 'ABRIR01');
+        $closed = $this->createGroup($teacher, 'Grupo cerrado', 'CERR001', isClosed: true);
+        $foreign = $this->createGroup($otherTeacher, 'Grupo externo', 'EXT001');
+
+        $this->actingAs($teacher)->get(route('exams.create', ['group_id' => $open->id]))
+            ->assertOk()
+            ->assertViewHas('selectedGroupIds', [$open->id]);
+
+        foreach ([$closed->id, $foreign->id, 'inválido'] as $groupId) {
+            $this->get(route('exams.create', ['group_id' => $groupId]))
+                ->assertOk()
+                ->assertViewHas('selectedGroupIds', []);
+        }
+
+        $this->withSession(['_old_input' => ['title' => 'Examen sin grupos']])
+            ->get(route('exams.create', ['group_id' => $open->id]))
+            ->assertOk()
+            ->assertViewHas('selectedGroupIds', []);
+    }
+
+    public function test_exam_creation_exposes_only_current_and_future_periods_of_selectable_groups(): void
+    {
+        $teacher = $this->createTeacherWithProSubscription();
+        $otherTeacher = $this->createTeacherWithProSubscription();
+        $configured = $this->createGroup($teacher, 'Grupo A con periodos', 'PER001');
+        $configured->forceFill(['grading_scale' => '0-100', 'passing_score' => 60])->save();
+        $unconfigured = $this->createGroup($teacher, 'Grupo B sin periodos', 'PER002');
+        $closed = $this->createGroup($teacher, 'Grupo cerrado con periodo', 'PER003', isClosed: true);
+        $foreign = $this->createGroup($otherTeacher, 'Grupo externo con periodo', 'PER004');
+
+        $createPeriod = static fn (Group $group, string $name, int $start, int $end) => $group->evaluationPeriods()->create([
+            'name' => $name,
+            'formula' => 'homework*1',
+            'starts_at' => today()->addDays($start),
+            'ends_at' => today()->addDays($end),
+        ]);
+
+        $upcoming = $createPeriod($configured, 'Parcial programado', 3, 5);
+        $active = $createPeriod($configured, 'Parcial que termina hoy', -3, 0);
+        $createPeriod($configured, 'Parcial vencido', -5, -1);
+        $createPeriod($closed, 'Parcial de grupo cerrado', 3, 5);
+        $createPeriod($foreign, 'Parcial de grupo externo', 3, 5);
+
+        $this->actingAs($teacher)->get(route('exams.create', ['group_id' => $configured->id]))
+            ->assertOk()
+            ->assertViewHas('examGroupScheduling', [
+                $configured->id => [
+                    'scale' => '0-100',
+                    'periods' => [
+                        [
+                            'id' => $active->id,
+                            'name' => 'Parcial que termina hoy',
+                            'startsAt' => today()->subDays(3)->toDateString() . 'T00:00',
+                            'endsAt' => today()->toDateString() . 'T23:59',
+                        ],
+                        [
+                            'id' => $upcoming->id,
+                            'name' => 'Parcial programado',
+                            'startsAt' => today()->addDays(3)->toDateString() . 'T00:00',
+                            'endsAt' => today()->addDays(5)->toDateString() . 'T23:59',
+                        ],
+                    ],
+                ],
+                $unconfigured->id => ['scale' => null, 'periods' => []],
+            ]);
+    }
+
+    public function test_exam_review_opened_from_a_group_keeps_its_group_context(): void
+    {
+        $teacher = $this->createTeacherWithProSubscription();
+        $firstGroup = $this->createGroup($teacher, 'Grupo primero', 'PRIM001');
+        $secondGroup = $this->createGroup($teacher, 'Grupo segundo', 'SEG001');
+        $unrelatedGroup = $this->createGroup($teacher, 'Grupo ajeno al examen', 'AJEN001');
+        $exam = $this->createExamRecord($teacher, [
+            'title' => 'Examen compartido',
+            'is_published' => true,
+        ], [$firstGroup->id, $secondGroup->id]);
+
+        $createAttempt = static function (Group $group) use ($exam): StudentAttempt {
+            return StudentAttempt::create([
+                'exam_id' => $exam->id,
+                'group_id' => $group->id,
+                'student_id' => User::factory()->student()->create()->id,
+                'status' => 'submitted',
+                'started_at' => now()->subHour(),
+                'submitted_at' => now(),
+                'question_sequence_payload' => [],
+            ]);
+        };
+        $firstAttempt = $createAttempt($firstGroup);
+        $createAttempt($secondGroup);
+        $scopedUrl = route('exams.revision.index', [$exam, 'group_id' => $firstGroup->id]);
+
+        $this->actingAs($teacher)->get($scopedUrl)
+            ->assertOk()
+            ->assertViewHas('attempts', static fn ($attempts): bool => $attempts->getCollection()->modelKeys() === [$firstAttempt->id])
+            ->assertSee(route('groups.show', $firstGroup) . '#exams');
+
+        $this->get(route('exams.revision.show', [$exam, $firstAttempt, 'group_id' => $firstGroup->id]))
+            ->assertOk()
+            ->assertSee('Revisión de entrega')
+            ->assertSee($scopedUrl);
+
+        $this->get(route('exams.revision.index', [$exam, 'group_id' => $unrelatedGroup->id]))
+            ->assertNotFound();
     }
 
     public function test_exam_crud_lifecycle_edit_destroy_unpublish_close_and_release_results(): void
@@ -351,6 +481,101 @@ class ExamTeacherWorkflowTest extends TestCase
         $this->assertDatabaseMissing('acs_exam_group', ['exam_id' => $deletableDraft->id]);
     }
 
+    public function test_exam_creation_stores_offset_dates_in_the_application_timezone(): void
+    {
+        $teacher = $this->createTeacherWithProSubscription();
+        $startsAt = now()->addHour()->startOfMinute();
+        $endsAt = $startsAt->copy()->addHour();
+
+        $result = $this->actingAs($teacher)->post(route('exams.store'), [
+            'title' => 'Examen con horario de otro huso',
+            'grading_scale' => '0-10',
+            'result_visibility_mode' => 'final_score',
+            'max_allowed_incidents' => 3,
+            'starts_at' => $startsAt->copy()->setTimezone('Pacific/Honolulu')->toIso8601String(),
+            'ends_at' => $endsAt->copy()->setTimezone('Pacific/Honolulu')->toIso8601String(),
+        ]);
+
+        $exam = Exam::where('title', 'Examen con horario de otro huso')->firstOrFail();
+        $result->assertRedirect(route('exams.assemble', $exam));
+        $this->assertSame($startsAt->toDateTimeString(), $exam->starts_at->toDateTimeString());
+        $this->assertSame($endsAt->toDateTimeString(), $exam->ends_at->toDateTimeString());
+    }
+
+    public function test_exam_update_preserves_unchanged_historical_dates_and_rejects_new_past_dates(): void
+    {
+        $teacher = $this->createTeacherWithProSubscription();
+        $historicalStart = now()->subMonths(2)->setTime(8, 0, 37);
+        $historicalEnd = $historicalStart->copy()->addHours(2)->setSecond(46);
+        $exam = $this->createExamRecord($teacher, [
+            'starts_at' => $historicalStart,
+            'ends_at' => $historicalEnd,
+        ]);
+        $payload = [
+            'title' => 'Título actualizado',
+            'grading_scale' => $exam->grading_scale,
+            'result_visibility_mode' => $exam->result_visibility_mode,
+            'max_allowed_incidents' => $exam->max_allowed_incidents,
+            'starts_at' => $historicalStart->format('Y-m-d\TH:i'),
+            'ends_at' => $historicalEnd->format('Y-m-d\TH:i'),
+        ];
+
+        $this->actingAs($teacher)->put(route('exams.update', $exam), $payload)
+            ->assertRedirect(route('exams.assemble', $exam));
+
+        $exam->refresh();
+        $this->assertSame('Título actualizado', $exam->title);
+        $this->assertSame($historicalStart->toDateTimeString(), $exam->starts_at->toDateTimeString());
+        $this->assertSame($historicalEnd->toDateTimeString(), $exam->ends_at->toDateTimeString());
+
+        $this->from(route('exams.edit', $exam))
+            ->put(route('exams.update', $exam), array_replace($payload, ['title' => '']))
+            ->assertRedirect(route('exams.edit', $exam))
+            ->assertSessionHasErrors(['title'])
+            ->assertSessionHasInput('starts_at', $payload['starts_at'])
+            ->assertSessionHasInput('ends_at', $payload['ends_at']);
+
+        $this->putJson(route('exams.update', $exam), array_replace($payload, [
+            'starts_at' => $historicalStart->copy()->subDay()->format('Y-m-d\TH:i'),
+            'ends_at' => $historicalEnd->copy()->addDay()->format('Y-m-d\TH:i'),
+        ]))->assertUnprocessable()->assertJsonValidationErrors(['starts_at', 'ends_at']);
+
+        $section = ExamSection::create([
+            'exam_id' => $exam->id,
+            'title' => 'Única',
+            'question_type' => 'multiple_choice',
+            'requested_quantity' => 1,
+            'sort_order' => 0,
+        ]);
+        $examQuestion = ExamQuestion::create([
+            'exam_id' => $exam->id,
+            'exam_section_id' => $section->id,
+            'question_id' => $this->createMultipleChoiceQuestion($teacher, 'Reactivo')->id,
+            'time_limit_seconds' => 60,
+            'points_weight' => 100,
+            'sort_order' => 0,
+        ]);
+        $configuration = $payload + [
+            'randomize_question_order' => false,
+            'questions' => [$examQuestion->id => ['points_weight' => 100, 'time_limit_seconds' => 90]],
+        ];
+
+        $this->put(route('exams.configuration.update', $exam), $configuration)
+            ->assertRedirect(route('exams.review', $exam));
+        $exam->refresh();
+        $this->assertSame($historicalStart->toDateTimeString(), $exam->starts_at->toDateTimeString());
+        $this->assertSame($historicalEnd->toDateTimeString(), $exam->ends_at->toDateTimeString());
+
+        $this->putJson(route('exams.configuration.update', $exam), array_replace($configuration, [
+            'starts_at' => $historicalStart->copy()->subDay()->format('Y-m-d\TH:i'),
+            'ends_at' => $historicalEnd->copy()->addDay()->format('Y-m-d\TH:i'),
+        ]))->assertUnprocessable()->assertJsonValidationErrors(['starts_at', 'ends_at']);
+
+        $exam->update(['is_published' => true]);
+        $this->putJson(route('exams.configuration.update', $exam), $configuration)
+            ->assertUnprocessable()->assertJsonValidationErrors(['exam']);
+    }
+
     // ------------------------------------------------------------------
     // b) Armado Dual e Inventario (exams.assemble)
     // ------------------------------------------------------------------
@@ -386,6 +611,14 @@ class ExamTeacherWorkflowTest extends TestCase
                 && $inv['by_type']['multiple_choice'] === 4
                 && $inv['by_type']['open'] === 1;
         });
+        $document = new \DOMDocument;
+        $document->loadHTML((string) $assembleInitial->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $quantityField = (new \DOMXPath($document))->query('//input[@name="requested_quantity"]')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $quantityField);
+        $this->assertSame('text', $quantityField->getAttribute('type'));
+        $this->assertSame('integer', $quantityField->getAttribute('data-numeric'));
+        $this->assertSame('numeric', $quantityField->getAttribute('inputmode'));
+        $assembleInitial->assertSee('js/academic-number.js', false);
 
         // 2. Generar propuesta válida (2 MC) y verificar preservación en sesión si la siguiente propuesta falla.
         $this->actingAs($teacher)->post(route('exams.proposals.generate', $exam), [
@@ -400,18 +633,24 @@ class ExamTeacherWorkflowTest extends TestCase
         $this->assertIsArray($originalProposal);
         $this->assertCount(2, $originalProposal['question_ids']);
 
-        // Solicitar 99 reactivos falla validación, pero NO borra la propuesta previa en sesión.
-        $this->actingAs($teacher)->from(route('exams.assemble', $exam))
-            ->post(route('exams.proposals.generate', $exam), [
-                'title' => 'Propuesta Fallida',
-                'question_type' => 'multiple_choice',
-                'subject_id' => $subjectMath->id,
-                'requested_quantity' => 99,
-            ])
-            ->assertRedirect(route('exams.assemble', $exam))
-            ->assertSessionHasErrors(['requested_quantity']);
+        $invalidQuantities = [
+            '1e0' => ['requested_quantity' => 'La cantidad a sortear debe ser un número entero'],
+            0 => ['requested_quantity' => 'La cantidad a sortear debe ser mayor o igual que 1'],
+            99 => ['requested_quantity'],
+        ];
+        foreach ($invalidQuantities as $quantity => $errors) {
+            $this->from(route('exams.assemble', $exam))
+                ->post(route('exams.proposals.generate', $exam), [
+                    'title' => 'Propuesta Fallida',
+                    'question_type' => 'multiple_choice',
+                    'subject_id' => $subjectMath->id,
+                    'requested_quantity' => $quantity,
+                ])
+                ->assertRedirect(route('exams.assemble', $exam))
+                ->assertSessionHasErrors($errors);
 
-        $this->assertSame($originalProposal, session($sessionKey));
+            $this->assertSame($originalProposal, session($sessionKey));
+        }
 
         // 3. Agregar manualmente $rootMc en un nuevo apartado y verificar exclusión de linaje COW.
         $this->actingAs($teacher)->post(route('exams.questions.manual.store', $exam), [
@@ -806,10 +1045,13 @@ class ExamTeacherWorkflowTest extends TestCase
             'ends_at' => now()->subMinutes(5), // ventana vencida inicialmente
         ], [$closedGroup->id]);
 
-        // 1. Falla por falta de secciones, peso != 100, sin grupo abierto, ventana vencida.
-        $this->actingAs($teacher)->get(route('exams.review', $exam))
-            ->assertOk()
-            ->assertViewHas('publishChecklist', fn (array $c): bool => $c['can_publish'] === false && $c['passed_count'] === 0);
+        // Sin un apartado armado se vuelve a la etapa de Armado.
+        $this->actingAs($teacher);
+        foreach (['exams.configuration', 'exams.review'] as $routeName) {
+            $this->get(route($routeName, $exam))
+                ->assertRedirect(route('exams.assemble', $exam))
+                ->assertSessionHasErrors(['assembly']);
+        }
 
         $this->actingAs($teacher)->postJson(route('exams.publish', $exam))
             ->assertStatus(422)
@@ -821,6 +1063,7 @@ class ExamTeacherWorkflowTest extends TestCase
         $eq = ExamQuestion::create(['exam_id' => $exam->id, 'exam_section_id' => $s1->id, 'question_id' => $q->id, 'time_limit_seconds' => 60, 'points_weight' => 90.0, 'sort_order' => 0]);
 
         // Falla por sección vacía, peso 90, sin grupo abierto y ventana expirada.
+        $this->get(route('exams.review', $exam))->assertRedirect(route('exams.assemble', $exam));
         $this->actingAs($teacher)->postJson(route('exams.publish', $exam))
             ->assertStatus(422)
             ->assertJsonValidationErrors(['publish']);
@@ -850,6 +1093,78 @@ class ExamTeacherWorkflowTest extends TestCase
             ->assertRedirect(route('exams.index'));
 
         $this->assertTrue($exam->fresh()->is_published);
+    }
+
+    public function test_pending_assembly_proposal_blocks_direct_navigation_and_configuration_until_resolved(): void
+    {
+        $teacher = $this->createTeacherWithProSubscription();
+        $group = $this->createGroup($teacher, 'Grupo para publicar', 'ARM0001');
+        $exam = $this->createPublishedBase100Exam($teacher, $group, '0-10', 70.0, 30.0);
+        $exam->update(['is_published' => false]);
+        $candidate = $this->createMultipleChoiceQuestion($teacher, 'Reactivo de la propuesta');
+
+        $this->actingAs($teacher)->post(route('exams.proposals.generate', $exam), [
+            'title' => 'Apartado pendiente',
+            'question_type' => $candidate->question_type,
+            'requested_quantity' => 1,
+        ])->assertRedirect(route('exams.assemble', $exam));
+
+        $this->get(route('exams.assemble', $exam))->assertOk()
+            ->assertDontSee('href="' . route('exams.configuration', $exam) . '"', false)
+            ->assertDontSee('href="' . route('exams.review', $exam) . '"', false);
+        foreach (['exams.configuration', 'exams.review'] as $routeName) {
+            $this->get(route($routeName, $exam))->assertRedirect(route('exams.assemble', $exam));
+        }
+        $configuration = $exam->only(['title', 'grading_scale', 'result_visibility_mode', 'max_allowed_incidents', 'randomize_question_order']);
+        $configuration['questions'] = $exam->examQuestions->mapWithKeys(fn (ExamQuestion $question): array => [
+            $question->id => $question->only(['points_weight', 'time_limit_seconds']),
+        ])->all();
+
+        $this->putJson(route('exams.configuration.update', $exam), $configuration)
+            ->assertUnprocessable()->assertJsonValidationErrors(['assembly']);
+        $this->postJson(route('exams.publish', $exam))->assertUnprocessable()->assertJsonValidationErrors(['publish']);
+        $this->assertFalse($exam->fresh()->is_published);
+
+        $this->post(route('exams.proposals.discard', $exam))->assertRedirect(route('exams.assemble', $exam));
+        $this->get(route('exams.configuration', $exam))->assertOk();
+        $this->get(route('exams.review', $exam))->assertOk();
+    }
+
+    public function test_configuration_persists_an_explicit_empty_group_selection_and_review_locates_incomplete_reactivos(): void
+    {
+        $teacher = $this->createTeacherWithProSubscription();
+        $group = $this->createGroup($teacher, 'Último grupo asignado', 'ARM0002');
+        $exam = $this->createPublishedBase100Exam($teacher, $group, '0-10', 70.0, 30.0);
+        $exam->update(['is_published' => false]);
+        $questions = $exam->examQuestions()->with('question.questionable')->get();
+        $open = $questions->first(fn (ExamQuestion $question): bool => $question->question->question_type === 'open');
+        $open->question->questionable->update(['reference_answer' => '']);
+
+        $configuration = $exam->only(['title', 'grading_scale', 'result_visibility_mode', 'max_allowed_incidents', 'randomize_question_order']);
+        $configuration['questions'] = $questions->mapWithKeys(fn (ExamQuestion $question): array => [
+            $question->id => $question->only(['points_weight', 'time_limit_seconds']),
+        ])->all();
+        $configuration['questions'][$open->id]['points_weight'] = 29.99;
+
+        $this->actingAs($teacher)->put(route('exams.configuration.update', $exam), $configuration)
+            ->assertRedirect(route('exams.review', $exam))->assertSessionHasNoErrors();
+        $this->assertSame([$group->id], $exam->groups()->pluck('acs_groups.id')->all());
+
+        $this->put(route('exams.configuration.update', $exam), $configuration + ['group_selection_submitted' => '1'])
+            ->assertRedirect(route('exams.review', $exam))->assertSessionHasNoErrors();
+        $this->assertFalse($exam->groups()->exists());
+
+        $this->get(route('exams.review', $exam))->assertOk()
+            ->assertSee(route('exams.questions.edit', [$exam, $open]))
+            ->assertViewHas('publishChecklist', fn (array $checklist): bool => $checklist['exact_weight']
+                && ! $checklist['has_open_group']
+                && ! $checklist['can_publish']
+                && $checklist['incomplete_questions'] === [[
+                    'id' => $open->id,
+                    'title' => $open->question->title,
+                    'missing_time' => false,
+                    'missing_reference' => true,
+                ]]);
     }
 
     // ------------------------------------------------------------------
@@ -974,8 +1289,7 @@ class ExamTeacherWorkflowTest extends TestCase
         $showRes->assertSee('Izq 1');
         $showRes->assertSee('Der 1');
         $showRes->assertSee('Respuesta compleja en arreglo');
-        $showRes->assertSeeText('source');
-        $showRes->assertSeeText('echo');
+        $showRes->assertSeeText('echo "ok";');
 
         // 2. Rechazo de edición sobre respuestas objetivas (multiple_choice y matching).
         $this->actingAs($teacher)->postJson(route('exams.revision.update', [$exam, $attempt]), [

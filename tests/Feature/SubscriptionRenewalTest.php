@@ -19,6 +19,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\AiCreditUsage;
 use App\Models\PaymentTransaction;
 use App\Models\SubscriptionPackage;
 use App\Models\TeacherSubscription;
@@ -74,6 +75,41 @@ class SubscriptionRenewalTest extends TestCase
         $subscription = TeacherSubscription::where('teacher_id', $teacher->id)->firstOrFail();
         $this->assertFalse($subscription->renewsAutomatically());
         $this->assertNull($subscription->nextChargeAt());
+    }
+
+    public function test_ai_quota_shows_used_and_available_credits_with_the_replenishment_time(): void
+    {
+        $this->travelTo(now()->setDate(2026, 11, 24)->setTime(11, 0));
+
+        $subscription = $this->subscription('4242', now()->addDays(32));
+        $subscription->update(['starts_at' => now()->subDay()->setTime(9, 15)]);
+        $teacher = $subscription->teacher;
+        $limit = (int) $subscription->subscriptionPackage->ai_requests_limit;
+
+        AiCreditUsage::create([
+            'teacher_id' => $teacher->id,
+            'credits_consumed' => $limit - 1,
+            'status' => AiCreditUsage::STATUS_CONSUMED,
+        ]);
+
+        $this->actingAs($teacher)->get(route('teacher.subscription.index'))
+            ->assertOk()
+            ->assertSeeText(($limit - 1)." de {$limit} créditos usados en este ciclo")
+            ->assertSeeText('1 crédito disponible')
+            ->assertSeeText('Cerca del límite.')
+            ->assertSeeText('Próxima reposición si tu plan sigue activo: 23/12/2026 a las 09:15.');
+
+        AiCreditUsage::create([
+            'teacher_id' => $teacher->id,
+            'credits_consumed' => 1,
+            'status' => AiCreditUsage::STATUS_CONSUMED,
+        ]);
+
+        $this->get(route('teacher.subscription.index'))
+            ->assertOk()
+            ->assertSeeText('0 créditos disponibles')
+            ->assertSeeText('Has alcanzado el límite.')
+            ->assertDontSeeText('Cerca del límite.');
     }
 
     public function test_due_subscription_is_renewed_with_the_stored_card(): void
@@ -138,6 +174,77 @@ class SubscriptionRenewalTest extends TestCase
         $this->artisan('subscriptions:renew');
         $this->assertSame(0, PaymentTransaction::where('teacher_subscription_id', $subscription->id)->count());
         $this->assertNull(app(SubscriptionLimitService::class)->resolveActivePackage($teacher->fresh()));
+    }
+
+    public function test_pending_and_rejected_renewal_show_accurate_actions_until_cancellation(): void
+    {
+        $subscription = $this->subscription('0002', now()->subHour());
+        $teacher = $subscription->teacher;
+        $checkout = route('teacher.subscription.checkout', $this->package('basic'));
+
+        $this->actingAs($teacher->fresh())->get(route('teacher.subscription.index'))
+            ->assertOk()
+            ->assertViewHas('isAwaitingRenewal', true)
+            ->assertViewHas('canCheckout', false)
+            ->assertViewHas('canCancelRenewal', true);
+        $this->actingAs($teacher->fresh())->get($checkout)
+            ->assertRedirect(route('teacher.subscription.index'))
+            ->assertSessionHasErrors('subscription');
+
+        $this->artisan('subscriptions:renew')->assertSuccessful();
+        $this->actingAs($teacher->fresh())->get(route('teacher.subscription.index'))
+            ->assertOk()
+            ->assertViewHas('isInGracePeriod', true)
+            ->assertViewHas('nextChargeAt', static fn ($value): bool => $value === null)
+            ->assertViewHas('canUpgrade', true);
+
+        $this->actingAs($teacher->fresh())->post(route('teacher.subscription.cancel-renewal'))
+            ->assertRedirect(route('teacher.subscription.index'))
+            ->assertSessionHas('status', 'Cancelaste la renovación. Terminó el acceso a tu plan de pago y se detuvieron los reintentos de cobro.');
+        $this->actingAs($teacher->fresh())->get(route('teacher.subscription.index'))
+            ->assertOk()
+            ->assertViewHas('isExpiredSubscription', true)
+            ->assertViewHas('canCheckout', true)
+            ->assertViewHas('canCancelRenewal', false);
+    }
+
+    public function test_suspended_subscription_can_retry_checkout_and_is_restored_only_by_an_approved_payment(): void
+    {
+        $subscription = $this->subscription('4242', now()->addDay());
+        $subscription->update(['payment_status' => 'suspended', 'suspended_at' => now()]);
+        $teacher = $subscription->teacher;
+        $teacher->teacherVerification()->firstOrFail()->forceFill([
+            'plan_onboarding_completed_at' => now(),
+        ])->save();
+        $package = $this->package('basic');
+        $checkout = route('teacher.subscription.checkout', $package);
+
+        $this->actingAs($teacher->fresh())->get(route('teacher.subscription.index'))
+            ->assertOk()
+            ->assertSeeText('Tienes 0 créditos de IA disponibles.')
+            ->assertViewHas('isSuspendedSubscription', true)
+            ->assertViewHas('canCheckout', true);
+        $this->actingAs($teacher->fresh())->get($checkout)->assertOk();
+
+        $this->actingAs($teacher->fresh())->from($checkout)
+            ->post(route('teacher.subscription.pay', $package), $this->cardPayload('4000000000000002'))
+            ->assertRedirect($checkout)
+            ->assertSessionHasErrors('payment_gateway');
+        $this->assertSame('suspended', $subscription->fresh()->payment_status);
+
+        $this->actingAs($teacher->fresh())
+            ->post(route('teacher.subscription.pay', $package), $this->cardPayload('4242424242424242'))
+            ->assertRedirect(route('teacher.subscription.index'))
+            ->assertSessionHas('status');
+        $subscription->refresh();
+        $this->assertSame('paid', $subscription->payment_status);
+        $this->assertNull($subscription->suspended_at);
+
+        $this->actingAs($teacher->fresh())
+            ->post(route('teacher.subscription.pay', $package), $this->cardPayload('4242424242424242'))
+            ->assertRedirect(route('teacher.subscription.index'))
+            ->assertSessionHasErrors('subscription');
+        $this->assertDatabaseCount('acs_payment_transactions', 2);
     }
 
     public function test_upgrade_enables_the_higher_level_immediately_without_charging(): void

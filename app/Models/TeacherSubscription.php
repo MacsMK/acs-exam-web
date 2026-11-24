@@ -123,6 +123,14 @@ class TeacherSubscription extends Model
         return $this->auto_renew && $this->cancelled_at === null && $this->card_last4 !== null;
     }
 
+    public function isRenewalDue(): bool
+    {
+        return $this->renewsAutomatically()
+            && in_array($this->payment_status, ['paid', 'overdue'], true)
+            && $this->expires_at !== null
+            && $this->expires_at->lte(now());
+    }
+
     /**
      * Fecha del próximo cobro domiciliado; null si no se renovará (RF-SUS-006).
      */

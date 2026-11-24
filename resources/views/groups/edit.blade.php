@@ -16,8 +16,9 @@
 <div class="space-y-6">
 
     <x-page-header
+        :institutional="true"
         title="Editar grupo"
-        subtitle="Modifica los datos generales del grupo. El folio de acceso y los estudiantes inscritos no cambian."
+        subtitle="Puedes cambiar el nombre, la materia y la descripción. El folio y la matrícula se conservan."
         :breadcrumbs="[
             ['label' => 'Grupos', 'href' => route('groups.index')],
             ['label' => $group->name, 'href' => route('groups.show', $group)],
@@ -32,7 +33,7 @@
         </x-slot:actions>
     </x-page-header>
 
-    <x-card title="Información del grupo" subtitle="Solo los grupos activos pueden modificarse.">
+    <x-card>
         <form
             id="edit-group-form"
             method="POST"

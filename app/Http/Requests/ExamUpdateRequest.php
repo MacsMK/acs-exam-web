@@ -20,7 +20,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
-use Carbon\Carbon;
+use App\Http\Requests\Concerns\ValidatesExamWindowChanges;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -34,6 +34,8 @@ use App\Models\Scopes\TenantTeacherScope;
  */
 class ExamUpdateRequest extends FormRequest
 {
+    use ValidatesExamWindowChanges;
+
     public function authorize(): bool
     {
         $user = $this->user();
@@ -63,9 +65,9 @@ class ExamUpdateRequest extends FormRequest
             'randomize_question_order' => ['sometimes', 'boolean'],
             'result_visibility_mode' => ['required', 'in:final_score,estimated_score,objective_only_pending,hidden'],
             'require_webcam' => ['nullable', 'boolean'],
-            'max_allowed_incidents' => ['required', 'integer', 'min:0'],
-            'starts_at' => ['required', 'date'],
-            'ends_at' => ['required', 'date', 'after:starts_at'],
+            'max_allowed_incidents' => ['required', 'integer', 'min:0', 'max:' . Exam::MAX_ALLOWED_INCIDENTS],
+            'starts_at' => ['bail', 'required', 'date'],
+            'ends_at' => ['bail', 'required', 'date', 'after:starts_at'],
             'group_ids' => ['nullable', 'array'],
             'group_ids.*' => [
                 'integer',
@@ -85,6 +87,8 @@ class ExamUpdateRequest extends FormRequest
                 return;
             }
 
+            $this->validateExamWindowChanges($validator, $exam);
+
             if ($exam->is_published) {
                 if ((string) $this->input('grading_scale') !== (string) $exam->grading_scale) {
                     $validator->errors()->add(
@@ -100,20 +104,6 @@ class ExamUpdateRequest extends FormRequest
                         'randomize_question_order',
                         'No puedes cambiar el orden estructural de un examen publicado'
                     );
-                }
-
-                if ($exam->hasStartedWindow() && $this->filled('starts_at')) {
-                    try {
-                        $submittedStart = Carbon::parse((string) $this->input('starts_at'));
-                        if ($exam->starts_at !== null && $submittedStart->ne($exam->starts_at)) {
-                            $validator->errors()->add(
-                                'starts_at',
-                                'No puedes modificar la fecha de inicio de un examen cuya ventana ya comenzó'
-                            );
-                        }
-                    } catch (\Throwable) {
-                        // La regla 'date' reportará formato inválido.
-                    }
                 }
             }
 
@@ -176,6 +166,7 @@ class ExamUpdateRequest extends FormRequest
             'max_allowed_incidents.required' => 'El campo incidentes máximos permitidos es obligatorio',
             'max_allowed_incidents.integer' => 'El número de incidentes máximos permitidos debe ser un entero',
             'max_allowed_incidents.min' => 'El número de incidentes máximos permitidos debe ser mayor o igual que 0',
+            'max_allowed_incidents.max' => 'El número de incidentes permitidos no debe exceder :max',
             'starts_at.required' => 'El campo fecha de inicio es obligatorio',
             'starts_at.date' => 'La fecha de inicio no tiene un formato válido',
             'ends_at.required' => 'El campo fecha de cierre es obligatorio',

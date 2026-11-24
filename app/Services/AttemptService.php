@@ -25,10 +25,12 @@ use App\Events\ExamAttemptSubmitted;
 use App\Models\AuditLog;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
+use App\Models\Group;
 use App\Models\QuestionParaphrase;
 use App\Models\StudentAnswer;
 use App\Models\StudentAttempt;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use DomainException;
 use Illuminate\Support\Facades\Cache;
@@ -154,23 +156,33 @@ class AttemptService
      */
     public function startOrResumeAttempt(Exam $exam, User $student): StudentAttempt
     {
-        abort_unless($exam->is_published, 404);
+        $attempt = DB::transaction(function () use ($exam, $student): StudentAttempt {
+            // Comparte el bloqueo del examen con su edición y cierre docente.
+            $exam = Exam::query()->whereKey($exam->id)->sharedLock()->firstOrFail();
+            abort_unless($exam->is_published, 404);
 
-        if ($exam->starts_at !== null && now()->lt($exam->starts_at)) {
-            throw new DomainException('El examen aún no se encuentra dentro de su ventana de aplicación.');
-        }
+            $window = $this->examWindowState($exam);
+            if ($window !== Exam::STATUS_ACTIVE) {
+                throw new DomainException($window === Exam::STATUS_SCHEDULED
+                    ? 'El examen aún no se encuentra dentro de su ventana de aplicación.'
+                    : 'La ventana de aplicación del examen ha concluido.');
+            }
 
-        if ($exam->ends_at !== null && now()->gt($exam->ends_at)) {
-            throw new DomainException('La ventana de aplicación del examen ha concluido.');
-        }
+            $preferredGroup = $this->latestAttemptFor($exam, $student)?->group_id;
+            $groupId = $exam->groups()->active()
+                ->whereHas('students', fn ($query) => $query->whereKey($student->id))
+                ->orderByRaw('CASE WHEN acs_groups.id = ? THEN 0 ELSE 1 END', [$preferredGroup])
+                ->orderBy('acs_groups.id')
+                ->value('acs_groups.id');
+            $group = Group::query()->whereKey($groupId)->lockForUpdate()->first();
 
-        $group = $exam->groups()
-            ->whereHas('students', fn ($q) => $q->where('acs_users.id', $student->id))
-            ->first();
+            // Una baja puede retirar el vínculo mientras el inicio espera el bloqueo.
+            abort_unless(
+                $group && ! $group->is_closed && $group->students()->whereKey($student->id)->exists(),
+                403,
+                'No perteneces a ningún grupo activo asignado a este examen.'
+            );
 
-        abort_unless($group, 403, 'No perteneces a ningún grupo asignado a este examen.');
-
-        $attempt = DB::transaction(function () use ($exam, $student, $group): StudentAttempt {
             $existing = StudentAttempt::where('exam_id', $exam->id)
                 ->where('student_id', $student->id)
                 ->orderByDesc('attempt_number')
@@ -180,6 +192,8 @@ class AttemptService
             // RF-EXA-051: un intento por alumno; RF-EXA-052: solo una reaplicación
             // autorizada por el docente abre el siguiente, conservando el anterior.
             if ($existing !== null && ($existing->reapplication_authorized_at === null || $existing->status === 'in_progress')) {
+                abort_unless($existing->group_id === $group->id, 403);
+
                 return $existing;
             }
 
@@ -188,6 +202,14 @@ class AttemptService
             $sequence = $this->assemblyService->buildQuestionSequence($exam);
             $paraphraseSnapshot = $this->buildParaphraseSnapshot($sequence, (int) $student->id);
 
+            $startedAt = now();
+            $visibleDeadline = $exam->free_duration_minutes !== null
+                ? $startedAt->copy()->addMinutes((int) $exam->free_duration_minutes) : null;
+            $grace = config('exams.free_submission_grace_seconds');
+            if ($visibleDeadline !== null && ! in_array($grace, [0, 60], true)) {
+                throw new DomainException('Falta autorizar la regla de cierre de la modalidad libre.');
+            }
+
             return StudentAttempt::firstOrCreate(
                 ['exam_id' => $exam->id, 'student_id' => $student->id, 'attempt_number' => $attemptNumber],
                 [
@@ -195,7 +217,9 @@ class AttemptService
                     'question_sequence_payload' => $sequence,
                     'paraphrase_snapshot_payload' => $paraphraseSnapshot,
                     'current_question_index' => 0,
-                    'started_at' => now(),
+                    'started_at' => $startedAt,
+                    'free_edit_until' => $visibleDeadline,
+                    'free_close_at' => $visibleDeadline?->copy()->addSeconds($grace ?? 0),
                     'status' => 'in_progress',
                 ],
             );
@@ -219,26 +243,46 @@ class AttemptService
         return $attempt;
     }
 
+    public function examWindowState(Exam $exam, ?CarbonInterface $now = null): string
+    {
+        $now ??= now();
+
+        if ($exam->ends_at !== null && $now->gt($exam->ends_at)) {
+            return Exam::STATUS_CLOSED;
+        }
+
+        return $exam->starts_at !== null && $now->lt($exam->starts_at)
+            ? Exam::STATUS_SCHEDULED
+            : Exam::STATUS_ACTIVE;
+    }
+
     /**
-     * @return array<string, mixed>|null null cuando ya no hay más preguntas
+     * Resuelve el reactivo activo o el índice elegido en la navegación libre.
+     *
+     * @param StudentAttempt $attempt Intento y secuencia fijada al inicio.
+     * @param int|null $freeIndex Índice solicitado en modalidad libre.
+     * @return array<string, mixed>|null Reactivo y tiempo restante, o nulo al salir de la secuencia.
      */
-    public function currentQuestion(StudentAttempt $attempt): ?array
+    public function currentQuestion(StudentAttempt $attempt, ?int $freeIndex = null): ?array
     {
         $sequence = $attempt->question_sequence_payload ?? [];
 
-        if ($attempt->current_question_index >= count($sequence)) {
+        $index = $attempt->free_close_at !== null ? ($freeIndex ?? 0) : $attempt->current_question_index;
+        if ($index < 0 || $index >= count($sequence)) {
             return null;
         }
 
-        $examQuestionId = $sequence[$attempt->current_question_index];
+        $examQuestionId = $sequence[$index];
         $examQuestion = ExamQuestion::with(['question.questionable', 'question.paraphrases'])->findOrFail($examQuestionId);
 
         return [
             'exam_question_id' => $examQuestion->id,
-            'index' => $attempt->current_question_index,
+            'index' => $index,
             'total' => count($sequence),
             'time_limit_seconds' => $examQuestion->time_limit_seconds,
-            'remaining_seconds' => $this->remainingSeconds($attempt, (int) $examQuestion->time_limit_seconds),
+            'remaining_seconds' => $attempt->free_edit_until !== null
+                ? max(0, $attempt->free_edit_until->getTimestamp() - now()->getTimestamp())
+                : $this->remainingSeconds($attempt, (int) $examQuestion->time_limit_seconds),
             'points_weight' => $examQuestion->points_weight,
             'question' => $this->questionPayloadWithoutAnswer($examQuestion, $attempt),
         ];
@@ -286,16 +330,22 @@ class AttemptService
     }
 
     /**
-     * Indica si una respuesta que llega ahora excede el límite de la pregunta
-     * activa más la tolerancia técnica de tres segundos.
+     * Indica si la recepción de una respuesta excede el plazo de la pregunta más su tolerancia.
+     *
+     * @param StudentAttempt $attempt Intento que conserva la hora del reactivo.
+     * @param int $timeLimitSeconds Duración del reactivo.
+     * @param CarbonInterface|null $receivedAt Hora registrada por el servidor.
+     * @return bool Indica si la respuesta se recibió fuera de tiempo.
      */
-    public function isAnswerLate(StudentAttempt $attempt, int $timeLimitSeconds): bool
+    public function isAnswerLate(StudentAttempt $attempt, int $timeLimitSeconds, ?CarbonInterface $receivedAt = null): bool
     {
         if ($timeLimitSeconds <= 0) {
             return false;
         }
 
-        return $this->elapsedOnActiveQuestion($attempt) > $timeLimitSeconds + self::QUESTION_TIME_TOLERANCE_SECONDS;
+        $elapsed = $this->questionServedAt($attempt)->diffInSeconds($receivedAt ?? now(), false);
+
+        return $elapsed > $timeLimitSeconds + self::QUESTION_TIME_TOLERANCE_SECONDS;
     }
 
     /**
@@ -317,125 +367,313 @@ class AttemptService
      * la revisión docente, pero se califica con cero puntos y sin evaluador
      * de IA; el intento avanza igual a la siguiente pregunta.
      *
-     * @return bool true cuando la respuesta fue extemporánea
+     * @param StudentAttempt $attempt Intento en aplicación.
+     * @param int $examQuestionId Reactivo enviado.
+     * @param mixed $answerPayload Respuesta validada.
+     * @param string|null $holder Sesión que presentó y envió la respuesta.
+     * @return bool Indica si la respuesta llegó fuera de tiempo.
      *
      * @throws DomainException
      */
-    public function submitAnswer(StudentAttempt $attempt, int $examQuestionId, mixed $answerPayload): bool
+    public function submitAnswer(StudentAttempt $attempt, int $examQuestionId, mixed $answerPayload, ?string $holder = null): bool
     {
-        if ($attempt->status !== 'in_progress') {
-            throw new DomainException('El intento ya no se encuentra activo.');
-        }
+        $receivedAt = now()->toImmutable();
+        $isLate = DB::transaction(function () use ($attempt, $examQuestionId, $answerPayload, $holder, $receivedAt): ?bool {
+            $locked = StudentAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            if ($locked->free_close_at !== null) {
+                throw new DomainException('Continúa el examen de modalidad libre en su vista web.');
+            }
+            if ($locked->status !== 'in_progress') {
+                throw new DomainException('El intento ya no se encuentra activo.');
+            }
+            $this->requireSession($locked, $holder);
+            if ($this->expireSequentialIfDue($locked)) {
+                return null;
+            }
 
-        $this->assertAttemptWithinTimeLimit($attempt);
+            $activeQuestion = $locked->question_sequence_payload[$locked->current_question_index] ?? null;
+            if ((int) $activeQuestion !== $examQuestionId) {
+                throw new DomainException('La pregunta enviada no corresponde al reactivo activo en secuencia.');
+            }
+            $question = $this->attemptQuestion($locked, $examQuestionId);
+            $isLate = $this->isAnswerLate($locked, (int) $question->time_limit_seconds, $receivedAt);
+            $this->persistSequentialAnswer($locked, $question, $answerPayload, $receivedAt, $isLate);
+            $locked->increment('current_question_index');
+            $this->forgetDraft($locked, $examQuestionId);
 
-        $examQuestion = ExamQuestion::with(['question.questionable', 'question.paraphrases'])->findOrFail($examQuestionId);
-        $question = $examQuestion->question;
-        $questionable = $question->questionable;
-        $resolvedStem = $this->resolvedStemData($examQuestion, $attempt);
-        $persistedParaphraseId = $resolvedStem['paraphrase_id'] !== null
-            && $question->paraphrases->contains('id', $resolvedStem['paraphrase_id'])
-            ? $resolvedStem['paraphrase_id']
-            : null;
-
-        $isLate = $this->isAnswerLate($attempt, (int) $examQuestion->time_limit_seconds);
-
-        $graded = $isLate
-            ? ['is_correct' => false, 'points_awarded' => 0.0]
-            : $this->gradeAnswer(
-                $question->question_type,
-                $questionable,
-                $answerPayload,
-                (float) $examQuestion->points_weight,
-            );
-
-        DB::transaction(static function () use ($attempt, $examQuestion, $graded, $answerPayload, $persistedParaphraseId, $resolvedStem): void {
-            $lockedAttempt = StudentAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
-
-            StudentAnswer::updateOrCreate(
-                ['student_attempt_id' => $lockedAttempt->id, 'exam_question_id' => $examQuestion->id],
-                array_merge($graded, [
-                    'answer_payload' => $answerPayload,
-                    'question_paraphrase_id' => $persistedParaphraseId,
-                    'served_stem_snapshot' => $resolvedStem['stem'],
-                    'answered_at' => now(),
-                ]),
-            );
-
-            // No se puede regresar a una pregunta anterior aunque sobre tiempo (RW-20).
-            $lockedAttempt->increment('current_question_index');
+            return $isLate;
         });
 
-        Cache::forget($this->draftKey($attempt, $examQuestion->id));
+        if ($isLate === null) {
+            throw new DomainException('El tiempo límite del examen ha expirado.');
+        }
 
         return $isLate;
+    }
+
+    /** Busca el reactivo dentro del examen del intento. */
+    private function attemptQuestion(StudentAttempt $attempt, int $id): ExamQuestion
+    {
+        return ExamQuestion::with(['question.questionable', 'question.paraphrases'])
+            ->where('exam_id', $attempt->exam_id)->findOrFail($id);
+    }
+
+    /** Registra la respuesta y la variante servida, manteniendo la calificación vigente. */
+    private function persistSequentialAnswer(
+        StudentAttempt $attempt,
+        ExamQuestion $examQuestion,
+        mixed $payload,
+        ?CarbonInterface $receivedAt,
+        ?bool $isLate,
+    ): void {
+        $question = $examQuestion->question;
+        $stem = $this->resolvedStemData($examQuestion, $attempt);
+        $graded = match ($isLate) {
+            null => [],
+            true => ['is_correct' => false, 'points_awarded' => 0.0],
+            false => $this->gradeAnswer($question->question_type, $question->questionable, $payload, (float) $examQuestion->points_weight),
+        };
+
+        StudentAnswer::firstOrCreate([
+            'student_attempt_id' => $attempt->id,
+            'exam_question_id' => $examQuestion->id,
+        ], $graded + [
+            'answer_payload' => $payload,
+            'question_paraphrase_id' => $question->paraphrases->contains('id', $stem['paraphrase_id']) ? $stem['paraphrase_id'] : null,
+            'served_stem_snapshot' => $stem['stem'],
+            // El borrador conserva zona horaria. answered_at usa la hora local del esquema histórico.
+            'answered_at' => $receivedAt?->toImmutable()->setTimezone(config('app.timezone')),
+        ]);
+    }
+
+    /** Incorpora el último borrador confirmado sin avanzar ni alterar respuestas consolidadas. */
+    private function preserveCurrentDraft(StudentAttempt $attempt, bool $score): void
+    {
+        if ($attempt->free_close_at !== null) {
+            return;
+        }
+        $id = $attempt->question_sequence_payload[$attempt->current_question_index] ?? null;
+        if ($id === null) {
+            return;
+        }
+        $draft = $this->confirmedDraft($attempt, (int) $id);
+        if ($draft === null) {
+            return;
+        }
+
+        [$payload, $savedAt] = $draft;
+        $question = $this->attemptQuestion($attempt, (int) $id);
+        $isLate = ($score && $savedAt !== null) ? $this->isAnswerLate($attempt, (int) $question->time_limit_seconds, $savedAt) : null;
+        $this->persistSequentialAnswer($attempt, $question, $payload, $savedAt, $isLate);
+        $this->forgetDraft($attempt, (int) $id);
+    }
+
+    /**
+     * Guarda una respuesta libre verificando el vencimiento y la revisión.
+     *
+     * @param StudentAttempt $attempt Intento del estudiante.
+     * @param int $questionId Identificador del reactivo de la secuencia.
+     * @param mixed $payload Respuesta normalizada por la ruta de captura.
+     * @param int $revision Última revisión confirmada al estudiante.
+     * @param string|null $holder Identificador de la sesión activa en ruta web.
+     * @return int Revisión persistida de la respuesta.
+     * @throws DomainException Si ha vencido el intento, la pregunta no pertenece a él o la revisión está desactualizada.
+     */
+    public function saveFreeAnswer(StudentAttempt $attempt, int $questionId, mixed $payload, int $revision, ?string $holder = null): int
+    {
+        $this->closeFreeIfDue($attempt);
+
+        return DB::transaction(function () use ($attempt, $questionId, $payload, $revision, $holder): int {
+            $locked = StudentAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status !== 'in_progress' || $locked->free_close_at === null || now()->gte($locked->free_close_at)) {
+                throw new DomainException('El intento ya no admite modificaciones.');
+            }
+            $this->requireSession($locked, $holder);
+            if (! in_array($questionId, array_map('intval', $locked->question_sequence_payload), true)) {
+                throw new DomainException('Selecciona una pregunta de este intento.');
+            }
+            $question = $this->attemptQuestion($locked, $questionId);
+            $answer = StudentAnswer::firstOrNew(['student_attempt_id' => $locked->id, 'exam_question_id' => $questionId]);
+            $currentRevision = (int) $answer->free_revision;
+            if ($answer->exists && $answer->answer_payload === $payload) {
+                return $currentRevision;
+            }
+            if ($currentRevision !== $revision) {
+                throw new DomainException('La respuesta cambió. Recarga la pregunta para ver la versión guardada.');
+            }
+            $stem = $this->resolvedStemData($question, $locked);
+            $graded = $this->gradeAnswer($question->question->question_type, $question->question->questionable,
+                $payload, (float) $question->points_weight);
+            $answer->fill($graded + ['answer_payload' => $payload, 'answered_at' => now(), 'free_revision' => $revision + 1,
+                'question_paraphrase_id' => $question->question->paraphrases->contains('id', $stem['paraphrase_id']) ? $stem['paraphrase_id'] : null,
+                'served_stem_snapshot' => $stem['stem']])->save();
+
+            return $revision + 1;
+        });
+    }
+
+    /**
+     * Entrega los intentos libres que alcanzan el límite registrado.
+     *
+     * @param StudentAttempt $attempt Intento observado por una petición o por el programador.
+     * @return StudentAttempt Estado resultante del intento.
+     */
+    public function closeFreeIfDue(StudentAttempt $attempt): StudentAttempt
+    {
+        if ($attempt->status === 'in_progress' && $attempt->free_close_at !== null
+            && $this->hasReachedDeadline($attempt, $attempt->free_close_at)) {
+            return $this->submitFinal($attempt);
+        }
+
+        return $attempt;
+    }
+
+    public function closeIfDue(StudentAttempt $attempt): StudentAttempt
+    {
+        if ($attempt->status !== 'in_progress') {
+            return $attempt;
+        }
+
+        if ($attempt->free_close_at !== null) {
+            return $this->closeFreeIfDue($attempt);
+        }
+
+        if ($this->isInProgress($attempt)) {
+            return $attempt;
+        }
+
+        return DB::transaction(function () use ($attempt): StudentAttempt {
+            $locked = StudentAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status === 'in_progress' && $locked->free_close_at === null) {
+                $this->expireSequentialIfDue($locked);
+            }
+
+            return $locked;
+        });
     }
 
     /**
      * Guarda en el servidor el borrador de la pregunta activa mientras el alumno
      * responde (RF-EXA-040). Solo acepta la pregunta activa de un intento en
-     * curso; el borrador dura hasta el tiempo máximo del intento y se descarta
-     * al registrar la respuesta. No califica ni avanza la secuencia.
+     * curso. La consolidación usa esta misma fila sin avanzar la secuencia.
      *
-     * @throws DomainException
+     * @param StudentAttempt $attempt Intento al que corresponde el borrador.
+     * @param int $examQuestionId Identificador del reactivo activo.
+     * @param mixed $payload Respuesta ya validada por la ruta.
+     * @param string|null $holder Sesión del estudiante.
+     * @return CarbonInterface Hora confirmada por el servidor.
+     * @throws DomainException Si el intento, su reactivo o su sesión dejaron de estar activos.
      */
-    public function saveDraft(StudentAttempt $attempt, int $examQuestionId, mixed $payload): void
+    public function saveDraft(StudentAttempt $attempt, int $examQuestionId, mixed $payload, ?string $holder = null): CarbonInterface
     {
-        if (! $this->isInProgress($attempt)) {
-            throw new DomainException('El intento ya no se encuentra activo.');
-        }
+        return DB::transaction(function () use ($attempt, $examQuestionId, $payload, $holder): CarbonInterface {
+            $locked = StudentAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            if ($locked->free_close_at !== null || ! $this->isInProgress($locked)) {
+                throw new DomainException('El intento ya no se encuentra activo.');
+            }
+            $this->requireSession($locked, $holder);
+            $activeQuestion = $locked->question_sequence_payload[$locked->current_question_index] ?? null;
+            if ((int) $activeQuestion !== $examQuestionId) {
+                throw new DomainException('La pregunta ya no es la activa; vuelve a consultar el examen.');
+            }
 
-        $current = $this->currentQuestion($attempt);
-        if ($current === null || (int) $current['exam_question_id'] !== $examQuestionId) {
-            throw new DomainException('La pregunta ya no es la activa; vuelve a consultar el examen.');
-        }
+            $savedAt = now()->toImmutable();
+            DB::table('acs_attempt_drafts')->updateOrInsert(
+                ['student_attempt_id' => $locked->id],
+                [
+                    'exam_question_id' => $examQuestionId,
+                    'payload' => json_encode($payload, JSON_THROW_ON_ERROR),
+                    'saved_at' => $savedAt->format('Y-m-d H:i:s.uP'),
+                ],
+            );
 
-        $deadline = $this->attemptDeadline($attempt) ?? now()->addHours(6);
-        Cache::put($this->draftKey($attempt, $examQuestionId), $payload, $deadline);
+            return $savedAt;
+        });
     }
 
-    /**
-     * Borrador guardado de la pregunta activa, para recuperarlo al volver al
-     * intento (RF-EXA-048). Null si no hay.
-     */
+    /** Recupera el último borrador de la pregunta activa para reanudar. */
     public function draftFor(StudentAttempt $attempt, int $examQuestionId): mixed
     {
-        return Cache::get($this->draftKey($attempt, $examQuestionId));
+        return $this->confirmedDraft($attempt, $examQuestionId)[0] ?? null;
     }
 
-    /**
-     * Segundos sin señal de presencia tras los cuales otra sesión puede tomar el
-     * intento (por ejemplo, si se cerró el navegador o se cambió de dispositivo).
-     */
+    /** Lee el contenido confirmado y la fecha del servidor, si el registro la conserva. */
+    private function confirmedDraft(StudentAttempt $attempt, int $examQuestionId): ?array
+    {
+        $draft = DB::table('acs_attempt_drafts')->where('student_attempt_id', $attempt->id)
+            ->where('exam_question_id', $examQuestionId)->first();
+        if ($draft !== null) {
+            return [json_decode($draft->payload, true, 512, JSON_THROW_ON_ERROR), CarbonImmutable::parse($draft->saved_at)];
+        }
+
+        // Los borradores anteriores contienen el valor confirmado, pero no su hora.
+        $legacy = Cache::get($this->draftKey($attempt, $examQuestionId));
+
+        return $legacy === null ? null : [$legacy, null];
+    }
+
+    /** Retira el borrador solo después de guardar su respuesta o avanzar de reactivo. */
+    private function forgetDraft(StudentAttempt $attempt, int $examQuestionId): void
+    {
+        DB::table('acs_attempt_drafts')->where('student_attempt_id', $attempt->id)->delete();
+        DB::afterCommit(fn () => Cache::forget($this->draftKey($attempt, $examQuestionId)));
+    }
+
+    /** Segundos sin presencia tras los que el estudiante puede cambiar de sesión. */
     public const SESSION_IDLE_SECONDS = 45;
 
-    /**
-     * Registra la sesión que presenta el intento (RF-EXA-049). Rechaza si otra
-     * sesión o dispositivo dio señal de presencia en los últimos
-     * SESSION_IDLE_SECONDS segundos.
-     */
+    /** Adquiere o renueva bajo bloqueo la única sesión que presenta el intento. */
     public function acquireSession(StudentAttempt $attempt, string $holder): bool
     {
-        if (! $this->sessionAvailable($attempt, $holder)) {
+        return DB::transaction(function () use ($attempt, $holder): bool {
+            $locked = StudentAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+
+            return $locked->status !== 'in_progress' || $this->claimSession($locked, $holder);
+        });
+    }
+
+    /** Informa si otra sesión mantiene la reserva en este momento. */
+    public function sessionAvailable(StudentAttempt $attempt, string $holder): bool
+    {
+        return $this->canClaimSession($attempt->refresh(), $holder);
+    }
+
+    /** Consulta la reserva observada dentro del bloqueo del intento cuando se va a renovar. */
+    private function canClaimSession(StudentAttempt $attempt, string $holder): bool
+    {
+        if ($attempt->presenter_hash !== null && $attempt->presenter_seen_at !== null) {
+            return hash_equals($attempt->presenter_hash, hash('sha256', $holder))
+                || CarbonImmutable::parse($attempt->presenter_seen_at)->addSeconds(self::SESSION_IDLE_SECONDS)->lte(now());
+        }
+
+        $legacy = Cache::get($this->sessionKey($attempt));
+
+        return ! is_array($legacy)
+            || ($legacy['holder'] ?? null) === $holder
+            || now()->getTimestamp() - (int) ($legacy['seen'] ?? 0) >= self::SESSION_IDLE_SECONDS;
+    }
+
+    /** Actualiza la reserva dentro del mismo bloqueo que protege las respuestas y el cierre. */
+    private function claimSession(StudentAttempt $attempt, string $holder): bool
+    {
+        if (! $this->canClaimSession($attempt, $holder)) {
             return false;
         }
 
-        $deadline = $this->attemptDeadline($attempt) ?? now()->addHours(6);
-        Cache::put($this->sessionKey($attempt), ['holder' => $holder, 'seen' => now()->getTimestamp()], $deadline);
+        StudentAttempt::withoutTimestamps(fn () => $attempt->forceFill([
+            'presenter_hash' => hash('sha256', $holder),
+            'presenter_seen_at' => now()->format('Y-m-d H:i:s.uP'),
+        ])->save());
 
         return true;
     }
 
-    /**
-     * Indica si la sesión puede usar el intento: no hay otra sesión activa.
-     */
-    public function sessionAvailable(StudentAttempt $attempt, string $holder): bool
+    /** Verifica la sesión de una operación del estudiante. Los cierres del sistema carecen de sesión. */
+    private function requireSession(StudentAttempt $attempt, ?string $holder): void
     {
-        $lock = Cache::get($this->sessionKey($attempt));
-
-        return ! is_array($lock)
-            || ($lock['holder'] ?? null) === $holder
-            || now()->getTimestamp() - (int) ($lock['seen'] ?? 0) >= self::SESSION_IDLE_SECONDS;
+        if ($holder !== null && ! $this->claimSession($attempt, $holder)) {
+            throw new DomainException('Este intento está abierto en otra sesión o dispositivo. Ciérralo ahí o espera un minuto e inténtalo de nuevo.');
+        }
     }
 
     private function sessionKey(StudentAttempt $attempt): string
@@ -464,27 +702,37 @@ class AttemptService
     /**
      * Registra un incidente de sospecha anti-trampa, incrementa el contador
      * y emite el evento en vivo por WebSockets Reverb (RW-12, RW-16, ADR-019).
+     *
+     * @param StudentAttempt $attempt Intento que estaba en curso.
+     * @param string $incidentType Tipo de incidente.
+     * @param string $description Detalle proporcionado por el cliente.
+     * @param string|null $holder Identificador de la sesión presentadora del cliente.
+     * @return StudentAttempt Intento actualizado.
+     * @throws DomainException Si otra sesión presenta el intento.
      */
-    public function reportIncident(StudentAttempt $attempt, string $incidentType, string $description = ''): StudentAttempt
+    public function reportIncident(StudentAttempt $attempt, string $incidentType, string $description = '', ?string $holder = null): StudentAttempt
     {
-        $exam = $attempt->relationLoaded('exam') ? $attempt->exam : $attempt->exam()->first();
-        $student = $attempt->relationLoaded('student') ? $attempt->student : $attempt->student()->first();
-
-        $isCancelled = false;
-        if ($attempt->status === 'in_progress') {
-            $attempt->increment('incidents_count');
-            $attempt->refresh();
-
-            if ($exam && $attempt->incidents_count > $exam->max_allowed_incidents) {
-                $attempt->update([
-                    'status' => 'cancelled_by_incident',
-                    'submitted_at' => now(),
-                    'final_score' => 0.0,
-                ]);
-                $isCancelled = true;
+        [$attempt, $recorded, $isCancelled] = DB::transaction(function () use ($attempt, $holder): array {
+            $locked = StudentAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status !== 'in_progress' || ($locked->free_close_at !== null && now()->gte($locked->free_close_at))) {
+                return [$locked, false, false];
             }
-        }
+            $this->requireSession($locked, $holder);
+            $locked->incidents_count++;
+            $limit = $locked->exam?->max_allowed_incidents;
+            $cancelled = $limit !== null && $locked->incidents_count > $limit;
+            if ($cancelled) {
+                $locked->fill(['status' => 'cancelled_by_incident', 'submitted_at' => now(), 'final_score' => 0.0]);
+            }
+            $locked->save();
 
+            return [$locked, true, $cancelled];
+        });
+
+        if (! $recorded) {
+            return $this->closeFreeIfDue($attempt);
+        }
+        $student = $attempt->student;
         $this->broadcastSafely(static fn () => ExamAttemptIncidentReported::dispatch(
             (int) $attempt->exam_id,
             (int) $attempt->id,
@@ -500,15 +748,30 @@ class AttemptService
         return $attempt;
     }
 
-    public function submitFinal(StudentAttempt $attempt): StudentAttempt
+    /**
+     * Entrega el intento una vez y conserva el borrador confirmado bajo bloqueo.
+     *
+     * @param StudentAttempt $attempt Intento por entregar.
+     * @param string|null $holder Sesión del estudiante, cuando la entrega no viene del sistema.
+     * @return StudentAttempt Intento finalizado.
+     * @throws DomainException Si el intento no se puede entregar en su estado o sesión.
+     */
+    public function submitFinal(StudentAttempt $attempt, ?string $holder = null): StudentAttempt
     {
         if ($attempt->status !== 'in_progress') {
             throw new DomainException('El intento ya no se encuentra activo.');
         }
 
-        $this->assertAttemptWithinTimeLimit($attempt);
-
-        $submitted = DB::transaction(function () use ($attempt): StudentAttempt {
+        $submitted = DB::transaction(function () use ($attempt, $holder): ?StudentAttempt {
+            $attempt = StudentAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            if ($attempt->status !== 'in_progress') {
+                return null;
+            }
+            $this->requireSession($attempt, $holder);
+            if ($attempt->free_close_at === null && $this->expireSequentialIfDue($attempt)) {
+                return $attempt;
+            }
+            $this->preserveCurrentDraft($attempt, score: true);
             $attempt->loadMissing('exam');
             $exam = $attempt->exam;
             $answers = $attempt->answers()->with('examQuestion.question')->get();
@@ -543,7 +806,7 @@ class AttemptService
 
             $attempt->update([
                 'status' => 'submitted',
-                'submitted_at' => now(),
+                'submitted_at' => $attempt->free_close_at !== null && now()->gte($attempt->free_close_at) ? $attempt->free_close_at : now(),
                 'objective_score' => $objectiveScore,
                 'ai_estimated_score' => $aiEstimatedScore,
                 'final_score' => $finalScore,
@@ -553,6 +816,12 @@ class AttemptService
             return $attempt->fresh();
         });
 
+        if ($submitted === null) {
+            return $attempt->fresh();
+        }
+        if ($submitted->status === 'expired') {
+            throw new DomainException('El tiempo límite del examen ha expirado.');
+        }
         $this->examNotifications->attemptClosed($submitted);
 
         $studentUser = $submitted->relationLoaded('student') ? $submitted->student : $submitted->student()->first();
@@ -569,32 +838,49 @@ class AttemptService
         return $submitted;
     }
 
-    /**
-     * Verifica la ventana y duración del intento en el servidor con margen de
-     * tolerancia de red de 60 segundos (MPW-V3 §5.6.1, RNF-CON-001).
-     *
-     * @throws DomainException
-     */
-    private function assertAttemptWithinTimeLimit(StudentAttempt $attempt): void
+    /** Conserva las respuestas confirmadas y aplica el estado de expiración secuencial. */
+    private function expireSequentialIfDue(StudentAttempt $attempt): bool
     {
-        $exam = $attempt->relationLoaded('exam') ? $attempt->exam : $attempt->exam()->first();
-
-        if ($exam === null) {
-            return;
+        if ($this->isInProgress($attempt)) {
+            return false;
         }
 
-        if ($this->deadlineHasPassed($attempt, $exam)) {
-            $attempt->update(['status' => 'expired', 'submitted_at' => now()]);
-            throw new DomainException('El tiempo límite del examen ha expirado.');
-        }
+        $this->preserveCurrentDraft($attempt, score: false);
+        $attempt->update(['status' => 'expired', 'submitted_at' => now()]);
+
+        return true;
     }
 
     /**
-     * Indica si el intento sigue en curso (RF-GRU-017): no fue enviado ni
-     * cancelado y su duración y la ventana del examen aún no vencen, con la
-     * misma tolerancia de 60 segundos de la validación de envío. El estado
-     * `expired` solo se marca cuando alguien intenta enviar el intento, así
-     * que uno abandonado a medias deja de contar como en curso al vencer.
+     * Conserva las respuestas y registra la causa de detención de los intentos activos.
+     * El cierre de la ventana y esta operación comparten la transacción del examen.
+     *
+     * @param Exam $exam Examen bloqueado por el cierre docente.
+     * @param int $actorId Docente que detuvo el examen.
+     * @return void
+     */
+    public function stopByTeacher(Exam $exam, int $actorId): void
+    {
+        $stoppedAt = now();
+        StudentAttempt::where('exam_id', $exam->id)->where('status', 'in_progress')
+            ->lockForUpdate()->chunkById(100, function ($attempts) use ($actorId, $stoppedAt): void {
+                foreach ($attempts as $attempt) {
+                    $this->preserveCurrentDraft($attempt, score: false);
+                    $attempt->update(['status' => 'expired', 'submitted_at' => $stoppedAt]);
+                    AuditLog::create([
+                        'user_id' => $actorId,
+                        'action' => StudentAttempt::ACTION_STOPPED_BY_TEACHER,
+                        'auditable_type' => StudentAttempt::class,
+                        'auditable_id' => $attempt->id,
+                        'new_values' => ['status' => 'expired', 'cause' => 'Detención del examen por el docente'],
+                    ]);
+                }
+            });
+    }
+
+    /**
+     * Indica si el intento sigue en curso (RF-GRU-017) según su plazo individual
+     * y la misma tolerancia que aplica la validación de envío.
      */
     public function isInProgress(StudentAttempt $attempt): bool
     {
@@ -602,9 +888,7 @@ class AttemptService
             return false;
         }
 
-        $exam = $attempt->relationLoaded('exam') ? $attempt->exam : $attempt->exam()->first();
-
-        return $exam === null || ! $this->deadlineHasPassed($attempt, $exam);
+        return ! $this->hasReachedDeadline($attempt, $this->attemptDeadline($attempt));
     }
 
     /**
@@ -614,11 +898,15 @@ class AttemptService
      * intentos en curso se finalizan en ExamAssemblyService::closeExamEarly
      * (RF-EXA-024).
      */
-    private function deadlineHasPassed(StudentAttempt $attempt, Exam $exam): bool
+    public function hasReachedDeadline(StudentAttempt $attempt, ?CarbonInterface $deadline, ?CarbonInterface $now = null): bool
     {
-        $deadline = $this->attemptDeadline($attempt);
+        if ($deadline === null) {
+            return false;
+        }
 
-        return $deadline !== null && now()->gt($deadline);
+        $now ??= now();
+
+        return $attempt->free_close_at !== null ? $now->gte($deadline) : $now->gt($deadline);
     }
 
     /**
@@ -626,8 +914,11 @@ class AttemptService
      * inicio más la suma de los tiempos de sus preguntas, la tolerancia de tres
      * segundos por pregunta y la tolerancia de red de 60 segundos.
      */
-    public function attemptDeadline(StudentAttempt $attempt): ?CarbonInterface
+    public function attemptDeadline(StudentAttempt $attempt, ?int $totalQuestionSeconds = null): ?CarbonInterface
     {
+        if ($attempt->free_close_at !== null) {
+            return $attempt->free_close_at;
+        }
         if ($attempt->started_at === null) {
             return null;
         }
@@ -641,7 +932,7 @@ class AttemptService
             return $exam?->ends_at?->copy()->addSeconds(60);
         }
 
-        $totalSeconds = (int) ExamQuestion::query()->whereIn('id', $sequence)->sum('time_limit_seconds');
+        $totalSeconds = $totalQuestionSeconds ?? (int) ExamQuestion::query()->whereIn('id', $sequence)->sum('time_limit_seconds');
 
         return $attempt->started_at->copy()
             ->addSeconds($totalSeconds + count($sequence) * self::QUESTION_TIME_TOLERANCE_SECONDS + 60);
@@ -762,18 +1053,7 @@ class AttemptService
      */
     private function registerQualitativeAnswer(mixed $answerPayload): array
     {
-        $studentText = '';
-
-        if (is_string($answerPayload)) {
-            $studentText = trim($answerPayload);
-        } elseif (is_array($answerPayload)) {
-            foreach (['text', 'code', 'answer', 'given_answer'] as $key) {
-                if (isset($answerPayload[$key]) && is_string($answerPayload[$key])) {
-                    $studentText = trim($answerPayload[$key]);
-                    break;
-                }
-            }
-        }
+        $studentText = StudentAnswer::qualitativeText($answerPayload);
 
         if ($studentText === '') {
             return [

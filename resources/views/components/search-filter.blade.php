@@ -4,72 +4,90 @@
     'method' => 'GET',
     'searchName' => 'search',
     'searchValue' => request('search', ''),
+    'searchLabel' => null,
     'placeholder' => 'Buscar reactivo, alumno o examen…',
     'clearUrl' => request()->url(),
     'clearKeys' => ['search', 'filter', 'type', 'group_id', 'subject', 'status', 'date'],
     'hasActiveFilters' => null,
     'autoSubmit' => false,
+    'resultsId' => null,
+    'liveClear' => false,
 ])
 
-<div {{ $attributes->merge(['class' => 'bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5']) }}>
-    <form
-        method="{{ $method }}"
-        action="{{ $action }}"
-        x-data="{
-            searchQuery: @js($searchValue),
-        }"
-        x-ref="searchForm"
-        class="space-y-3"
-    >
-        @php
-            $activeClearKeys = array_values(array_unique(array_merge(
-                [$searchName],
-                is_array($clearKeys) ? $clearKeys : []
-            )));
-            $showClearAction = $hasActiveFilters !== null
-                ? (bool) $hasActiveFilters
-                : request()->anyFilled($activeClearKeys);
-        @endphp
+@php
+    $activeClearKeys = array_values(array_unique(array_merge(
+        [$searchName],
+        is_array($clearKeys) ? $clearKeys : []
+    )));
+    $showClearAction = $hasActiveFilters !== null
+        ? (bool) $hasActiveFilters
+        : request()->anyFilled($activeClearKeys);
+    $predictive = $resultsId && strcasecmp($method, 'GET') === 0;
+    $clearFormId = $predictive && $liveClear ? $resultsId . '-clear' : null;
+@endphp
 
-        {{-- Fila principal: campo de búsqueda predictiva (ancho completo disponible) + botones Buscar / Limpiar --}}
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div class="relative flex-1 min-w-0">
-                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <x-icon name="search" class="w-5 h-5" />
-                </div>
-                <input
-                    type="text"
-                    name="{{ $searchName }}"
-                    x-model="searchQuery"
-                    @if ($autoSubmit)
-                        @input.debounce.300ms="$refs.searchForm.submit()"
+<form
+    method="{{ $method }}"
+    action="{{ $action }}"
+    x-data
+    role="search"
+    aria-label="{{ $searchLabel ?? $placeholder }}"
+    @if ($predictive)
+        data-catalog-search="{{ $resultsId }}"
+        data-catalog-search-field="{{ $searchName }}"
+    @elseif ($autoSubmit)
+        x-on:input.debounce.300ms="if ($event.target.name === @js($searchName)) $el.submit()"
+    @endif
+    {{ $attributes }}
+>
+    {{ $parameters ?? '' }}
+
+    <x-search-panel>
+        <x-slot:field>
+            <label for="{{ $searchName }}" class="sr-only">{{ $searchLabel ?? $placeholder }}</label>
+            <x-form.input
+                :name="$searchName"
+                prefix-icon="search"
+                :placeholder="$placeholder"
+                :value="$searchValue"
+            />
+        </x-slot:field>
+
+        <x-slot:actions>
+            @if ($showClearAction || $predictive)
+                <span @if ($predictive) data-catalog-clear @endif @unless ($showClearAction) hidden @endunless>
+                    @if ($clearFormId)
+                        <x-button type="submit" :form="$clearFormId" variant="secondary" :disabled="! $showClearAction">
+                            Limpiar filtros
+                        </x-button>
+                    @else
+                        <x-button :href="$clearUrl" variant="secondary">
+                            Limpiar filtros
+                        </x-button>
                     @endif
-                    placeholder="{{ $placeholder }}"
-                    value="{{ $searchValue }}"
-                    class="w-full h-10 pl-10 pr-3.5 rounded-lg border border-slate-300 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-acode-tech focus:border-acode-tech bg-white placeholder-slate-400"
-                />
-            </div>
+                </span>
+            @endif
+        </x-slot:actions>
 
-            <div class="flex items-center gap-2 shrink-0">
-                <x-button type="submit" variant="secondary" size="md">
-                    <x-icon name="search" class="w-4 h-4" />
-                    Buscar
-                </x-button>
+        @isset($filters)
+            <x-slot:filters>{{ $filters }}</x-slot:filters>
+        @endisset
 
-                @if ($showClearAction)
-                    <x-button href="{{ $clearUrl }}" variant="neutral" size="md">
-                        <x-icon name="filter" class="w-4 h-4 text-slate-500" />
-                        Limpiar filtros
-                    </x-button>
-                @endif
-            </div>
-        </div>
-
-        {{-- Fila secundaria de filtros desplegables para no comprimir el buscador --}}
-        @if (isset($filters))
-            <div class="flex flex-wrap items-center gap-3 pt-1">
-                {{ $filters }}
-            </div>
+        @if ($predictive)
+            <x-slot:feedback>
+                <p class="sr-only text-xs font-medium text-acode-danger-dark" role="status" aria-atomic="true" data-catalog-status></p>
+            </x-slot:feedback>
         @endif
-    </form>
-</div>
+    </x-search-panel>
+</form>
+@if ($clearFormId)
+    <form id="{{ $clearFormId }}" method="GET" action="{{ $clearUrl }}" hidden></form>
+@endif
+
+@if ($predictive)
+    @once
+        @push('scripts')
+            <script src="{{ asset('js/catalog-search.js') }}" defer></script>
+        @endpush
+    @endonce
+@endif

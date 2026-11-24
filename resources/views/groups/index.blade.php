@@ -4,11 +4,8 @@
     ============================================================================
     Archivo:     resources/views/groups/index.blade.php
     Ubicación:   resources/views/groups/index.blade.php
-    Descripción: Catálogo operativo de grupos escolares del docente con arquitectura
-                 espacial homologada: encabezado institucional, 4 KPIs canónicos,
-                 barra de búsqueda y filtrado con alternancia cuadrícula/lista,
-                 tarjetas con folio copiable y modal QR (MPW-V3 §7.3, §7.4.2,
-                 §7.8.2, §8.1–§8.12; MC-V3 §2.4).
+    Descripción: Catálogo docente con búsqueda, filtros, cuadrícula y tabla de
+                 grupos, acciones de inscripción y resumen de matrículas.
     ============================================================================
 --}}
 @extends('layouts.app')
@@ -16,525 +13,253 @@
 @section('title', 'Mis grupos escolares')
 
 @section('content')
+@php
+    $catalogGroups = $groups->map(fn ($group) => [
+        'id' => $group->id,
+        'name' => $group->name,
+        'subject' => filled($group->subject) ? $group->subject : 'Sin asignatura',
+        'students_count' => (int) $group->students_count,
+        'is_closed' => (bool) $group->is_closed,
+        'folio' => $group->access_folio,
+        'url' => route('groups.show', $group),
+        'periods_url' => route('groups.periods.index', $group),
+    ])->values();
+    $subjects = $catalogGroups->pluck('subject')->unique()->sort();
+    $groupCount = $catalogGroups->count();
+    $activeGroupCount = $catalogGroups->where('is_closed', false)->count();
+@endphp
+
 <div
     x-data="{
+        searchInput: '',
         search: '',
         filter: 'all',
+        subjectFilter: '',
         viewMode: 'grid',
-        qrModalOpen: false,
-        selectedGroup: null,
-        copiedFolio: false,
+        copyResult: null,
+        groups: @js($catalogGroups),
 
-        groups: @js(
-            $groups->map(fn ($group) => [
-                'id' => $group->id,
-                'name' => $group->name,
-                'subject' => $group->subject ?? 'Sin asignatura',
-                'students_count' => (int) $group->students_count,
-                'is_closed' => (bool) $group->is_closed,
-                'folio' => $group->access_folio,
-                'url' => route('groups.show', $group),
-                'periods_url' => route('groups.periods.index', $group),
-            ])->values()
-        ),
+        normalize(value) {
+            return (value || '').normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('es').trim();
+        },
 
         get filteredGroups() {
-            const term = this.search.trim().toLocaleLowerCase();
+            const term = this.normalize(this.search);
 
             return this.groups
                 .filter(group => {
-                    const matchesSearch = !term ||
-                        (group.name && group.name.toLocaleLowerCase().includes(term)) ||
-                        (group.subject && group.subject.toLocaleLowerCase().includes(term)) ||
-                        (group.folio && group.folio.toLocaleLowerCase().includes(term));
+                    const matchesSearch = !term || [group.name, group.subject, group.folio]
+                        .some(value => this.normalize(value).includes(term));
+                    const matchesSubject = !this.subjectFilter || group.subject === this.subjectFilter;
+                    const matchesStatus = this.filter === 'all' || group.is_closed === (this.filter === 'closed');
 
-                    const matchesStatus =
-                        this.filter === 'all' ||
-                        (this.filter === 'active' && !group.is_closed) ||
-                        (this.filter === 'closed' && group.is_closed);
-
-                    return matchesSearch && matchesStatus;
+                    return matchesSearch && matchesSubject && matchesStatus;
                 })
-                .sort((a, b) => {
-                    if (a.is_closed !== b.is_closed) {
-                        return Number(a.is_closed) - Number(b.is_closed);
-                    }
-
-                    return a.name.localeCompare(b.name, 'es');
-                });
+                .sort((a, b) => Number(a.is_closed) - Number(b.is_closed) || a.name.localeCompare(b.name, 'es'));
         },
 
-        openQr(group) {
-            this.selectedGroup = group;
-            this.copiedFolio = false;
-            this.qrModalOpen = true;
+        clearFilters() {
+            this.searchInput = '';
+            this.search = '';
+            this.filter = 'all';
+            this.subjectFilter = '';
+            this.$nextTick(() => this.$refs.groupSearch.focus());
         },
 
-        closeQr() {
-            this.qrModalOpen = false;
-            this.selectedGroup = null;
-            this.copiedFolio = false;
-        },
-
-        copyFolio(folio) {
-            if (!folio) return;
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(folio).then(() => {
-                    this.copiedFolio = true;
-                    setTimeout(() => { this.copiedFolio = false; }, 2500);
-
-                    if (typeof AcodeAlert !== 'undefined') {
-                        AcodeAlert.toast('Folio copiado al portapapeles con éxito', 'success');
-                    }
-                }).catch(() => {});
+        async copyFolio(group) {
+            this.copyResult = null;
+            let copied = false;
+            try {
+                copied = await window.copyGroupFolio?.(group.folio);
+            } catch {
+                copied = false;
             }
-        }
+
+            this.copyResult = {
+                groupId: group.id,
+                message: copied
+                    ? 'Folio de ' + group.name + ' copiado al portapapeles.'
+                    : 'No se pudo copiar el folio. Selecciónalo para copiarlo manualmente.',
+            };
+
+            if (copied) window.AcodeAlert?.toast(this.copyResult.message, 'success');
+        },
     }"
-    @keydown.escape.window="closeQr()"
     class="space-y-6"
 >
-
-    {{-- Nivel 1: Encabezado Institucional --}}
-    <x-page-header
-        title="Mis grupos escolares"
-        subtitle="Gestiona tus aulas escolares, consulta folios de acceso, supervisa la matrícula y accede a las evaluaciones por periodo."
-    >
+    <x-page-header title="Mis grupos escolares" :institutional="true">
         <x-slot:actions>
             <x-button :href="route('groups.create')" variant="primary" size="md">
-                <x-icon name="add" class="w-4 h-4" />
+                <x-icon name="add" class="h-4 w-4" />
                 Crear grupo
             </x-button>
         </x-slot:actions>
     </x-page-header>
 
-    {{-- Nivel 2: Barra de 4 Tarjetas KPI Canónicas --}}
-    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        <x-kpi-card
-            label="Total de grupos"
-            :value="$groups->count()"
-            meta="Aulas escolares registradas"
-            nav-icon="groups"
-            tone="tech"
-        />
-
-        <x-kpi-card
-            label="Grupos activos"
-            :value="$groups->where('is_closed', false)->count()"
-            meta="En ciclo lectivo vigente"
-            icon="success"
-            tone="accent"
-        />
-
-        <x-kpi-card
-            label="Grupos cerrados"
-            :value="$groups->where('is_closed', true)->count()"
-            meta="Ciclos escolares concluidos"
-            icon="lock"
-            tone="neutral"
-        />
-
-        <x-kpi-card
-            label="Estudiantes inscritos"
-            :value="$groups->sum('students_count')"
-            meta="Censo total en tus aulas"
-            icon="user"
-            tone="primary"
-        />
-    </div>
-
-    {{-- Nivel 3: Barra de Búsqueda, Filtros de Estado y Alternador de Vista --}}
-    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            {{-- Buscador predictivo multidimensional --}}
-            <div class="w-full lg:max-w-md">
-                <label for="group-search" class="sr-only">
-                    Buscar grupo, materia o folio
-                </label>
-                <div class="relative">
-                    <x-form.input
-                        id="group-search"
-                        type="text"
-                        enterkeyhint="search"
-                        autocomplete="off"
-                        prefixIcon="search"
-                        x-model="search"
-                        placeholder="Buscar por grupo, asignatura o folio..."
-                        class="pr-10"
-                    />
-                    <button
-                        type="button"
-                        title="Limpiar búsqueda"
-                        aria-label="Limpiar búsqueda"
-                        x-show="search.length > 0"
-                        x-cloak
-                        x-on:click="search = ''"
-                        class="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-acode-tech"
-                    >
-                        <x-icon name="xMark" class="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
-
-            {{-- Filtros de estado y switch de vista --}}
-            <div class="flex flex-wrap items-center justify-between lg:justify-end gap-3">
-                <x-toggle-group
-                    model="filter"
-                    :options="['all' => 'Todos', 'active' => 'Activos', 'closed' => 'Cerrados']"
-                    label="Filtrar grupos por estado"
-                />
-
-                <div class="hidden sm:block h-6 w-px bg-slate-200"></div>
-
-                <x-toggle-group
-                    model="viewMode"
-                    variant="segmented"
-                    :options="[
-                        ['value' => 'grid', 'label' => 'Cuadrícula', 'icon' => 'squares2x2'],
-                        ['value' => 'list', 'label' => 'Lista', 'icon' => 'listBullet'],
-                    ]"
-                    label="Cambiar vista de grupos"
-                />
-            </div>
-        </div>
-    </div>
-
-    {{-- Estado Inicial: Sin grupos creados en base de datos --}}
-    @if ($groups->isEmpty())
+    @if ($catalogGroups->isEmpty())
         <x-empty-state
             icon="userGroup"
             title="Todavía no tienes grupos escolares"
-            message="Crea tu primer grupo escolar para organizar a tus estudiantes, asignar exámenes y gestionar evaluaciones por periodos."
-        >
-            <x-button :href="route('groups.create')" variant="primary" size="md">
-                <x-icon name="add" class="w-4 h-4" />
-                Crear grupo
-            </x-button>
-        </x-empty-state>
+            message="Crea tu primer grupo para inscribir estudiantes y gestionar sus periodos de evaluación."
+        />
     @else
-        {{-- Cabecera de Resultados y Conteo --}}
-        <x-section-header title="Grupos registrados">
-            <x-slot:actions>
-                <p class="text-xs sm:text-sm text-slate-500">
-                    Mostrando
-                    <span class="font-bold text-acode-primary" x-text="filteredGroups.length"></span>
-                    de
-                    <span class="font-bold text-slate-700">{{ $groups->count() }}</span>
-                    {{ $groups->count() === 1 ? 'grupo' : 'grupos' }}
-                </p>
-            </x-slot:actions>
-        </x-section-header>
+        <section class="space-y-3" aria-label="Catálogo de grupos">
+            <form role="search" aria-label="Grupos" x-on:submit.prevent="search = searchInput">
+                <x-search-panel>
+                    <x-slot:field>
+                        <x-form.input
+                            id="group-search"
+                            type="search"
+                            prefix-icon="search"
+                            enterkeyhint="search"
+                            autocomplete="off"
+                            aria-label="Buscar grupos"
+                            x-ref="groupSearch"
+                            x-model="searchInput"
+                            @input.debounce.300ms="search = searchInput"
+                            placeholder="Buscar por nombre, asignatura o folio…"
+                        />
+                    </x-slot:field>
 
-        {{-- Nivel 4A: Cuadrícula de Tarjetas (Grid View) --}}
-        <div
-            x-show="filteredGroups.length > 0 && viewMode === 'grid'"
-            class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
-        >
-            <template x-for="group in filteredGroups" :key="group.id">
-                <article class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-acode-tech/40 hover:shadow-md">
-                    <div>
-                        {{-- Cabecera de tarjeta: Materia + Badge semántico de estado --}}
-                        <div class="flex items-start justify-between gap-3">
-                            <span
-                                class="text-xs font-semibold uppercase tracking-wider text-acode-tech break-words"
-                                x-text="group.subject || 'Sin asignatura'"
-                            ></span>
-
-                            <span
-                                class="inline-flex items-center rounded-full text-xs px-2.5 py-0.5 font-semibold tracking-wide shrink-0"
-                                :class="group.is_closed
-                                    ? 'bg-slate-100 text-slate-700 border border-slate-200'
-                                    : 'bg-acode-accent/15 text-acode-primary border border-acode-accent/40'"
-                                x-text="group.is_closed ? 'Cerrado' : 'Activo'"
-                            ></span>
-                        </div>
-
-                        {{-- Título del grupo escolar --}}
-                        <h3
-                            class="mt-3 break-words text-lg font-bold text-acode-primary leading-snug"
-                            x-text="group.name"
-                        ></h3>
-
-                        {{-- Chip de folio de acceso alfanumérico con botón de copiado --}}
-                        <div class="mt-4 flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-acode-surface/60 px-3 py-2">
-                            <div class="flex items-center gap-1.5 overflow-hidden">
-                                <span class="text-xs font-semibold text-slate-500 shrink-0">Folio:</span>
-                                <span
-                                    class="font-mono text-xs sm:text-sm font-bold tracking-wider text-acode-primary truncate select-all"
-                                    x-text="group.folio || 'N/D'"
-                                ></span>
-                            </div>
-
-                            <x-button
-                                variant="neutral"
-                                size="sm"
-                                type="button"
-                                x-on:click="copyFolio(group.folio)"
-                                title="Copiar folio al portapapeles"
-                            >
-                                <x-icon name="copy" class="w-3.5 h-3.5" />
-                                <span>Copiar</span>
-                            </x-button>
-                        </div>
-
-                        {{-- Conteo de estudiantes --}}
-                        <div class="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3 text-xs text-slate-600">
-                            <x-icon name="userGroup" class="w-4 h-4 text-acode-tech shrink-0" />
-                            <span class="font-bold text-slate-800" x-text="group.students_count"></span>
-                            <span x-text="group.students_count === 1 ? 'estudiante inscrito' : 'estudiantes inscritos'"></span>
-                        </div>
-                    </div>
-
-                    {{-- Tríada de botones de acción canónicos --}}
-                    <div class="mt-5 flex items-center gap-2 border-t border-slate-100 pt-4">
-                        <x-button
-                            ::href="group.url"
-                            variant="primary"
-                            size="sm"
-                            class="flex-1"
-                        >
-                            Abrir grupo
-                        </x-button>
-
-                        <x-button
-                            ::href="group.periods_url"
-                            variant="neutral"
-                            size="sm"
-                        >
-                            Abrir periodos
-                        </x-button>
-
+                    <x-slot:actions>
                         <x-button
                             type="button"
-                            variant="neutral"
-                            size="sm"
-                            :icon-only="true"
-                            @click="openQr(group)"
-                            title="Abrir QR del grupo"
-                            aria-label="Abrir QR del grupo"
+                            variant="secondary"
+                            x-show="searchInput !== '' || filter !== 'all' || subjectFilter"
+                            x-cloak
+                            @click="clearFilters()"
                         >
-                            <x-icon name="qrCode" class="w-4 h-4 text-acode-primary" />
+                            Limpiar filtros
                         </x-button>
-                    </div>
-                </article>
-            </template>
-        </div>
+                    </x-slot:actions>
 
-        {{-- Nivel 4B: Vista de Tabla Compacta (List View) --}}
-        <div
-            x-show="filteredGroups.length > 0 && viewMode === 'list'"
-            x-cloak
-        >
-            <x-table>
-                <x-slot:header>
-                    <x-table.th>Grupo</x-table.th>
-                    <x-table.th>Folio de acceso</x-table.th>
-                    <x-table.th align="center">Estudiantes inscritos</x-table.th>
-                    <x-table.th align="center">Estado</x-table.th>
-                    <x-table.th align="right">Acciones</x-table.th>
-                </x-slot:header>
+                    <x-slot:filters>
+                        <x-form.group field-id="group-status" label="Estado" class="sm:w-44">
+                            <x-form.select id="group-status" size="sm" x-model="filter">
+                                <option value="all">Todos</option>
+                                <option value="active">Activos</option>
+                                <option value="closed">Cerrados</option>
+                            </x-form.select>
+                        </x-form.group>
 
-                <template x-for="group in filteredGroups" :key="group.id">
-                    <tr>
-                        <x-table.td>
-                            <div class="font-bold text-acode-primary text-sm" x-text="group.name"></div>
-                            <div class="text-xs font-semibold text-acode-tech mt-0.5" x-text="group.subject || 'Sin asignatura'"></div>
-                        </x-table.td>
+                        <x-form.group field-id="group-subject" label="Asignatura" class="sm:w-48">
+                            <x-form.select id="group-subject" size="sm" x-model="subjectFilter">
+                                <option value="">Todas</option>
+                                @foreach ($subjects as $subject)
+                                    <option value="{{ $subject }}">{{ $subject }}</option>
+                                @endforeach
+                            </x-form.select>
+                        </x-form.group>
+                    </x-slot:filters>
+                </x-search-panel>
+            </form>
 
-                        <x-table.td>
-                            <div class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-acode-surface/60 px-2.5 py-1">
-                                <span class="font-mono text-xs font-bold text-acode-primary select-all" x-text="group.folio || 'N/D'"></span>
-                                <x-button
-                                    type="button"
-                                    variant="neutral"
-                                    size="sm"
-                                    :icon-only="true"
-                                    title="Copiar folio"
-                                    aria-label="Copiar folio"
-                                    x-on:click="copyFolio(group.folio)"
-                                    class="!h-6 !w-6"
-                                >
-                                    <x-icon name="copy" class="w-3.5 h-3.5" />
-                                </x-button>
-                            </div>
-                        </x-table.td>
+            <x-section-header title="Grupos registrados" :institutional="true">
+                <x-slot:actions>
+                    <p class="text-sm text-slate-700" role="status" aria-atomic="true">
+                        Mostrando
+                        <span class="font-semibold text-acode-primary" x-text="filteredGroups.length">{{ $groupCount }}</span>
+                        de {{ $groupCount }} {{ $groupCount === 1 ? 'grupo' : 'grupos' }}
+                    </p>
 
-                        <x-table.td align="center">
-                            <div class="inline-flex items-center gap-1.5 text-xs text-slate-700">
-                                <x-icon name="userGroup" class="w-4 h-4 text-acode-tech shrink-0" />
-                                <span class="font-bold text-slate-800" x-text="group.students_count"></span>
-                            </div>
-                        </x-table.td>
-
-                        <x-table.td align="center">
-                            <span
-                                class="inline-flex items-center rounded-full text-xs px-2.5 py-0.5 font-semibold tracking-wide"
-                                :class="group.is_closed
-                                    ? 'bg-slate-100 text-slate-700 border border-slate-200'
-                                    : 'bg-acode-accent/15 text-acode-primary border border-acode-accent/40'"
-                                x-text="group.is_closed ? 'Cerrado' : 'Activo'"
-                            ></span>
-                        </x-table.td>
-
-                        <x-table.td align="right">
-                            <div class="flex items-center justify-end gap-1.5">
-                                <x-button
-                                    ::href="group.url"
-                                    variant="primary"
-                                    size="sm"
-                                >
-                                    Abrir grupo
-                                </x-button>
-
-                                <x-button
-                                    ::href="group.periods_url"
-                                    variant="neutral"
-                                    size="sm"
-                                >
-                                    Abrir periodos
-                                </x-button>
-
-                                <x-button
-                                    type="button"
-                                    variant="neutral"
-                                    size="sm"
-                                    :icon-only="true"
-                                    @click="openQr(group)"
-                                    title="Abrir QR"
-                                    aria-label="Abrir QR"
-                                >
-                                    <x-icon name="qrCode" class="w-4 h-4 text-acode-primary" />
-                                </x-button>
-                            </div>
-                        </x-table.td>
-                    </tr>
-                </template>
-            </x-table>
-        </div>
-
-        {{-- Sin coincidencias por búsqueda o filtro --}}
-        <div x-show="filteredGroups.length === 0" x-cloak>
-            <x-empty-state
-                icon="search"
-                title="No encontramos grupos escolares"
-                message="No se encontraron grupos que coincidan con los criterios de búsqueda o filtro seleccionados."
-            >
-                <x-button
-                    type="button"
-                    variant="neutral"
-                    size="sm"
-                    @click="search = ''; filter = 'all'"
-                >
-                    Limpiar filtros
-                </x-button>
-            </x-empty-state>
-        </div>
-    @endif
-
-    {{-- Nivel 5: Modal Dinámico de Código QR Institucional --}}
-    <div
-        x-show="qrModalOpen"
-        x-cloak
-        class="fixed inset-0 z-50 overflow-y-auto px-4 py-6 sm:px-0 flex items-center justify-center"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="qr-modal-title"
-    >
-        {{-- Fondo oscurecido y desenfocado normativo --}}
-        <div
-            x-show="qrModalOpen"
-            x-transition:enter="ease-out duration-200"
-            x-transition:enter-start="opacity-0"
-            x-transition:enter-end="opacity-100"
-            x-transition:leave="ease-in duration-150"
-            x-transition:leave-start="opacity-100"
-            x-transition:leave-end="opacity-0"
-            class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-            @click="closeQr()"
-            aria-hidden="true"
-        ></div>
-
-        {{-- Contenedor de la ventana modal --}}
-        <div
-            x-show="qrModalOpen"
-            x-transition:enter="ease-out duration-200"
-            x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-            x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
-            x-transition:leave="ease-in duration-150"
-            x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
-            x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-            class="relative bg-white rounded-2xl shadow-xl overflow-hidden transform transition-all w-full border border-slate-200 z-10 sm:max-w-md"
-        >
-            {{-- Encabezado --}}
-            <div class="flex items-center justify-between gap-3 px-6 py-4 border-b border-slate-100 bg-slate-50/70">
-                <h3 id="qr-modal-title" class="text-base font-bold text-acode-primary tracking-tight truncate">
-                    Código QR y Folio · <span x-text="selectedGroup?.name || 'Grupo escolar'"></span>
-                </h3>
-                <x-button
-                    type="button"
-                    variant="neutral"
-                    size="sm"
-                    :icon-only="true"
-                    title="Cerrar ventana"
-                    aria-label="Cerrar ventana"
-                    x-on:click="closeQr()"
-                >
-                    <x-icon name="xMark" class="w-4 h-4" />
-                </x-button>
-            </div>
-
-            {{-- Cuerpo del modal --}}
-            <div class="px-6 py-5 text-sm text-slate-700 flex flex-col items-center text-center">
-                <p class="text-xs text-slate-500 mb-4 max-w-xs">
-                    Comparte este código QR o el folio alfanumérico con tus estudiantes para que se inscriban al grupo escolar.
-                </p>
-
-                <div class="p-3 bg-white border border-slate-200 rounded-2xl shadow-sm mb-4 inline-flex items-center justify-center">
-                    <img
-                        :src="'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(selectedGroup?.folio || '') + '&color=14-43-74&bgcolor=255-255-255&margin=1'"
-                        :alt="'Código QR de acceso al grupo ' + (selectedGroup?.name || '')"
-                        class="w-48 h-48 object-contain rounded-lg"
-                        loading="lazy"
+                    <x-toggle-group
+                        model="viewMode"
+                        variant="segmented"
+                        :options="[
+                            ['value' => 'grid', 'label' => 'Cuadrícula', 'icon' => 'squares2x2'],
+                            ['value' => 'list', 'label' => 'Lista', 'icon' => 'listBullet'],
+                        ]"
+                        label="Cambiar vista de grupos"
                     />
-                </div>
+                </x-slot:actions>
+            </x-section-header>
 
-                <div class="w-full bg-acode-surface border border-slate-200 rounded-xl p-3 mb-4">
-                    <span class="text-xs font-semibold text-slate-500 block mb-1">
-                        Folio alfanumérico oficial
-                    </span>
-                    <span
-                        class="font-mono text-2xl font-bold tracking-widest text-acode-primary block select-all"
-                        x-text="selectedGroup?.folio || '------'"
-                    ></span>
-                </div>
+            <p class="sr-only" role="status" aria-atomic="true" x-text="copyResult?.message || ''"></p>
 
-                <div class="flex items-center justify-center gap-3 w-full">
-                    <x-button
-                        type="button"
-                        variant="accent"
-                        size="md"
-                        class="w-full"
-                        @click="copyFolio(selectedGroup?.folio)"
-                    >
-                        <x-icon name="check" class="w-4 h-4" x-show="copiedFolio" />
-                        <x-icon name="copy" class="w-4 h-4" x-show="!copiedFolio" />
-                        <span x-text="copiedFolio ? '¡Folio copiado!' : 'Copiar folio'"></span>
-                    </x-button>
-                </div>
+            <div
+                x-show="filteredGroups.length > 0 && viewMode === 'grid'"
+                class="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3"
+            >
+                <template x-for="group in filteredGroups" :key="group.id">
+                    <x-card class="min-w-0 transition hover:border-acode-tech hover:shadow-md" padding="p-4">
+                        <div class="space-y-1.5">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <span class="break-words text-xs font-semibold uppercase tracking-wider text-acode-tech"
+                                      x-text="group.subject"></span>
+                                <x-badge class="shrink-0" variant="accent" x-show="!group.is_closed">Activo</x-badge>
+                                <x-badge class="shrink-0" variant="neutral" x-show="group.is_closed">Cerrado</x-badge>
+                            </div>
+                            <h3 class="break-words text-base font-semibold leading-6 text-acode-primary"
+                                x-text="group.name"></h3>
+                        </div>
+
+                        <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-700">
+                            <span class="font-mono font-semibold">
+                                Folio: <span class="select-all" x-text="group.folio || 'No disponible'"></span>
+                            </span>
+                            <span x-text="group.students_count + (group.students_count === 1 ? ' estudiante inscrito' : ' estudiantes inscritos')"></span>
+                        </div>
+
+                        <div class="mt-2">
+                            @include('groups.partials._catalog-actions')
+                        </div>
+                    </x-card>
+                </template>
             </div>
 
-            {{-- Pie de acciones --}}
-            <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
-                <x-button
-                    type="button"
-                    variant="neutral"
-                    size="md"
-                    @click="closeQr()"
-                >
-                    Cerrar
-                </x-button>
-            </div>
-        </div>
-    </div>
+            <div x-show="filteredGroups.length > 0 && viewMode === 'list'" x-cloak>
+                <p class="mb-2 text-xs text-slate-700 sm:hidden">Desliza la tabla para ver todas las columnas.</p>
+                <x-table zebra="slate" scroll-label="Grupos registrados">
+                    <x-slot:header>
+                        <x-table.th align="center">Grupo</x-table.th>
+                        <x-table.th align="center">Folio de acceso</x-table.th>
+                        <x-table.th align="center">Estudiantes inscritos</x-table.th>
+                        <x-table.th align="center">Estado</x-table.th>
+                        <x-table.th align="center">Acciones</x-table.th>
+                    </x-slot:header>
 
+                    <template x-for="group in filteredGroups" :key="group.id">
+                        <tr>
+                            <th scope="row" class="min-w-40 px-4 py-3 text-left text-sm">
+                                <div class="font-semibold text-acode-primary" x-text="group.name"></div>
+                                <div class="mt-0.5 text-xs font-normal text-slate-700" x-text="group.subject"></div>
+                            </th>
+                            <x-table.td>
+                                <span class="select-all whitespace-nowrap font-mono text-xs font-semibold text-acode-primary"
+                                      x-text="group.folio || 'No disponible'"></span>
+                            </x-table.td>
+                            <x-table.td align="center">
+                                <span x-text="group.students_count"></span>
+                            </x-table.td>
+                            <x-table.td align="center">
+                                <x-badge variant="accent" x-show="!group.is_closed">Activo</x-badge>
+                                <x-badge variant="neutral" x-show="group.is_closed">Cerrado</x-badge>
+                            </x-table.td>
+                            <x-table.td>
+                                @include('groups.partials._catalog-actions')
+                            </x-table.td>
+                        </tr>
+                    </template>
+                </x-table>
+            </div>
+
+            <div x-show="filteredGroups.length === 0" x-cloak>
+                <x-empty-state
+                    icon="search"
+                    title="No hay grupos que coincidan"
+                    message="Cambia la búsqueda o limpia los filtros para ver otros grupos."
+                />
+            </div>
+        </section>
+
+        <x-catalog-summary title="Resumen de grupos">
+            <x-summary-item label="Total de grupos" :value="$groupCount" icon="squares2x2" />
+            <x-summary-item label="Grupos activos" :value="$activeGroupCount" icon="success" />
+            <x-summary-item label="Grupos cerrados" :value="$groupCount - $activeGroupCount" icon="lock" />
+            <x-summary-item label="Matrículas" :value="$groups->sum('students_count')" icon="userGroup" />
+        </x-catalog-summary>
+
+        <x-group.qr-modal />
+    @endif
 </div>
 @endsection

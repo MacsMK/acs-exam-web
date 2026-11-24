@@ -367,6 +367,35 @@ class BackendArchitectureAndSecurityTest extends TestCase
         $this->assertSame([$ownGroup->id], $examA->groups()->pluck('acs_groups.id')->all());
     }
 
+    /**
+     * Verifica que una respuesta omitida se distinga de la primera opción válida.
+     * @return void
+     */
+    public function test_web_multiple_choice_keeps_blank_distinct_from_option_zero(): void
+    {
+        $teacher = $this->createUser('teacher');
+        $student = $this->createUser('student');
+        [$exam, $section] = $this->createPublishedExamForStudent($teacher, $student);
+        [$firstQuestion, $first] = $this->attachMultipleChoiceQuestion($exam, $section, $teacher, 0);
+        [$secondQuestion, $second] = $this->attachMultipleChoiceQuestion($exam, $section, $teacher, 1);
+        $firstQuestion->questionable->update(['correct_option_index' => 0]);
+        $secondQuestion->questionable->update(['correct_option_index' => 0]);
+
+        $start = $this->actingAs($student)->post(route('attempts.start', $exam))->assertSessionHasNoErrors()->assertRedirect();
+        $sessionCookie = config('session.cookie');
+        $this->withCookie($sessionCookie, $start->getCookie($sessionCookie)->getValue());
+        $attempt = StudentAttempt::whereBelongsTo($exam)->sole();
+        $this->post(route('attempts.answer', $attempt), [
+            'exam_question_id' => $first->id, 'selected_option_index' => null,
+        ])->assertSessionHasNoErrors()->assertRedirect(route('attempts.show', $attempt));
+        $this->post(route('attempts.answer', $attempt), [
+            'exam_question_id' => $second->id, 'selected_option_index' => 0,
+        ])->assertSessionHasNoErrors()->assertRedirect(route('attempts.show', $attempt));
+
+        $this->assertEquals(0, $attempt->answers()->where('exam_question_id', $first->id)->sole()->points_awarded);
+        $this->assertEquals(10, $attempt->answers()->where('exam_question_id', $second->id)->sole()->points_awarded);
+    }
+
     public function test_empty_open_and_code_answers_bypass_ai_evaluator_and_award_zero_points(): void
     {
         $aiEvaluationCalls = 0;

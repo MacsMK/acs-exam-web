@@ -41,7 +41,7 @@ return [
 
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY', env('AI_API_KEY')),
-        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+        'model' => env('GEMINI_MODEL', \App\Services\Ai\GeminiAiEvaluator::DEFAULT_MODEL),
         'timeout' => (int) env('GEMINI_TIMEOUT', 15),
         'circuit_failure_threshold' => (int) env('GEMINI_CIRCUIT_FAILURE_THRESHOLD', 3),
         'circuit_cooldown_seconds' => (int) env('GEMINI_CIRCUIT_COOLDOWN_SECONDS', 60),

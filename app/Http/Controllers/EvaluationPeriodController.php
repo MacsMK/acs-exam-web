@@ -17,22 +17,34 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Requests\EvaluationPeriodStoreRequest;
+use App\Http\Requests\EvaluationPeriodUpdateRequest;
 use App\Http\Requests\GradebookSaveRequest;
 use App\Models\EvaluationPeriod;
+use App\Models\Exam;
 use App\Models\Group;
-use App\Models\StudentAttempt;
-use App\Models\StudentPeriodGrade;
-use App\Services\GradeCalculatorService;
+use App\Services\GradePlanService;
+use App\Services\GroupGradeResults;
+use App\Services\GradebookEntryService;
 use App\Services\GradeSheetExportService;
+use App\Support\GradebookCatalogContext;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Normalizer;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EvaluationPeriodController extends Controller
 {
     public function __construct(
-        private readonly GradeCalculatorService $gradeCalculator,
+        private readonly GradebookEntryService $entryService,
+        private readonly GroupGradeResults $results,
         private readonly GradeSheetExportService $gradeSheetExportService,
     ) {
     }
@@ -40,38 +52,108 @@ class EvaluationPeriodController extends Controller
     /**
      * Hub concentrador de periodos y sábanas de calificaciones por grupo.
      */
-    public function hub(\Illuminate\Http\Request $request): View
+    public function hub(Request $request): View|Response|RedirectResponse
     {
-        $teacher = $request->user();
+        $teacherId = (int) $request->user()->id;
+        $filters = GradebookCatalogContext::filters($request);
+        $teacherGroups = Group::forTeacher($teacherId);
+        $matchingGroups = clone $teacherGroups;
 
-        $groups = Group::where('teacher_id', $teacher->id)
+        $this->filterGradebookGroups($matchingGroups, $filters);
+
+        $groups = (clone $matchingGroups)
             ->withCount(['students', 'evaluationPeriods', 'exams'])
-            ->with(['evaluationPeriods' => function ($query): void {
-                $query->orderBy('starts_at');
-            }])
+            ->with(['evaluationPeriods' => fn ($query) => $query->orderBy('starts_at')->orderBy('id')])
             ->latest()
-            ->paginate(12);
+            ->orderByDesc('id')
+            ->paginate(12)
+            ->appends(GradebookCatalogContext::query($filters));
 
-        return view('teacher.gradebook.hub', [
+        if ($groups->currentPage() > $groups->lastPage()) {
+            return to_route('teacher.gradebook.hub', GradebookCatalogContext::query($filters, $groups->lastPage()));
+        }
+
+        $matchingGroupIds = $matchingGroups->select('acs_groups.id')->toBase();
+        $stats = [
+            'periods' => EvaluationPeriod::whereIn('group_id', $matchingGroupIds)->count(),
+            'examAssignments' => DB::table('acs_exam_group')->whereIn('group_id', $matchingGroupIds)
+                ->whereIn('exam_id', Exam::forTeacher($teacherId)->select('acs_exams.id'))->count(),
+        ];
+
+        $view = view('teacher.gradebook.hub', [
             'groups' => $groups,
+            'hasGroups' => $groups->total() > 0 || $teacherGroups->exists(),
+            'filters' => $filters,
+            'subjects' => $teacherGroups->whereNotNull('subject')->where('subject', '<>', '')
+                ->distinct()->orderBy('subject')->pluck('subject'),
+            'stats' => $stats,
+            'returnQuery' => GradebookCatalogContext::returnQuery(
+                GradebookCatalogContext::query($filters, $groups->currentPage()),
+            ),
         ]);
+
+        if ($request->header('X-Catalog-Fragment') === 'teacher-gradebook-results') {
+            return response($view->fragment('teacher-gradebook-results'))->header('Cache-Control', 'no-store');
+        }
+
+        return $view;
+    }
+
+    /** @param array{search: string, status: string, subject: string} $filters */
+    private function filterGradebookGroups(EloquentBuilder $groups, array $filters): void
+    {
+        if ($filters['status'] !== 'all') {
+            $groups->where('is_closed', $filters['status'] === 'closed');
+        }
+
+        if ($filters['subject'] !== '') {
+            $groups->where('subject', $filters['subject']);
+        }
+
+        $normalized = Normalizer::normalize($filters['search'], Normalizer::FORM_D) ?: $filters['search'];
+        $search = mb_strtolower(preg_replace('/[\x{0300}-\x{036F}]/u', '', $normalized) ?? $normalized, 'UTF-8');
+        if ($search === '') {
+            return;
+        }
+
+        $groups->where(function (EloquentBuilder $query) use ($search): void {
+            foreach (['name', 'subject', 'access_folio'] as $column) {
+                $folded = "regexp_replace(lower(normalize(coalesce({$column}, ''), NFD)) COLLATE \"C\", U&'[\\0300-\\036F]', '', 'g')";
+                $query->orWhereRaw("strpos({$folded}, ?) > 0", [$search]);
+            }
+        });
     }
 
     /**
      * Lista los periodos de evaluación configurados para un grupo escolar.
      */
-    public function index(Group $group): View
+    public function index(Request $request, Group $group): View
     {
         $this->authorizeTeacher($group);
 
         $periods = $group->evaluationPeriods()
-            ->withCount('studentGrades')
+            ->with('previousPeriods')
+            ->addSelect([
+                'required_exams_count' => DB::table('acs_period_required_exams')->selectRaw('COUNT(*)')
+                    ->whereColumn('period_id', 'acs_evaluation_periods.id'),
+                'weighted_exams_count' => DB::table('acs_period_exam_weights')->selectRaw('COUNT(*)')
+                    ->whereColumn('period_id', 'acs_evaluation_periods.id'),
+            ])
             ->orderBy('starts_at')
+            ->orderBy('id')
             ->get();
+
+        $gradedByPeriod = collect($this->results->calculate($group)['rows'])
+            ->map(fn (array $rows) => collect($rows)->filter(fn ($grade) => $grade->final_grade !== null)->keys());
 
         return view('evaluation-periods.index', [
             'group' => $group,
             'periods' => $periods,
+            'gradedByPeriod' => $gradedByPeriod->map->count(),
+            'evaluatedStudentsTotal' => $gradedByPeriod->flatten()->unique()->count(),
+            'examApplications' => $group->is_closed ? collect() : $this->examApplicationOptions($group),
+            'catalogContext' => GradebookCatalogContext::destinationQuery($request),
+            'catalogQuery' => GradebookCatalogContext::fromReturn($request),
         ]);
     }
 
@@ -82,8 +164,6 @@ class EvaluationPeriodController extends Controller
     {
         $this->authorizeTeacher($group);
 
-        abort_if($group->is_closed, 403, 'No es posible registrar periodos de evaluación en un grupo escolar cerrado.');
-
         $wExams = round(((float) $request->input('exams_weight')) / 100, 4);
         $wHw = round(((float) $request->input('homework_weight')) / 100, 4);
         $wProj = round(((float) $request->input('project_weight')) / 100, 4);
@@ -91,53 +171,192 @@ class EvaluationPeriodController extends Controller
 
         $formula = "exams*{$wExams}+homework*{$wHw}+project*{$wProj}+other*{$wOther}";
 
-        $group->evaluationPeriods()->create([
-            'name' => (string) $request->input('name'),
-            'formula' => $formula,
-            'starts_at' => $request->input('starts_at'),
-            'ends_at' => $request->input('ends_at'),
-        ]);
+        $catalogContext = GradebookCatalogContext::destinationQuery($request);
+        $destination = route('groups.periods.index', [$group, ...$catalogContext]);
+        try {
+            DB::transaction(function () use ($request, $group, $formula): void {
+                $group = Group::whereKey($group->id)->lockForUpdate()->firstOrFail();
+                $this->authorizeTeacher($group);
+                abort_if($group->is_closed, 403, 'No es posible registrar periodos de evaluación en un grupo escolar cerrado.');
 
-        return redirect()
-            ->route('groups.periods.index', $group)
+                $period = $group->evaluationPeriods()->create([
+                    'name' => (string) $request->input('name'),
+                    'formula' => $formula,
+                    'starts_at' => $request->input('starts_at'),
+                    'ends_at' => $request->input('ends_at'),
+                ]);
+                $this->saveExamSelection($request, $group, $period);
+            });
+        } catch (ValidationException $exception) {
+            if ($catalogContext !== []) {
+                $exception->redirectTo($destination);
+            }
+
+            throw $exception;
+        }
+
+        return redirect($destination)
             ->with('status', 'Periodo de evaluación creado correctamente.');
+    }
+
+    public function edit(Group $group, EvaluationPeriod $period): View
+    {
+        $this->authorizeTeacher($group);
+        abort_unless($period->group_id === $group->id, 404);
+        abort_if($group->is_closed, 403);
+
+        $selected = $period->requiredExamApplicationIds();
+
+        return view('evaluation-periods.edit', [
+            'group' => $group,
+            'period' => $period,
+            'selectedExamApplicationIds' => $selected,
+            'examApplications' => $this->examApplicationOptions($group, $selected),
+            'periodHasWeightedExams' => DB::table('acs_period_exam_weights')->where('period_id', $period->id)->exists(),
+        ]);
+    }
+
+    public function update(
+        EvaluationPeriodUpdateRequest $request,
+        Group $group,
+        EvaluationPeriod $period,
+    ): RedirectResponse {
+        DB::transaction(function () use ($request, $group, $period): void {
+            $group = Group::whereKey($group->id)->lockForUpdate()->firstOrFail();
+            $this->authorizeTeacher($group);
+            abort_if($group->is_closed, 403);
+            $period = $group->evaluationPeriods()->whereKey($period->id)->firstOrFail();
+            $details = $request->safe()->only(['name', 'starts_at', 'ends_at']);
+            $start = $details['starts_at'];
+
+            if ($start !== $period->starts_at->toDateString()) {
+                if ($start < EvaluationPeriodStoreRequest::earliestStartDate()->toDateString()) {
+                    throw ValidationException::withMessages([
+                        'starts_at' => $request->messages()['starts_at.after_or_equal'],
+                    ]);
+                }
+
+                $source = $period->previousPeriods()->where('acs_evaluation_periods.starts_at', '>=', $start)
+                    ->value('acs_evaluation_periods.name');
+                if ($source !== null) {
+                    throw ValidationException::withMessages([
+                        'starts_at' => "El periodo debe empezar después de «{$source}» porque usa sus calificaciones",
+                    ]);
+                }
+
+                $dependent = $group->evaluationPeriods()->where('starts_at', '<=', $start)
+                    ->whereHas('previousPeriods', fn ($sources) => $sources->whereKey($period->id))
+                    ->value('name');
+                if ($dependent !== null) {
+                    throw ValidationException::withMessages([
+                        'starts_at' => "El periodo debe empezar antes de «{$dependent}» porque ese periodo usa sus calificaciones",
+                    ]);
+                }
+            } else {
+                unset($details['starts_at']);
+            }
+
+            if ($details['ends_at'] === $period->ends_at->toDateString()) {
+                unset($details['ends_at']);
+            }
+
+            $period->update($details);
+            $this->saveExamSelection($request, $group, $period);
+        });
+
+        return to_route('groups.periods.index', $group)->with('status', 'Periodo de evaluación actualizado');
+    }
+
+    private function saveExamSelection(FormRequest $request, Group $group, EvaluationPeriod $period): void
+    {
+        if (! $request->boolean('uses_exam_selection')) {
+            return;
+        }
+
+        if (DB::table('acs_period_exam_weights')->where('period_id', $period->id)->exists()) {
+            throw ValidationException::withMessages([
+                'required_exam_ids' => 'El periodo ya usa aplicaciones ponderadas. Edita esas aplicaciones desde Ponderaciones',
+            ]);
+        }
+
+        $requested = array_map('intval', $request->validated('required_exam_ids') ?? []);
+        $current = $period->requiredExamApplicationIds();
+        $available = $this->selectableExamApplications($group, $current)
+            ->whereIn('a.id', $requested)->lock('for key share of a')->pluck('a.id')->all();
+
+        if (array_diff($requested, $available) !== []) {
+            throw ValidationException::withMessages([
+                'required_exam_ids' => 'Selecciona aplicaciones publicadas de este grupo. Las aplicaciones ya seleccionadas se pueden conservar',
+            ]);
+        }
+
+        DB::table('acs_period_required_exams')->where('period_id', $period->id)
+            ->whereNotIn('application_id', $requested)->delete();
+        $added = array_diff($requested, $current);
+        if ($added !== []) {
+            DB::table('acs_period_required_exams')->insert(array_map(
+                static fn (int $applicationId): array => ['period_id' => $period->id, 'application_id' => $applicationId],
+                array_values($added),
+            ));
+        }
+        $period->forceFill(['uses_exam_selection' => true])->save();
+    }
+
+    /** @param list<int> $retained IDs ya seleccionados que se pueden conservar aunque se despubliquen. */
+    private function selectableExamApplications(Group $group, array $retained): Builder
+    {
+        return DB::table('acs_exam_group as a')->join('acs_exams as e', 'e.id', '=', 'a.exam_id')
+            ->where('a.group_id', $group->id)->where('e.teacher_id', $group->teacher_id)
+            ->where(fn (Builder $query) => $query->where('e.is_published', true)->orWhereIn('a.id', $retained));
+    }
+
+    /** @param list<int> $retained IDs ya seleccionados en la edición. */
+    private function examApplicationOptions(Group $group, array $retained = []): Collection
+    {
+        return $this->selectableExamApplications($group, $retained)
+            ->orderBy('e.starts_at')->orderBy('a.id')
+            ->get(['a.id', 'e.title', 'e.starts_at', 'e.is_published']);
     }
 
     /**
      * Sábana de calificaciones del grupo para un periodo específico.
      */
-    public function gradebook(Group $group, EvaluationPeriod $period): View
+    public function gradebook(Request $request, Group $group, EvaluationPeriod $period): View|RedirectResponse
     {
         $this->authorizeTeacher($group);
         abort_unless($period->group_id === $group->id, 404);
 
-        $students = $group->students()
-            ->orderBy('last_name')
-            ->orderBy('first_name')
-            ->get();
+        $catalogContext = GradebookCatalogContext::destinationQuery($request);
+        $students = $this->entryService->students($group)->paginate(GradebookEntryService::PAGE_SIZE)->appends($catalogContext);
+        if ($students->currentPage() > $students->lastPage()) {
+            $request->session()->keep(['errors', '_old_input']);
 
-        $savedGrades = $period->studentGrades->keyBy('student_id');
+            return to_route('groups.periods.gradebook', [$group, $period, ...$catalogContext, 'page' => $students->lastPage()]);
+        }
 
-        // Promedio de exámenes reales aplicados en este grupo para pre-llenado sugerido
-        $examIds = $group->exams()->pluck('acs_exams.id');
-        $examAverages = StudentAttempt::current()
-            ->whereIn('exam_id', $examIds)
-            ->where('group_id', $group->id)
-            ->whereNotNull('final_score')
-            ->groupBy('student_id')
-            ->selectRaw('student_id, AVG(final_score) as avg_score')
-            ->pluck('avg_score', 'student_id')
-            ->map(fn ($score) => round((float) $score, 2));
+        $results = $this->results->calculate($group, breakdownPeriodId: $period->id);
+        $savedGrades = collect($results['rows'][$period->id] ?? []);
+        $weightedExams = in_array($period->id, $results['weightedPeriods'], true);
 
-        $weights = $this->parseFormulaWeights($period->formula);
+        $weights = array_replace(array_fill_keys(GradePlanService::COMPONENTS, 0), $period->parsed_weights);
+        $period->load('previousPeriods');
+        $examDelivery = $weights['exams'] > 0 && $period->hasStarted() && $students->isNotEmpty()
+            ? $this->results->examDeliveryProgress($group, $period, $students->getCollection()->modelKeys(), $weightedExams)
+            : ['requiredCount' => 0, 'missingByStudent' => [], 'suggestedScores' => collect()];
 
         return view('evaluation-periods.gradebook', [
             'group' => $group,
             'period' => $period,
             'students' => $students,
             'savedGrades' => $savedGrades,
-            'examAverages' => $examAverages,
+            'examAverages' => $examDelivery['suggestedScores'],
+            'examDelivery' => $examDelivery,
+            'periodBreakdowns' => $results['periodBreakdown'],
             'weights' => $weights,
+            'weightedExams' => $weightedExams,
+            'finals' => $results['finals'],
+            'catalogContext' => $catalogContext,
+            'catalogQuery' => GradebookCatalogContext::fromReturn($request),
         ]);
     }
 
@@ -149,48 +368,26 @@ class EvaluationPeriodController extends Controller
         $this->authorizeTeacher($group);
         abort_unless($period->group_id === $group->id, 404);
 
-        DB::transaction(function () use ($request, $period): void {
-            /** @var array<int, array<string, mixed>> $gradesData */
-            $gradesData = $request->input('grades', []);
+        $page = $request->validated('gradebook_page');
+        $catalogContext = GradebookCatalogContext::destinationQuery($request);
+        $parameters = [$group, $period, ...$catalogContext];
+        if ($page !== null) {
+            $parameters['page'] = $page;
+        }
+        $destination = route('groups.periods.gradebook', $parameters);
 
-            foreach ($gradesData as $row) {
-                $studentId = (int) $row['student_id'];
-                $exams = isset($row['exams_component']) && $row['exams_component'] !== '' ? (float) $row['exams_component'] : null;
-                $hw = isset($row['homework_component']) && $row['homework_component'] !== '' ? (float) $row['homework_component'] : null;
-                $proj = isset($row['project_component']) && $row['project_component'] !== '' ? (float) $row['project_component'] : null;
-                $other = isset($row['other_component']) && $row['other_component'] !== '' ? (float) $row['other_component'] : null;
-
-                $finalGrade = null;
-                // Si al menos un componente fue capturado, aplicamos la fórmula aritmética segura
-                if ($exams !== null || $hw !== null || $proj !== null || $other !== null) {
-                    $components = [
-                        'exams' => $exams ?? 0.0,
-                        'homework' => $hw ?? 0.0,
-                        'project' => $proj ?? 0.0,
-                        'other' => $other ?? 0.0,
-                    ];
-                    $finalGrade = $this->gradeCalculator->calculate($period->formula, $components);
-                }
-
-                StudentPeriodGrade::updateOrCreate(
-                    [
-                        'evaluation_period_id' => $period->id,
-                        'student_id' => $studentId,
-                    ],
-                    [
-                        'exams_component' => $exams,
-                        'homework_component' => $hw,
-                        'project_component' => $proj,
-                        'other_component' => $other,
-                        'final_grade' => $finalGrade,
-                    ],
-                );
+        try {
+            $this->entryService->save($group, $period, $request->validated('grades'), $request->user()->id, $page === null ? null : (int) $page);
+        } catch (ValidationException $exception) {
+            if ($catalogContext !== []) {
+                $exception->redirectTo($destination);
             }
-        });
 
-        return redirect()
-            ->route('groups.periods.gradebook', [$group, $period])
-            ->with('status', 'Sábana de calificaciones guardada y promedios recalculados con éxito.');
+            throw $exception;
+        }
+
+        return redirect($destination)
+            ->with('status', 'Calificaciones guardadas y promedios actualizados.');
     }
 
     /**
@@ -202,34 +399,6 @@ class EvaluationPeriodController extends Controller
         abort_unless($period->group_id === $group->id, 404);
 
         return $this->gradeSheetExportService->exportPeriodToXlsx($group, $period, request()->user());
-    }
-
-    /**
-     * Extrae los porcentajes legibles de una fórmula (ej. exams*0.6+homework*0.4 -> 60%, 40%).
-     *
-     * @return array<string, float>
-     */
-    private function parseFormulaWeights(string $formula): array
-    {
-        $weights = [
-            'exams' => 0.0,
-            'homework' => 0.0,
-            'project' => 0.0,
-            'other' => 0.0,
-        ];
-
-        foreach (explode('+', str_replace(' ', '', $formula)) as $term) {
-            if ($term === '') {
-                continue;
-            }
-
-            [$component, $weight] = array_pad(explode('*', $term), 2, '0');
-            if (isset($weights[$component])) {
-                $weights[$component] = round(((float) $weight) * 100, 1);
-            }
-        }
-
-        return $weights;
     }
 
     /**
