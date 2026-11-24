@@ -16,6 +16,9 @@ declare(strict_types=1);
  *              grupo con la materia, las fechas de apertura y límite, el
  *              número de preguntas y el estado de su intento, y el listado
  *              se puede limitar a un grupo con ?group= (ADR-061).
+ *              ACT-WEB-032 (RF-EXA-052): el estado y los intentos se toman
+ *              del intento más reciente; una reaplicación autorizada y aún
+ *              no iniciada suma un intento permitido.
  * ============================================================================
  */
 
@@ -73,7 +76,9 @@ class ExamController extends Controller
             ->with([
                 'teacher',
                 'groups' => $openGroupsOfStudent,
-                'studentAttempts' => fn ($query) => $query->where('student_id', $user->id),
+                'studentAttempts' => fn ($query) => $query
+                    ->where('student_id', $user->id)
+                    ->orderByDesc('attempt_number'),
             ])
             ->withCount('examQuestions')
             ->get();
@@ -116,7 +121,13 @@ class ExamController extends Controller
      */
     private function studentPayload(Exam $exam): array
     {
+        // Intento más reciente (RF-EXA-052): los anteriores se conservan con
+        // sus resultados, pero el estado y los intentos usados son los vigentes.
         $attempt = $exam->studentAttempts->first();
+        $attemptsUsed = $attempt === null ? 0 : (int) $attempt->attempt_number;
+        $isReapplicationPending = $attempt !== null
+            && $attempt->reapplication_authorized_at !== null
+            && $attempt->status !== 'in_progress';
 
         $group = $attempt !== null
             ? ($exam->groups->firstWhere('id', $attempt->group_id) ?? $exam->groups->first())
@@ -134,8 +145,8 @@ class ExamController extends Controller
             'starts_at' => $exam->starts_at,
             'ends_at' => $exam->ends_at,
             'questions_count' => (int) $exam->exam_questions_count,
-            'attempts_allowed' => self::ATTEMPTS_PER_STUDENT,
-            'attempts_used' => $attempt === null ? 0 : 1,
+            'attempts_allowed' => max(self::ATTEMPTS_PER_STUDENT, $attemptsUsed + ($isReapplicationPending ? 1 : 0)),
+            'attempts_used' => $attemptsUsed,
             'attempt_status' => $this->attemptStatus($attempt, $exam),
         ];
     }

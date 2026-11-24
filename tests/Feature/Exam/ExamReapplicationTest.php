@@ -12,12 +12,14 @@ declare(strict_types=1);
  * Requerimiento:  RF-EXA-051 (control de intentos), RF-EXA-052 (reaplicación)
  * Actividad:      ACT-WEB-032
  * Autor:          Meneses Mendoza Elizabeth (A-Code Solutions)
- * Versión:        1.0.0
+ * Versión:        1.1.0
  * Fecha Creación: 22/11/2026
  * Descripción:    Verifica que el docente autorice un intento adicional
  *                 individual mientras el examen sigue abierto, que el
  *                 intento anterior se conserve con sus resultados y que la
  *                 calificación vigente sea la del intento más reciente.
+ *                 v1.1.0: la API del alumno informa el intento más reciente
+ *                 y suma el intento autorizado mientras no se inicia.
  * ============================================================================
  */
 
@@ -144,6 +146,29 @@ class ExamReapplicationTest extends TestCase
         // Reanudar no crea otro intento
         $this->assertSame($second->id, app(AttemptService::class)->start($this->exam, $this->student)->id);
         $this->assertSame(2, StudentAttempt::where('exam_id', $this->exam->id)->count());
+    }
+
+    public function test_api_lists_the_latest_attempt_and_the_authorized_reapplication(): void
+    {
+        $first = $this->startAndSubmit();
+        app(AttemptService::class)->authorizeReapplication($first, $this->teacher);
+
+        $this->withToken($this->student->createToken('test')->plainTextToken)
+            ->getJson('/api/v1/exams')
+            ->assertOk()
+            ->assertJsonPath('data.0.attempt_status', 'submitted')
+            ->assertJsonPath('data.0.attempts_used', 1)
+            ->assertJsonPath('data.0.attempts_allowed', 2);
+
+        app(AttemptService::class)->start($this->exam, $this->student);
+        $this->app['auth']->forgetGuards();
+
+        $this->withToken($this->student->createToken('test')->plainTextToken)
+            ->getJson('/api/v1/exams')
+            ->assertOk()
+            ->assertJsonPath('data.0.attempt_status', 'in_progress')
+            ->assertJsonPath('data.0.attempts_used', 2)
+            ->assertJsonPath('data.0.attempts_allowed', 2);
     }
 
     public function test_the_grade_that_counts_is_the_one_of_the_latest_attempt(): void
