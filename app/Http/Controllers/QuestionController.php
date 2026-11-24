@@ -27,6 +27,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Validation\ValidationException;
 
 use App\Http\Requests\QuestionBatchStoreRequest;
 use App\Http\Requests\QuestionImportRequest;
@@ -251,7 +252,11 @@ class QuestionController extends Controller
         abort_unless($question->teacher_id === $request->user()->id, 403);
 
         $data = $request->validated();
-        $this->questionBankService->createParaphrase($request->user(), $question, (string) $data['stem']);
+        try {
+            $this->questionBankService->createParaphrase($request->user(), $question, (string) $data['stem']);
+        } catch (DomainException $e) {
+            throw ValidationException::withMessages(['stem' => $e->getMessage()]);
+        }
 
         return back()->with('status', 'Paráfrasis guardada.');
     }

@@ -32,11 +32,27 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <x-form.group name="first_name" label="Nombre" :error="$errors->first('first_name')" required>
-                            <x-form.input id="first_name" name="first_name" :value="old('first_name', $user->first_name)" required />
+                            <x-form.input
+                                name="first_name"
+                                :value="old('first_name', $user->first_name)"
+                                maxlength="100"
+                                pattern="(?=.*\p{L})[\p{L}\p{M} ]+"
+                                data-character-filter="name"
+                                title="El nombre no tiene un formato válido"
+                                required
+                            />
                         </x-form.group>
 
                         <x-form.group name="last_name" label="Apellidos" :error="$errors->first('last_name')" required>
-                            <x-form.input id="last_name" name="last_name" :value="old('last_name', $user->last_name)" required />
+                            <x-form.input
+                                name="last_name"
+                                :value="old('last_name', $user->last_name)"
+                                maxlength="100"
+                                pattern="(?=.*\p{L})[\p{L}\p{M} ]+"
+                                data-character-filter="name"
+                                title="El campo apellidos no tiene un formato válido"
+                                required
+                            />
                         </x-form.group>
                     </div>
 
@@ -47,7 +63,20 @@
                         </x-form.group>
 
                         <x-form.group name="phone" label="Teléfono (10 dígitos)" :error="$errors->first('phone')" required>
-                            <x-form.input id="phone" name="phone" :value="old('phone', $user->phone)" maxlength="10" placeholder="5512345678" required />
+                            <x-form.input
+                                type="tel"
+                                name="phone"
+                                :value="old('phone', $user->phone)"
+                                maxlength="10"
+                                pattern="[0-9]{10}"
+                                inputmode="numeric"
+                                autocomplete="tel-national"
+                                data-character-filter="digits"
+                                data-mexican-phone
+                                title="El teléfono debe contener 10 dígitos"
+                                placeholder="5512345678"
+                                required
+                            />
                         </x-form.group>
                     </div>
                 </x-card>
@@ -109,44 +138,25 @@
                                 {{ strtoupper(substr($user->first_name, 0, 1)) }}
                             </div>
                             <div class="min-w-0">
-                                <p class="truncate text-sm font-bold text-acode-primary">{{ $user->full_name }}</p>
-                                <p class="truncate text-xs text-slate-500">{{ $user->email }}</p>
+                                <p class="break-words text-sm font-semibold text-acode-primary">{{ $user->full_name }}</p>
+                                <p class="break-words text-xs text-slate-600">{{ $user->email }}</p>
                             </div>
                         </div>
 
-                        <dl class="space-y-3">
-                            <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5">
-                                <dt class="text-xs text-slate-500">Institución</dt>
-                                <dd class="mt-1 text-sm font-semibold text-acode-primary">
-                                    {{ $user->teacherVerification?->institution_name ?: 'Institución registrada' }}
-                                </dd>
-                            </div>
-
-                            <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5">
-                                <dt class="text-xs text-slate-500">Método de acreditación</dt>
-                                <dd class="mt-1 text-sm font-semibold text-acode-primary">
-                                    {{ $user->teacherVerification?->verificationMethodLabel() ?? 'Verificación institucional' }}
-                                </dd>
-                            </div>
+                        <x-summary-list>
+                            <x-summary-item label="Institución" :value="$user->teacherVerification?->institution_name ?: 'Institución registrada'" compact />
+                            <x-summary-item label="Método de acreditación" :value="$user->teacherVerification?->verificationMethodLabel() ?? 'Verificación institucional'" compact />
 
                             @if ($user->teacherVerification?->professional_license)
-                                <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5">
-                                    <dt class="text-xs text-slate-500">Cédula profesional SEP</dt>
-                                    <dd class="mt-1 text-sm font-semibold font-mono text-acode-primary">
-                                        {{ $user->teacherVerification->professional_license }}
-                                    </dd>
-                                </div>
+                                <x-summary-item label="Cédula profesional SEP" compact>
+                                    <x-slot:valueSlot><span class="font-mono">{{ $user->teacherVerification->professional_license }}</span></x-slot:valueSlot>
+                                </x-summary-item>
                             @endif
 
                             @if ($user->teacherVerification?->reviewed_at)
-                                <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5">
-                                    <dt class="text-xs text-slate-500">Fecha de verificación</dt>
-                                    <dd class="mt-1 text-sm font-semibold text-acode-primary">
-                                        {{ $user->teacherVerification->reviewed_at->format('d/m/Y H:i') }}
-                                    </dd>
-                                </div>
+                                <x-summary-item label="Fecha de verificación" :value="$user->teacherVerification->reviewed_at->format('d/m/Y H:i')" compact />
                             @endif
-                        </dl>
+                        </x-summary-list>
 
                         @if ($user->teacherVerification?->document_purged_at)
                             <div class="rounded-xl border border-acode-accent/30 bg-acode-accent/10 px-4 py-3 flex items-start gap-2.5">
@@ -180,3 +190,7 @@
     </form>
 </div>
 @endsection
+
+@push('scripts')
+<script src="{{ asset('js/character-filter.js') }}"></script>
+@endpush

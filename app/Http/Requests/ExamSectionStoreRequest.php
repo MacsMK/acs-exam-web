@@ -25,6 +25,8 @@ class ExamSectionStoreRequest extends FormRequest
 {
     use NormalizesQuestionInputs;
 
+    public const MAX_QUANTITY = 100;
+
     public function authorize(): bool
     {
         $user = $this->user();
@@ -54,7 +56,7 @@ class ExamSectionStoreRequest extends FormRequest
                 'integer',
                 Rule::exists('acs_subjects', 'id')->where('teacher_id', $this->user()?->id),
             ],
-            'requested_quantity' => ['required', 'integer', 'min:1', 'max:100'],
+            'requested_quantity' => ['required', 'integer', 'min:1', 'max:' . self::MAX_QUANTITY],
         ];
     }
 
@@ -76,7 +78,7 @@ class ExamSectionStoreRequest extends FormRequest
             'requested_quantity.required' => 'El campo cantidad a sortear es obligatorio',
             'requested_quantity.integer' => 'La cantidad a sortear debe ser un número entero',
             'requested_quantity.min' => 'La cantidad a sortear debe ser mayor o igual que 1',
-            'requested_quantity.max' => 'La cantidad a sortear debe ser menor o igual que 100',
+            'requested_quantity.max' => 'La cantidad a sortear debe ser menor o igual que :max',
         ];
     }
 

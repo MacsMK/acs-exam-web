@@ -11,37 +11,37 @@
 --}}
 @extends('layouts.app')
 
-@section('title', 'Crear grupo escolar')
+@section('title', 'Crear grupo')
 
 @section('content')
+@php
+    $backUrl = $catalogQuery === null ? route('groups.index') : route('teacher.gradebook.hub', $catalogQuery);
+@endphp
 <div class="space-y-6">
 
     {{-- Encabezado Institucional --}}
     <x-page-header
-        title="Crear grupo escolar"
-        subtitle="Registra un nuevo grupo para inscribir estudiantes mediante código QR o folio alfanumérico."
+        :institutional="true"
+        title="Crear grupo"
         :breadcrumbs="[
-            ['label' => 'Grupos', 'href' => route('groups.index')],
+            ['label' => $catalogQuery === null ? 'Grupos' : 'Calificaciones', 'href' => $backUrl],
             ['label' => 'Crear grupo'],
         ]"
     >
         <x-slot:actions>
-            <x-button :href="route('groups.index')" variant="neutral" size="md">
+            <x-button :href="$backUrl" variant="neutral" size="md">
                 <x-icon name="arrowLeft" class="w-4 h-4" />
-                Volver
+                {{ $catalogQuery === null ? 'Volver' : 'Volver a calificaciones' }}
             </x-button>
         </x-slot:actions>
     </x-page-header>
 
     {{-- Formulario en tarjeta institucional --}}
-    <x-card
-        title="Información del grupo"
-        subtitle="Define el nombre, la asignatura y, si quieres, una descripción para habilitar el aula y generar automáticamente su folio de acceso."
-    >
+    <x-card>
         <form
             id="create-group-form"
             method="POST"
-            action="{{ route('groups.store') }}"
+            action="{{ route('groups.store', $catalogContext) }}"
             class="space-y-6"
         >
             @csrf
@@ -88,7 +88,7 @@
             <div class="flex items-start gap-3 rounded-xl border border-acode-accent/30 bg-acode-accent/10 px-4 py-3.5 text-acode-primary">
                 <x-icon name="qrCode" class="mt-0.5 h-5 w-5 shrink-0 text-acode-accent" />
                 <p class="text-sm font-medium leading-relaxed">
-                    El código QR y el folio alfanumérico de incorporación se generarán automáticamente al guardar el grupo.
+                    Al crear el grupo podrás compartir su código QR o su folio para inscribir estudiantes.
                 </p>
             </div>
 
@@ -96,12 +96,12 @@
             <div class="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 pt-5">
                 <x-unsaved-changes
                     form-id="create-group-form"
-                    :cancel-url="route('groups.index')"
+                    :cancel-url="$backUrl"
                 />
 
                 <x-button type="submit" variant="primary" size="md">
                     <x-icon name="save" class="w-4 h-4" />
-                    Guardar grupo
+                    Crear grupo
                 </x-button>
             </div>
         </form>

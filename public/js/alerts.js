@@ -16,6 +16,84 @@
     };
 
     const hasSwal = () => typeof global.Swal !== 'undefined';
+    let fallbackDialogSequence = 0;
+
+    function fallbackDialog({ title, text, confirmButtonText, cancelButtonText, isDanger = false, focusCancel = isDanger, inputPlaceholder, institutional = false }) {
+        const trigger = document.activeElement;
+        const dialog = document.createElement('dialog');
+        if (typeof dialog.showModal !== 'function') return Promise.resolve({ isConfirmed: false });
+
+        const id = `acode-alert-${++fallbackDialogSequence}`;
+        dialog.setAttribute('aria-labelledby', `${id}-title`);
+        dialog.className = 'm-auto w-11/12 max-w-md rounded-2xl border border-slate-200 bg-white p-0 text-slate-700 shadow-xl backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm';
+        if (institutional) {
+            dialog.classList.add('border-t-4', isDanger ? 'border-t-acode-danger' : 'border-t-acode-primary');
+        }
+
+        const form = document.createElement('form');
+        form.method = 'dialog';
+        form.className = 'space-y-4 p-6';
+        dialog.append(form);
+
+        const heading = document.createElement('h2');
+        heading.id = `${id}-title`;
+        heading.textContent = title;
+        heading.className = 'text-xl font-semibold text-acode-primary';
+        form.append(heading);
+
+        if (text) {
+            const description = document.createElement('p');
+            description.id = `${id}-description`;
+            description.textContent = text;
+            dialog.setAttribute('aria-describedby', description.id);
+            form.append(description);
+        }
+
+        let input;
+        if (inputPlaceholder !== undefined) {
+            input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = inputPlaceholder;
+            input.setAttribute('aria-label', inputPlaceholder || title);
+            input.className = 'h-10 w-full rounded-lg border border-slate-300 px-3 focus:border-acode-tech focus:ring-2 focus:ring-acode-tech';
+            input.autofocus = true;
+            form.append(input);
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'flex flex-wrap justify-end gap-2';
+        form.append(actions);
+
+        const buttonClasses = 'min-h-10 rounded-lg px-4 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acode-tech';
+        if (cancelButtonText) {
+            const cancel = document.createElement('button');
+            cancel.type = 'button';
+            cancel.textContent = cancelButtonText;
+            cancel.className = `${buttonClasses} border border-slate-300 bg-white text-slate-700`;
+            cancel.autofocus = focusCancel;
+            cancel.addEventListener('click', () => dialog.close('cancel'));
+            actions.append(cancel);
+        }
+
+        const confirm = document.createElement('button');
+        confirm.type = 'submit';
+        confirm.value = 'confirm';
+        confirm.textContent = confirmButtonText;
+        confirm.className = `${buttonClasses} text-white ${isDanger ? 'bg-acode-danger' : 'bg-acode-primary'}`;
+        confirm.autofocus = !focusCancel && !input;
+        actions.append(confirm);
+
+        return new Promise(resolve => {
+            dialog.addEventListener('close', () => {
+                const isConfirmed = dialog.returnValue === 'confirm';
+                dialog.remove();
+                if (trigger?.isConnected) trigger.focus();
+                resolve(input && isConfirmed ? { isConfirmed, value: input.value } : { isConfirmed });
+            }, { once: true });
+            document.body.append(dialog);
+            dialog.showModal();
+        });
+    }
 
     const AcodeAlert = {
         palette: PALETTE,
@@ -28,8 +106,7 @@
          */
         success(title, text = '') {
             if (!hasSwal()) {
-                global.alert(`${title}\n${text}`);
-                return Promise.resolve({ isConfirmed: true });
+                return fallbackDialog({ title: title || 'Operación exitosa', text, confirmButtonText: 'Aceptar' });
             }
 
             return global.Swal.fire({
@@ -54,8 +131,7 @@
          */
         error(title, text = '') {
             if (!hasSwal()) {
-                global.alert(`Error: ${title}\n${text}`);
-                return Promise.resolve({ isConfirmed: true });
+                return fallbackDialog({ title: title || 'Ocurrió un error', text, confirmButtonText: 'Aceptar' });
             }
 
             return global.Swal.fire({
@@ -80,8 +156,7 @@
          */
         warning(title, text = '') {
             if (!hasSwal()) {
-                global.alert(`Atención: ${title}\n${text}`);
-                return Promise.resolve({ isConfirmed: true });
+                return fallbackDialog({ title: title || 'Atención', text, confirmButtonText: 'Entendido' });
             }
 
             return global.Swal.fire({
@@ -109,33 +184,38 @@
             confirmButtonText = 'Aceptar',
             cancelButtonText = 'Cancelar',
             isDanger = false,
+            focusCancel = isDanger,
+            institutional = false,
             onConfirm = null
         } = {}) {
-            if (!hasSwal()) {
-                const confirmed = global.confirm(`${title}\n${text}`);
-                if (confirmed && typeof onConfirm === 'function') {
-                    onConfirm();
-                }
-                return Promise.resolve({ isConfirmed: confirmed });
-            }
-
-            return global.Swal.fire({
+            const popup = 'rounded-2xl shadow-xl font-sans';
+            const actionBorder = isDanger ? '!border-t-acode-danger' : '!border-t-acode-primary';
+            const button = 'px-5 py-2.5 rounded-lg text-sm font-semibold';
+            const dialog = hasSwal() ? global.Swal.fire({
                 icon: isDanger ? 'warning' : 'question',
                 iconColor: isDanger ? PALETTE.danger : PALETTE.tech,
                 title: title,
                 text: text,
                 showCancelButton: true,
+                focusCancel,
                 confirmButtonColor: isDanger ? PALETTE.danger : PALETTE.primary,
                 cancelButtonColor: PALETTE.neutral,
                 confirmButtonText: confirmButtonText,
                 cancelButtonText: cancelButtonText,
                 reverseButtons: true,
-                customClass: {
-                    popup: 'rounded-2xl shadow-xl font-sans',
-                    confirmButton: 'px-5 py-2.5 rounded-lg text-sm font-semibold',
-                    cancelButton: 'px-5 py-2.5 rounded-lg text-sm font-semibold'
-                }
-            }).then((result) => {
+                backdrop: institutional ? 'rgba(15, 23, 42, 0.6)' : true,
+                customClass: institutional ? {
+                    container: 'backdrop-blur-sm',
+                    popup: `${popup} !border-solid !border-t-4 ${actionBorder}`,
+                    title: '!px-6 !text-left !text-xl !font-semibold !leading-7 !text-acode-primary',
+                    htmlContainer: '!mx-0 !px-6 !text-left !text-sm !text-slate-700',
+                    actions: '!mx-0 !w-full !justify-end !px-6',
+                    confirmButton: button,
+                    cancelButton: `${button} !border !border-slate-300 !bg-white !text-slate-700`,
+                } : { popup, confirmButton: button, cancelButton: button }
+            }) : fallbackDialog({ title, text, confirmButtonText, cancelButtonText, isDanger, focusCancel, institutional });
+
+            return dialog.then((result) => {
                 if (result.isConfirmed && typeof onConfirm === 'function') {
                     onConfirm();
                 }
@@ -188,15 +268,7 @@
             inputPlaceholder = '',
             onConfirm = null
         } = {}) {
-            if (!hasSwal()) {
-                const val = global.prompt(`${title}\n${text}`);
-                if (val !== null && typeof onConfirm === 'function') {
-                    onConfirm(val);
-                }
-                return Promise.resolve({ isConfirmed: val !== null, value: val });
-            }
-
-            return global.Swal.fire({
+            const dialog = hasSwal() ? global.Swal.fire({
                 title: title,
                 text: text,
                 input: 'text',
@@ -213,7 +285,9 @@
                     confirmButton: 'px-5 py-2.5 rounded-lg text-sm font-semibold',
                     cancelButton: 'px-5 py-2.5 rounded-lg text-sm font-semibold'
                 }
-            }).then((result) => {
+            }) : fallbackDialog({ title, text, inputPlaceholder, confirmButtonText, cancelButtonText });
+
+            return dialog.then((result) => {
                 if (result.isConfirmed && typeof onConfirm === 'function') {
                     onConfirm(result.value);
                 }

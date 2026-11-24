@@ -41,6 +41,8 @@ use App\Models\Question;
 use App\Models\StudentAttempt;
 use App\Models\User;
 use App\Services\AttemptService;
+use DOMDocument;
+use DOMXPath;
 use Illuminate\Broadcasting\BroadcastManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
@@ -123,6 +125,16 @@ class ExamMonitoringReverbTest extends TestCase
 
     public function test_teacher_owner_can_access_exam_monitoring_dashboard(): void
     {
+        config([
+            'broadcasting.default' => 'reverb',
+            'broadcasting.connections.reverb.options.host' => 'reverb',
+            'broadcasting.connections.reverb.public' => [
+                'host' => 'monitor.example.test',
+                'port' => 443,
+                'scheme' => 'https',
+            ],
+        ]);
+
         // Crear un intento activo
         StudentAttempt::create([
             'exam_id' => $this->exam->id,
@@ -130,7 +142,7 @@ class ExamMonitoringReverbTest extends TestCase
             'student_id' => $this->student->id,
             'status' => 'in_progress',
             'started_at' => now(),
-            'current_question_index' => 1,
+            'current_question_index' => 0,
             'incidents_count' => 0,
             'question_sequence_payload' => [1],
         ]);
@@ -138,12 +150,99 @@ class ExamMonitoringReverbTest extends TestCase
         $response = $this->actingAs($this->teacher)
             ->get(route('exams.monitor', $this->exam));
 
-        $response->assertOk();
-        $response->assertSee('Monitoreo en Vivo');
-        $response->assertSee('Carlos Santana');
-        $response->assertSee('Examen Parcial de Estructuras');
-        $response->assertSee('Reverb Conectado en Vivo');
-        $response->assertSee('wsKey =');
+        $response->assertOk()
+            ->assertSee('Monitoreo')
+            ->assertSee('Examen Parcial de Estructuras')
+            ->assertSee('Sin conexión en tiempo real')
+            ->assertDontSee('wsKey =');
+
+        $document = new DOMDocument();
+        $document->loadHTML($response->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath = new DOMXPath($document);
+        $this->assertSame(1, (int) $xpath->evaluate("count(//tr[td and contains(., 'Carlos Santana') and contains(., 'En examen')])"));
+        $this->assertSame(1, (int) $xpath->evaluate("count(//tr[td and contains(., 'Carlos Santana')]/td[normalize-space(.) = '0 / 1'])"));
+
+        $boot = $xpath->evaluate("string(//script[@type='application/json' and @id='exam-monitor-data'])");
+        $this->assertJson($boot);
+        $configuration = json_decode($boot, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(0, $configuration['snapshot']['counts']['incidents']);
+        $this->assertTrue($configuration['realtime']['enabled']);
+        $this->assertSame('monitor.example.test', $configuration['realtime']['host']);
+        $this->assertSame(443, $configuration['realtime']['port']);
+        $this->assertTrue($configuration['realtime']['useTls']);
+    }
+
+    public function test_monitor_page_filters_rows_without_changing_exam_totals(): void
+    {
+        $this->actingAs($this->teacher)
+            ->get(route('exams.monitor', [$this->exam, 'search' => 'Carlos', 'status' => 'not_started']))
+            ->assertOk()
+            ->assertSeeText('1 de 1 estudiantes')
+            ->assertViewHas('visibleStudents', static fn (array $students): bool => count($students) === 1);
+
+        $this->get(route('exams.monitor', [$this->exam, 'search' => 'Carlos', 'status' => 'submitted']))
+            ->assertOk()
+            ->assertSeeText('0 de 1 estudiantes')
+            ->assertViewHas('visibleStudents', []);
+    }
+
+    public function test_monitor_snapshot_counts_current_attempts_and_handles_non_delivery(): void
+    {
+        $cancelled = User::factory()->create(['role' => 'student']);
+        $expired = User::factory()->create(['role' => 'student']);
+        $notStarted = User::factory()->create(['role' => 'student']);
+        $this->group->students()->attach([$cancelled->id, $expired->id, $notStarted->id], ['joined_at' => now()]);
+
+        $attemptDefaults = [
+            'exam_id' => $this->exam->id,
+            'group_id' => $this->group->id,
+            'started_at' => now()->subMinutes(5),
+            'question_sequence_payload' => [],
+        ];
+        StudentAttempt::create($attemptDefaults + [
+            'student_id' => $this->student->id,
+            'status' => 'cancelled_by_incident',
+            'incidents_count' => 2,
+        ]);
+        $submittedAttempt = StudentAttempt::create($attemptDefaults + [
+            'student_id' => $this->student->id,
+            'attempt_number' => 2,
+            'status' => 'submitted',
+            'submitted_at' => now(),
+        ]);
+        StudentAttempt::create($attemptDefaults + [
+            'student_id' => $cancelled->id,
+            'status' => 'cancelled_by_incident',
+            'incidents_count' => 2,
+            'submitted_at' => now(),
+            'final_score' => 0,
+        ]);
+        $expiredAttempt = StudentAttempt::create($attemptDefaults + [
+            'student_id' => $expired->id,
+            'status' => 'in_progress',
+            'free_edit_until' => now()->subMinutes(2),
+            'free_close_at' => now()->subMinute(),
+        ]);
+
+        $response = $this->actingAs($this->teacher)
+            ->getJson(route('exams.monitor', [$this->exam, 'snapshot' => 1, 'status' => 'submitted']))
+            ->assertOk()
+            ->assertJsonPath('counts.enrolled', 4)
+            ->assertJsonPath('counts.inProgress', 0)
+            ->assertJsonPath('counts.submitted', 1)
+            ->assertJsonPath('counts.incidents', 2)
+            ->assertJsonPath('maxIncidents', 1)
+            ->assertJsonCount(4, 'students');
+
+        $this->assertTrue($response->headers->hasCacheControlDirective('no-store'));
+        $students = collect($response->json('students'))->keyBy('id');
+        $this->assertSame($submittedAttempt->id, $students[$this->student->id]['attempt_id']);
+        $this->assertSame('Pendiente', $students[$this->student->id]['score']);
+        $this->assertSame('Sin envío formal', $students[$cancelled->id]['submitted_at']);
+        $this->assertSame('expired', $students[$expired->id]['status']);
+        $this->assertSame('Sin envío formal', $students[$expired->id]['submitted_at']);
+        $this->assertSame('not_started', $students[$notStarted->id]['status']);
+        $this->assertSame('in_progress', $expiredAttempt->refresh()->status);
     }
 
     public function test_monitoring_dashboard_writes_reverb_settings_as_javascript_strings(): void
@@ -168,6 +267,8 @@ class ExamMonitoringReverbTest extends TestCase
             ->get(route('exams.monitor', $this->exam));
 
         $response->assertForbidden();
+
+        $this->getJson(route('exams.monitor', [$this->exam, 'snapshot' => 1]))->assertForbidden();
     }
 
     public function test_guest_is_redirected_to_login(): void

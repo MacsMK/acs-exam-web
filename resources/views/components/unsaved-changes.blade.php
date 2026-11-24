@@ -1,188 +1,106 @@
 {{-- Proyecto: acs-exam-web | Organización: A-Code Solutions | Componente: x-unsaved-changes (MPW-V3 §7.3, §8.3) --}}
-@props(['formId', 'cancelUrl'])
+@props(['formId', 'cancelUrl', 'hasRestoredDraft' => false])
 
 <div
     x-data="{
-        dirty: false,
+        formId: @js($formId),
+        cancelUrl: @js($cancelUrl),
+        modalName: @js('unsaved-changes-' . $formId),
+        hasRestoredDraft: @js($hasRestoredDraft),
+        form: null,
+        initialValues: null,
+        destination: null,
         submitting: false,
-        leaving: false,
-        historyGuard: false,
-        showConfirm: false,
-        destination: @js($cancelUrl),
 
         init() {
-            const form = document.getElementById(@js($formId));
+            this.form = document.getElementById(this.formId);
+            this.cancelUrl = new URL(this.cancelUrl, document.baseURI).href;
 
-            if (!form) return;
-
-            const serialize = () => [...new FormData(form).entries()]
-                .filter(([key]) => key !== '_token');
-
-            let initialValues = [];
-            this.$nextTick(() => {
-                initialValues = serialize();
-            });
-
-            const updateDirty = () => {
-                const current = serialize();
-
-                this.dirty =
-                    JSON.stringify(current) !== JSON.stringify(initialValues);
-
-                if (this.dirty) {
-                    this.armHistoryGuard();
-                }
-            };
-
-            form.addEventListener('input', updateDirty);
-            form.addEventListener('change', updateDirty);
-
-            form.addEventListener('submit', () => {
-                this.submitting = true;
-                this.dirty = false;
-            });
-
-            document.addEventListener('click', (event) => {
-                if (!this.dirty || this.submitting) return;
-
-                if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-                    return;
-                }
-
-                const link = event.target.closest('a[href]');
-                if (!link) return;
-
-                const rawHref = (link.getAttribute('href') || '').trim();
-                if (!rawHref || rawHref.startsWith('#') || rawHref.startsWith('javascript:') || link.target === '_blank' || link.hasAttribute('download')) {
-                    return;
-                }
-
-                event.preventDefault();
-                event.stopPropagation();
-                this.destination = link.href;
-                this.showConfirm = true;
-            }, true);
-
-            // Botón Atrás del navegador: la entrada extra del historial se
-            // consume sin salir de la página y se muestra el modal propio.
-            window.addEventListener('popstate', () => {
-                if (!this.historyGuard) return;
-
-                this.historyGuard = false;
-
-                if (!this.dirty || this.submitting) {
-                    history.back();
-                    return;
-                }
-
-                this.destination = null;
-                this.showConfirm = true;
-            });
-
-            // Recargar o cerrar la pestaña: el navegador no permite un modal
-            // propio en estos casos; solo su aviso nativo evita perder datos.
-            window.addEventListener('beforeunload', (event) => {
-                if (!this.dirty || this.submitting || this.leaving) return;
-
-                event.preventDefault();
-                event.returnValue = '';
-            });
-        },
-
-        armHistoryGuard() {
-            if (this.historyGuard) return;
-
-            history.pushState({ acsUnsavedChanges: true }, '', window.location.href);
-            this.historyGuard = true;
-        },
-
-        keepEditing() {
-            this.showConfirm = false;
-
-            if (this.dirty) {
-                this.armHistoryGuard();
+            if (this.form) {
+                this.$nextTick(() => { this.initialValues = this.snapshot(); });
             }
         },
 
-        cancel() {
-            if (this.dirty) {
-                this.destination = @js($cancelUrl);
-                this.showConfirm = true;
+        snapshot() {
+            const values = [];
+            for (const [name, value] of new FormData(this.form)) {
+                if (name === '_token') continue;
+
+                const normalizedValue = typeof value === 'string'
+                    ? value
+                    : (value.name ? [value.name, value.size, value.type, value.lastModified] : '');
+                values.push([name, normalizedValue]);
+            }
+
+            return JSON.stringify(values);
+        },
+
+        hasChanges() {
+            return !this.submitting && this.initialValues !== null
+                && (this.hasRestoredDraft || this.snapshot() !== this.initialValues);
+        },
+
+        confirmNavigation(destination, trigger) {
+            this.destination = destination;
+            trigger.dispatchEvent(new CustomEvent('open-modal', { bubbles: true, detail: this.modalName }));
+        },
+
+        guardLink(event) {
+            if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+            const link = event.target.closest?.('a[href]');
+            if (!link || link.hasAttribute('download') || (link.target && link.target.toLowerCase() !== '_self')) return;
+
+            const marker = link.closest('[data-cancel-form]');
+            const markedForThisForm = marker?.dataset.cancelForm === this.formId
+                || (marker?.dataset.cancelForm === '' && this.$el.contains(link));
+
+            if ((link.href === this.cancelUrl || markedForThisForm) && this.hasChanges()) {
+                event.preventDefault();
+                this.confirmNavigation(link.href, link);
+            }
+        },
+
+        cancel(trigger) {
+            if (this.hasChanges()) {
+                this.confirmNavigation(this.cancelUrl, trigger);
             } else {
-                window.location.href = @js($cancelUrl);
+                window.location.assign(this.cancelUrl);
             }
         },
 
         discard() {
-            this.dirty = false;
-            this.leaving = true;
-            this.showConfirm = false;
+            if (!this.destination) return;
 
-            if (this.destination === null) {
-                history.back();
-                return;
-            }
-
-            window.location.href = this.destination;
-        }
+            this.submitting = true;
+            this.$dispatch('close-modal', this.modalName);
+            window.location.assign(this.destination);
+        },
     }"
+    x-on:click.document="guardLink($event)"
+    x-on:submit.document="if ($event.target === form && !$event.defaultPrevented) submitting = true"
+    x-on:pageshow.window="submitting = false"
+    x-on:beforeunload.window="if (hasChanges()) { $event.preventDefault(); $event.returnValue = ''; }"
 >
     <x-button
         type="button"
         variant="neutral"
         size="md"
-        @click="cancel()"
+        @click="cancel($event.currentTarget)"
     >
         Cancelar
     </x-button>
 
-    <template x-teleport="body">
-        <div
-            x-show="showConfirm"
-            x-cloak
-            x-transition.opacity.duration.150ms
-            class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="discard-title"
-        >
-            <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-                <div class="flex items-start gap-3">
-                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-acode-warning/20 text-amber-800">
-                        <x-icon name="warning" class="w-5 h-5" />
-                    </div>
-                    <div>
-                        <h2 id="discard-title" class="text-lg font-bold text-acode-primary">
-                            ¿Descartar los cambios?
-                        </h2>
-                        <p class="mt-1.5 text-sm text-slate-600 leading-relaxed">
-                            Tienes información sin guardar. Si sales de esta pantalla, perderás los ajustes realizados.
-                        </p>
-                    </div>
-                </div>
+    <x-modal :name="'unsaved-changes-' . $formId" title="¿Descartar los cambios?" max-width="md">
+        <p>Tienes cambios sin guardar. Si sales de esta pantalla, se perderán.</p>
 
-                <div class="mt-6 flex flex-wrap justify-end gap-2.5 border-t border-slate-100 pt-4">
-                    <x-button
-                        type="button"
-                        variant="neutral"
-                        size="md"
-                        class="rounded-xl"
-                        @click="keepEditing()"
-                    >
-                        Continuar editando
-                    </x-button>
-
-                    <x-button
-                        type="button"
-                        variant="danger"
-                        size="md"
-                        class="rounded-xl"
-                        @click="discard()"
-                    >
-                        Cancelar cambios
-                    </x-button>
-                </div>
-            </div>
-        </div>
-    </template>
+        <x-slot:footer>
+            <x-button type="button" variant="neutral" size="md" @click="$dispatch('close-modal', modalName)">
+                Continuar editando
+            </x-button>
+            <x-button type="button" variant="danger" size="md" @click="discard()">
+                Descartar cambios
+            </x-button>
+        </x-slot:footer>
+    </x-modal>
 </div>

@@ -117,6 +117,57 @@ class Group extends Model
     }
 
     /**
+     * Comprueba si está definida la unidad de captura manual para esta escala.
+     *
+     * @return bool Disponibilidad de la captura numérica en la sábana.
+     */
+    public function allowsManualGradeEntry(): bool
+    {
+        return $this->grading_scale !== '0-10' || config('grading.manual_input_for_ten') === 'group_scale';
+    }
+
+    /**
+     * Presenta un valor ya calculado con la precisión de la escala elegida.
+     *
+     * @param string|int|float|null $value Calificación almacenada o derivada.
+     * @param int|null $legacyDigits Decimales de la vista para grupos anteriores.
+     * @return string|null Calificación visible o ausencia de calificación.
+     */
+    public function formatGrade(string|int|float|null $value, ?int $legacyDigits = null): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        $digits = match ($this->grading_scale) {
+            '0-100' => 0,
+            '0-10' => 2,
+            default => $legacyDigits,
+        };
+
+        return $digits === null ? (string) $value : number_format((float) $value, $digits, '.', '');
+    }
+
+    /**
+     * Expresa el mínimo del grupo en la escala del examen calificado.
+     *
+     * @param string $scale Escala del examen.
+     * @param float $legacyMinimum Mínimo anterior para grupos sin escala explícita.
+     * @return float Umbral para comparar con el puntaje del examen.
+     */
+    public function minimumForExam(string $scale, float $legacyMinimum): float
+    {
+        if ($this->grading_scale === null) {
+            return $legacyMinimum;
+        }
+        $minimum = (float) $this->passing_score;
+        if ($this->grading_scale === $scale) {
+            return $minimum;
+        }
+
+        return $scale === '0-100' ? $minimum * 10 : $minimum / 10;
+    }
+
+    /**
      * Alumnos inscritos en el grupo (acs_group_student).
      *
      * @return BelongsToMany<User>

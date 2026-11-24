@@ -4,6 +4,8 @@ use App\Models\User;
 
 return [
 
+    'two_factor_demo' => env('AUTH_TWO_FACTOR_DEMO', false),
+
     /*
     |--------------------------------------------------------------------------
     | Authentication Defaults

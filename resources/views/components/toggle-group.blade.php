@@ -35,7 +35,7 @@
             @click="{{ $select ? $select . '(' . \Illuminate\Support\Js::from($item['value']) . ')' : $model . ' = ' . \Illuminate\Support\Js::from($item['value']) }}"
             :class="{{ $model }} === @js($item['value']) ? @js($activeClass) : @js($inactiveClass)"
             :aria-pressed="({{ $model }} === @js($item['value'])).toString()"
-            @if ($item['icon']) title="{{ $item['label'] }}" @endif
+            @if ($item['icon']) aria-label="{{ $item['label'] }}" title="{{ $item['label'] }}" @endif
             class="{{ $itemClass }} focus:outline-none focus:ring-2 focus:ring-acode-tech"
         >
             @if ($item['icon'])

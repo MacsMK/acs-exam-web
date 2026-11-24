@@ -5,19 +5,22 @@
 
 @section('content')
     @php
-        $typeLabels = [
-            'multiple_choice' => 'Opción múltiple',
-            'matching' => 'Relación de columnas',
-            'open' => 'Pregunta abierta',
-            'code' => 'Código fuente',
-        ];
-        $typeVariants = [
-            'multiple_choice' => 'info',
-            'matching' => 'accent',
-            'open' => 'warning',
-            'code' => 'primary',
-        ];
+        $forExam = isset($examContext);
         $isLinked = (bool) ($isLinkedToExams ?? $isLinkedToExam ?? false);
+        $cancelDestination = $cancelUrl ?? route('questions.show', $question);
+        $backUrl = $forExam ? $cancelDestination : route('questions.index');
+        $saveLabel = $isLinked ? 'Guardar como v' . $nextVersionNumber : 'Actualizar reactivo';
+        $breadcrumbs = $forExam
+            ? [
+                ['label' => 'Exámenes', 'href' => route('exams.index')],
+                ['label' => $examContext->title, 'href' => $cancelDestination],
+                ['label' => 'Editar'],
+            ]
+            : [
+                ['label' => 'Banco de preguntas', 'href' => route('questions.index')],
+                ['label' => $question->title, 'href' => route('questions.show', $question)],
+                ['label' => 'Editar'],
+            ];
     @endphp
 
     <div
@@ -29,7 +32,7 @@
             subjectTag: @js(old('subject_tag', $question->subject_tag ?? '')),
             stem: @js(old('stem', $question->stem)),
             options: @js(old('options', $initialOptions)),
-            correctOption: @js((int) old('correct_option_index', $initialCorrectOption)),
+            correctOption: @js($errors->has('correct_option_index') ? -1 : (int) old('correct_option_index', $initialCorrectOption)),
             pairs: @js(old('concepts') !== null ? collect(old('concepts'))->values()->map(static fn ($c, $i) => ['concept' => (string) $c, 'definition' => (string) (old('definitions')[$i] ?? '')])->all() : $initialPairs),
             referenceAnswer: @js(old('reference_answer', $question->questionable?->reference_answer ?? '')),
             evaluationRubric: @js(old('evaluation_rubric', $question->questionable?->evaluation_rubric ?? '')),
@@ -48,26 +51,21 @@
         {{-- Cabecera institucional --}}
         <x-page-header
             title="Editar reactivo"
-            :subtitle="$question->title"
-            :breadcrumbs="[
-                ['label' => 'Banco de preguntas', 'href' => route('questions.index')],
-                ['label' => $question->title, 'href' => route('questions.show', $question)],
-                ['label' => 'Editar'],
-            ]"
+            :subtitle="$forExam ? $question->title : null"
+            :institutional="true"
+            :breadcrumbs="$breadcrumbs"
+            data-cancel-form="edit-question-form"
         >
-            <x-slot:badge>
-                <x-badge :variant="$typeVariants[$question->question_type] ?? 'neutral'">
-                    {{ $typeLabels[$question->question_type] ?? $question->question_type }}
-                </x-badge>
-                @if ($isLinked)
+            @if ($isLinked)
+                <x-slot:badge>
                     <x-badge variant="warning">
                         Próxima versión v{{ $nextVersionNumber }}
                     </x-badge>
-                @endif
-            </x-slot:badge>
+                </x-slot:badge>
+            @endif
 
             <x-slot:actions>
-                <x-button :href="route('questions.index')" variant="neutral" size="md">
+                <x-button :href="$backUrl" variant="neutral" size="md">
                     <x-icon name="arrowLeft" class="w-4 h-4" />
                     Volver
                 </x-button>
@@ -80,15 +78,15 @@
         </x-page-header>
 
         {{-- Banner dinámico de Versionado Copy-on-Write --}}
-        @if (isset($examContext))
+        @if ($forExam)
             {{-- RF-EXA-005: edición solo para este examen --}}
             <div class="rounded-xl border border-acode-tech/40 bg-acode-tech/10 p-4 text-slate-800 flex items-start gap-3">
                 <span class="w-9 h-9 rounded-lg bg-acode-tech/20 text-acode-primary flex items-center justify-center shrink-0">
                     <x-icon name="edit" class="w-5 h-5" />
                 </span>
                 <div class="space-y-1 text-xs">
-                    <p class="font-semibold text-acode-primary text-sm">Estás editando este reactivo solo para el examen «{{ $examContext->title }}»</p>
-                    <p class="text-slate-700 leading-relaxed">Al guardar se creará la versión v{{ $nextVersionNumber }} y este examen la usará. El reactivo original del banco (#{{ $question->id }}) no cambia.</p>
+                    <p class="text-sm font-semibold text-acode-primary">Edición solo para el examen</p>
+                    <p class="leading-relaxed text-slate-700">Este examen usará la versión que guardes. El banco conserva el reactivo original.</p>
                 </div>
             </div>
         @elseif ($isLinked)
@@ -97,19 +95,15 @@
                     <x-icon name="warning" class="w-5 h-5" />
                 </span>
                 <div class="space-y-1 text-xs">
-                    <p class="font-semibold text-acode-primary text-sm">
-                        Este reactivo está vinculado a exámenes: al guardar se creará la nueva versión <span class="font-mono px-1.5 py-0.5 rounded bg-acode-warning/40 text-acode-primary">v{{ $nextVersionNumber }}</span>
-                    </p>
-                    <p class="text-slate-700 leading-relaxed">
-                        Los exámenes y resultados históricos conservarán intacto este reactivo original (<span class="font-mono font-semibold text-acode-primary">#{{ $question->id }}</span>), mientras que tus nuevos exámenes usarán automáticamente la versión <strong>v{{ $nextVersionNumber }}</strong>.
-                    </p>
+                    <p class="text-sm font-semibold text-acode-primary">Se guardará una nueva versión en el banco</p>
+                    <p class="leading-relaxed text-slate-700">Los exámenes vinculados y sus resultados conservarán el reactivo que ya usan.</p>
                 </div>
             </div>
         @endif
 
         {{-- Resumen único de errores de validación --}}
         @if ($errors->any())
-            <div class="rounded-xl border border-acode-danger/30 bg-acode-danger/10 p-4 text-sm text-acode-danger" role="alert">
+            <div class="rounded-xl border border-acode-danger/30 bg-acode-danger/10 p-4 text-sm text-acode-danger-dark" role="alert">
                 <div class="flex items-start gap-2.5">
                     <x-icon name="error" class="w-5 h-5 shrink-0 mt-0.5" />
                     <div>
@@ -129,13 +123,22 @@
             method="POST"
             enctype="multipart/form-data"
             action="{{ $formAction ?? route('questions.update', $question) }}"
+            x-data="{ saving: false }"
+            @submit="
+                if (saving) {
+                    $event.preventDefault();
+                } else {
+                    saving = true;
+                }
+            "
+            @pageshow.window="saving = false"
             @keydown.enter="if ($event.target.tagName === 'INPUT' && !['submit', 'button'].includes($event.target.type)) { $event.preventDefault(); }"
-            class="space-y-6"
+            class="space-y-6 [&_:is(input,textarea):enabled::placeholder]:text-slate-500"
         >
             @csrf
             @method('PUT')
 
-            <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div class="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
                 <div class="min-w-0">
                     @include('questions._partials.form-fields', [
                         'mode' => 'edit',
@@ -150,14 +153,15 @@
 
             {{-- Barra inferior de acciones normativas --}}
             <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                <x-unsaved-changes form-id="edit-question-form" :cancel-url="$cancelUrl ?? route('questions.show', $question)" />
+                <x-unsaved-changes form-id="edit-question-form" :cancel-url="$cancelDestination" />
 
                 <div class="flex items-center justify-end gap-2.5">
-                    <x-button type="submit" variant="primary" size="md">
-                        <x-icon name="save" class="w-4 h-4" />
-                        {{ $isLinked ? 'Guardar como v' . $nextVersionNumber : 'Actualizar reactivo' }}
+                    <x-button type="submit" variant="primary" size="md" loading-when="saving" ::disabled="saving">
+                        <x-icon name="save" class="w-4 h-4" x-show="!saving" />
+                        <span x-text="saving ? 'Guardando…' : @js($saveLabel)">{{ $saveLabel }}</span>
                     </x-button>
                 </div>
+                <p class="sr-only" role="status" x-text="saving ? 'Guardando…' : ''"></p>
             </div>
         </form>
     </div>

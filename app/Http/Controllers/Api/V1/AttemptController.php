@@ -28,6 +28,8 @@ use App\Services\AttemptService;
 use App\Support\ApiResponse;
 use DomainException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AttemptController extends Controller
 {
@@ -45,6 +47,9 @@ class AttemptController extends Controller
     {
         $data = $request->validated();
         $exam = Exam::findOrFail($data['exam_id']);
+        if ($exam->free_duration_minutes !== null) {
+            return ApiResponse::error('Abre el examen en la web para utilizar la navegación libre.', 409);
+        }
 
         try {
             $attempt = $this->attemptService->start($exam, $request->user());
@@ -96,12 +101,13 @@ class AttemptController extends Controller
                 $attempt,
                 $examQuestion->id,
                 $this->normalizeAnswerPayload($data),
+                $this->sessionHolder($request),
             );
 
             $attempt = $attempt->fresh();
 
             if ($attempt->current_question_index >= count($attempt->question_sequence_payload)) {
-                $this->attemptService->submitFinal($attempt);
+                $this->attemptService->submitFinal($attempt, $this->sessionHolder($request));
                 $attempt = $attempt->fresh();
             }
         } catch (DomainException $e) {
@@ -124,11 +130,16 @@ class AttemptController extends Controller
         $attempt = $this->attemptForUser($exam, $request->user());
         $data = $request->validated();
 
-        $this->attemptService->reportIncident(
-            $attempt,
-            (string) ($data['incident_type'] ?? 'unknown'),
-            (string) ($data['description'] ?? '')
-        );
+        try {
+            $this->attemptService->reportIncident(
+                $attempt,
+                (string) ($data['incident_type'] ?? 'unknown'),
+                (string) ($data['description'] ?? ''),
+                $this->sessionHolder($request),
+            );
+        } catch (DomainException $e) {
+            return ApiResponse::error($e->getMessage(), 409);
+        }
 
         return ApiResponse::success(null, 'Incidente registrado.');
     }
@@ -137,7 +148,8 @@ class AttemptController extends Controller
     {
         $attempt = StudentAttempt::where('exam_id', $exam->id)
             ->where('student_id', $user->id)
-            ->orderByDesc('attempt_number')
+            ->current()
+            ->inCurrentGroupsOfStudent($user->id)
             ->first();
 
         abort_if($attempt === null, 404, 'No has iniciado este examen.');
@@ -253,8 +265,21 @@ class AttemptController extends Controller
         };
     }
 
-    private function sessionHolder(\Illuminate\Http\Request $request): string
+    /**
+     * Identifica la misma sesión autenticada en las rutas que presentan el examen.
+     *
+     * @param Request $request Petición autenticada por Sanctum.
+     * @return string Identificador de la sesión presentadora.
+     */
+    private function sessionHolder(Request $request): string
     {
-        return 'api:' . ($request->user()?->currentAccessToken()?->id ?? 'token');
+        $token = $request->user()?->currentAccessToken();
+        if ($token instanceof PersonalAccessToken) {
+            return 'api:' . $token->getKey();
+        }
+
+        abort_unless($request->hasSession(), 401);
+
+        return 'web:' . $request->session()->getId();
     }
 }

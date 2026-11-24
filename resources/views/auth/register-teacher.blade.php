@@ -160,6 +160,8 @@
                             type="text"
                             name="first_name"
                             maxlength="100"
+                            pattern="(?=.*\p{L})[\p{L}\p{M} ]+"
+                            data-character-filter="name"
                             value="{{ old('first_name') }}"
                             required
                             autofocus
@@ -172,6 +174,8 @@
                             type="text"
                             name="last_name"
                             maxlength="100"
+                            pattern="(?=.*\p{L})[\p{L}\p{M} ]+"
+                            data-character-filter="name"
                             value="{{ old('last_name') }}"
                             required
                             placeholder="Tus apellidos"
@@ -206,6 +210,9 @@
                         maxlength="10"
                         pattern="[0-9]{10}"
                         inputmode="numeric"
+                        autocomplete="tel-national"
+                        data-character-filter="digits"
+                        data-mexican-phone
                         required
                         prefixIcon="shield"
                         placeholder="5512345678"
@@ -373,6 +380,7 @@
                                     value="{{ old('professional_license') }}"
                                     maxlength="8"
                                     pattern="[0-9]{7,8}"
+                                    data-character-filter="digits"
                                     inputmode="numeric"
                                     placeholder="7 u 8 dígitos"
                                     x-bind:disabled="registrationMode === 'code'"
@@ -464,6 +472,7 @@
                 </p>
 
                 <div
+                    x-effect="if (show) $nextTick(() => { if ($el.clientHeight > 0) checkScroll({target: $el}) })"
                     @scroll="checkScroll($event)"
                     class="max-h-64 overflow-y-auto p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 space-y-3 leading-relaxed"
                 >
@@ -475,21 +484,13 @@
                         </div>
                     @endif
 
-                    <h4 class="font-bold text-acode-primary">1. Identidad y Domicilio del Responsable</h4>
-                    <p>A-Code Solutions (Equipo 4), con domicilio operativo institucional, es responsable del tratamiento y salvaguarda de sus datos personales conforme a los lineamientos normativos de la Plataforma Evaluadora.</p>
-
-                    <h4 class="font-bold text-acode-primary">2. Finalidades del Tratamiento de Datos</h4>
-                    <p>Los datos recabados (nombre, correo electrónico, teléfono, adscripción institucional, métricas de evaluación académica y registros de conexión) serán utilizados única y exclusivamente para la acreditación de identidad docente, gestión de exámenes, emisión de actas de calificaciones y auditoría anti-suplantación en tiempo real.</p>
-
-                    <h4 class="font-bold text-acode-primary">3. Tratamiento Temporal y Borrado Automático del Comprobante Docente (LFPDPPP)</h4>
-                    <p>El documento probatorio adjuntado para acreditar su rol docente (credencial institucional, constancia laboral u horario oficial) se resguarda exclusivamente en almacenamiento privado no público, es consultado únicamente por personal administrativo autorizado para dictaminar la solicitud y se elimina de manera automática e irreversible al concluir la revisión, conservando únicamente el registro de auditoría del dictamen.</p>
-
-                    <h4 class="font-bold text-acode-primary">4. Medidas de Seguridad y Anti-Fraude</h4>
-                    <p>La plataforma registra marcas de tiempo server-side, direcciones IP, incidencias por pérdida de foco y controles de supervisión pasiva no invasiva. Queda prohibida la reproducción, copia o extracción no autorizada de reactivos de examen.</p>
-
-                    <h4 class="font-bold text-acode-primary">5. Aceptación y Consentimiento</h4>
-                    <p>Al confirmar el presente documento, usted otorga su consentimiento expreso e informado para el tratamiento de su información académica, documental y operativa en el ecosistema SaaS A-Code Solutions.</p>
-
+                    @if ($termsVersion ?? null)
+                        <h4 class="font-bold text-acode-primary">Términos y condiciones · {{ $termsVersion->version }}</h4>
+                        <p>Vigentes desde {{ $termsVersion->effective_at->format('d/m/Y H:i') }}</p>
+                        <p class="whitespace-pre-line">{{ $termsVersion->content }}</p>
+                    @else
+                        @include('legal.terms-teacher-original')
+                    @endif
                     <div class="p-3 bg-acode-surface border border-slate-200 rounded-lg text-center text-[11px] font-semibold text-acode-primary">
                         --- Fin del Aviso de Privacidad y Términos del Servicio ---
                     </div>
@@ -538,6 +539,7 @@
 @endsection
 
 @push('scripts')
+<script src="{{ asset('js/character-filter.js') }}"></script>
 <script>
     {{-- Validación en cliente (MPW-V3 Tabla 18): mensajes en español bajo cada campo, sin punto final. --}}
     (function () {
@@ -546,41 +548,6 @@
         if (!form) {
             return;
         }
-
-        function filterInput(field, allowedCharacters) {
-            if (!field) {
-                return;
-            }
-
-            function clean() {
-                const original = field.value;
-                const cursor = field.selectionStart;
-                const beforeCursor = original.slice(0, cursor);
-                const cleaned = original.replace(allowedCharacters, '');
-                const cleanedBeforeCursor = beforeCursor.replace(allowedCharacters, '');
-
-                if (cleaned !== original) {
-                    field.value = cleaned;
-                    field.setSelectionRange(
-                        cleanedBeforeCursor.length,
-                        cleanedBeforeCursor.length
-                    );
-                }
-            }
-
-            field.addEventListener('input', function (event) {
-                if (!event.isComposing) {
-                    clean();
-                }
-            });
-
-            field.addEventListener('compositionend', clean);
-        }
-
-        filterInput(form.querySelector('[name="first_name"]'), /[^\p{L}\p{M} ]/gu);
-        filterInput(form.querySelector('[name="last_name"]'), /[^\p{L}\p{M} ]/gu);
-        filterInput(form.querySelector('[name="phone"]'), /[^0-9]/g);
-        filterInput(form.querySelector('[name="professional_license"]'), /[^0-9]/g);
 
         const invitationField = form.querySelector('[name="invitation_code"]');
         if (invitationField) {
@@ -623,6 +590,14 @@
 
             if (field.validity.patternMismatch && field.name === 'phone') {
                 return 'El teléfono debe contener 10 dígitos';
+            }
+
+            if (field.validity.patternMismatch && field.name === 'first_name') {
+                return 'El nombre no tiene un formato válido';
+            }
+
+            if (field.validity.patternMismatch && field.name === 'last_name') {
+                return 'El campo apellidos no tiene un formato válido';
             }
 
             if (field.validity.patternMismatch && field.name === 'professional_license') {

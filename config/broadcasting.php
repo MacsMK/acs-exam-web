@@ -1,5 +1,9 @@
 <?php
 
+$sail = env('LARAVEL_SAIL', false);
+$reverbPublicScheme = env('REVERB_SCHEME', 'https');
+$reverbPublishScheme = env('REVERB_PUBLISH_SCHEME', $sail ? 'http' : $reverbPublicScheme);
+
 return [
 
     /*
@@ -36,10 +40,15 @@ return [
             'secret' => env('REVERB_APP_SECRET'),
             'app_id' => env('REVERB_APP_ID'),
             'options' => [
+                'host' => env('REVERB_PUBLISH_HOST', $sail ? 'reverb' : env('REVERB_HOST')),
+                'port' => env('REVERB_PUBLISH_PORT', $sail ? 8080 : env('REVERB_PORT', 443)),
+                'scheme' => $reverbPublishScheme,
+                'useTLS' => $reverbPublishScheme === 'https',
+            ],
+            'public' => [
                 'host' => env('REVERB_HOST'),
                 'port' => env('REVERB_PORT', 443),
-                'scheme' => env('REVERB_SCHEME', 'https'),
-                'useTLS' => env('REVERB_SCHEME', 'https') === 'https',
+                'scheme' => $reverbPublicScheme,
             ],
             'client_options' => [
                 // Guzzle client options: https://docs.guzzlephp.org/en/stable/request-options.html

@@ -16,6 +16,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Exceptions\SubscriptionLimitExceededException;
+use App\Models\AiCreditUsage;
 use App\Models\Group;
 use App\Models\MultipleChoiceItem;
 use App\Models\Question;
@@ -25,8 +26,10 @@ use App\Models\User;
 use App\Services\GroupEnrollmentService;
 use App\Services\QuestionBankService;
 use App\Services\SubscriptionLimitService;
+use App\Services\TeacherSubscriptionService;
 use Database\Seeders\SubscriptionPackageSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class SubscriptionLimitServiceTest extends TestCase
@@ -206,5 +209,131 @@ class SubscriptionLimitServiceTest extends TestCase
         $this->expectExceptionMessage('Tu suscripción docente se encuentra temporalmente suspendida por falta de pago.');
 
         $this->limitService->ensureCanCreateGroup($this->teacher);
+    }
+
+    public function test_paid_ai_credits_reset_each_month_and_keep_the_original_activation_day(): void
+    {
+        $basicPackage = SubscriptionPackage::where('tier', 'basic')->firstOrFail();
+        TeacherSubscription::create([
+            'teacher_id' => $this->teacher->id,
+            'subscription_package_id' => $basicPackage->id,
+            'payment_status' => 'paid',
+            'starts_at' => '2026-01-31 10:00:00',
+            'expires_at' => '2027-01-31 10:00:00',
+        ]);
+
+        $this->travelTo(Carbon::parse('2026-02-28 09:59:59'));
+        AiCreditUsage::create([
+            'teacher_id' => $this->teacher->id,
+            'credits_consumed' => 200,
+            'status' => AiCreditUsage::STATUS_CONSUMED,
+        ]);
+
+        $summary = $this->limitService->getAiCreditQuotaSummary($this->teacher);
+        $this->assertSame(0, $summary['remaining']);
+        $this->assertSame('2026-02-28 10:00:00', $summary['next_reset_at']?->toDateTimeString());
+        $this->assertThrows(
+            fn () => $this->limitService->ensureCanConsumeAiCredits($this->teacher),
+            SubscriptionLimitExceededException::class,
+            'El próximo ciclo está previsto para el 28/02/2026.',
+        );
+
+        $this->travelTo(Carbon::parse('2026-02-28 10:00:00'));
+        $this->limitService->ensureCanConsumeAiCredits($this->teacher);
+        AiCreditUsage::create([
+            'teacher_id' => $this->teacher->id,
+            'credits_consumed' => 1,
+            'status' => AiCreditUsage::STATUS_CONSUMED,
+        ]);
+
+        $this->travelTo(Carbon::parse('2026-03-28 10:00:00'));
+        $summary = $this->limitService->getAiCreditQuotaSummary($this->teacher);
+        $this->assertSame(199, $summary['remaining']);
+        $this->assertSame('2026-02-28 10:00:00', $summary['cycle_starts_at']?->toDateTimeString());
+        $this->assertSame('2026-03-31 10:00:00', $summary['next_reset_at']?->toDateTimeString());
+
+        $this->travelTo(Carbon::parse('2026-03-31 10:00:00'));
+        $summary = $this->limitService->getAiCreditQuotaSummary($this->teacher);
+        $this->assertSame(200, $summary['remaining']);
+        $this->assertSame('2026-04-30 10:00:00', $summary['next_reset_at']?->toDateTimeString());
+    }
+
+    public function test_upgrading_keeps_ai_consumption_and_cancelling_removes_the_unfunded_next_cycle(): void
+    {
+        $this->travelTo(Carbon::parse('2026-03-10 10:00:00'));
+        $basicPackage = SubscriptionPackage::where('tier', 'basic')->firstOrFail();
+        $advancedPackage = SubscriptionPackage::where('tier', 'advanced')->firstOrFail();
+        TeacherSubscription::create([
+            'teacher_id' => $this->teacher->id,
+            'subscription_package_id' => $basicPackage->id,
+            'payment_status' => 'paid',
+            'starts_at' => '2026-02-25 10:00:00',
+            'expires_at' => '2026-03-25 10:00:00',
+            'auto_renew' => true,
+            'card_brand' => 'Visa',
+            'card_last4' => '4242',
+        ]);
+        AiCreditUsage::create([
+            'teacher_id' => $this->teacher->id,
+            'credits_consumed' => 35,
+            'status' => AiCreditUsage::STATUS_CONSUMED,
+        ]);
+
+        $subscriptions = app(TeacherSubscriptionService::class);
+        $subscriptions->upgradePackage($this->teacher, $advancedPackage, null, null);
+        $summary = $this->limitService->getAiCreditQuotaSummary($this->teacher->fresh());
+        $this->assertSame(565, $summary['remaining']);
+        $this->assertSame('2026-02-25 10:00:00', $summary['cycle_starts_at']?->toDateTimeString());
+        $this->assertSame('2026-03-25 10:00:00', $summary['next_reset_at']?->toDateTimeString());
+
+        $subscriptions->cancelRenewal($this->teacher->fresh(), null, null);
+        $summary = $this->limitService->getAiCreditQuotaSummary($this->teacher->fresh());
+        $this->assertSame(565, $summary['remaining']);
+        $this->assertSame('2026-03-25 10:00:00', $summary['cycle_ends_at']?->toDateTimeString());
+        $this->assertNull($summary['next_reset_at']);
+        $this->assertThrows(
+            fn () => $this->limitService->ensureCanConsumeAiCredits($this->teacher->fresh(), 566),
+            SubscriptionLimitExceededException::class,
+            'Consulta las opciones de tu plan en Suscripción.',
+        );
+    }
+
+    public function test_trial_overview_and_validation_keep_used_allowances_after_records_are_removed(): void
+    {
+        $this->teacher->forceFill([
+            'trial_group_used_at' => now()->subMonth(),
+            'legacy_exam_record' => true,
+        ])->save();
+
+        $overview = app(TeacherSubscriptionService::class)->getSubscriptionOverview($this->teacher);
+        $this->assertSame(1, $overview['quotaMetrics']['groups']['used']);
+        $this->assertSame(1, $overview['quotaMetrics']['exams']['used']);
+        $this->assertThrows(fn () => $this->limitService->ensureCanCreateGroup($this->teacher), SubscriptionLimitExceededException::class);
+        $this->assertThrows(fn () => $this->limitService->ensureCanCreateExam($this->teacher), SubscriptionLimitExceededException::class);
+    }
+
+    public function test_unlimited_ai_reports_consumption_since_activation_without_a_monthly_reset(): void
+    {
+        $this->travelTo(Carbon::parse('2026-02-26 10:00:00'));
+        $proPackage = SubscriptionPackage::where('tier', 'pro')->firstOrFail();
+        TeacherSubscription::create([
+            'teacher_id' => $this->teacher->id,
+            'subscription_package_id' => $proPackage->id,
+            'payment_status' => 'paid',
+            'starts_at' => '2026-02-25 10:00:00',
+            'expires_at' => '2027-02-25 10:00:00',
+        ]);
+        AiCreditUsage::create([
+            'teacher_id' => $this->teacher->id,
+            'credits_consumed' => 35,
+            'status' => AiCreditUsage::STATUS_CONSUMED,
+        ]);
+
+        $this->travelTo(Carbon::parse('2026-04-26 10:00:00'));
+        $summary = $this->limitService->getAiCreditQuotaSummary($this->teacher);
+        $this->assertSame(35, $summary['used']);
+        $this->assertTrue($summary['is_unlimited']);
+        $this->assertNull($summary['cycle_starts_at']);
+        $this->assertNull($summary['next_reset_at']);
     }
 }

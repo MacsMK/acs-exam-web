@@ -10,16 +10,16 @@
 --}}
 @extends('layouts.app')
 
-@section('title', 'Unirme a un Grupo Escolar')
+@section('title', 'Unirme a un grupo')
 
 @section('content')
 <div class="space-y-6">
     {{-- Nivel 1: Encabezado Institucional --}}
     <x-page-header
-        title="Unirme a un Grupo Escolar"
-        subtitle="Ingresa el folio alfanumérico proporcionado por tu profesor para inscribirte a su asignatura."
+        :institutional="true"
+        title="Unirme a un grupo"
         :breadcrumbs="[
-            ['label' => 'Mis Grupos', 'href' => route('student.groups.index')],
+            ['label' => 'Mis grupos', 'href' => route('student.groups.index')],
             ['label' => 'Unirme a un grupo'],
         ]"
     >
@@ -38,52 +38,47 @@
                 <x-nav-icon name="groups" class="h-7 w-7" />
             </div>
 
-            <div class="mb-6 text-center">
-                <h2 class="text-lg font-bold text-acode-primary tracking-tight">
-                    Código de inscripción de grupo
-                </h2>
-                <p class="mt-1 text-sm text-slate-500">
-                    Escribe el folio exactamente como te lo compartió tu docente titular.
-                </p>
-            </div>
+            @php($folio = old('access_folio', request('folio', '')))
 
-            <form method="POST" action="{{ route('student.groups.join') }}" class="space-y-6" x-data="{ folio: '{{ old('access_folio', request('folio', '')) }}' }">
+            <form method="POST" action="{{ route('student.groups.join') }}" class="space-y-6"
+                  x-data="{ submitting: false }"
+                  x-on:submit="submitting ? $event.preventDefault() : submitting = true"
+                  x-on:pageshow.window="submitting = false">
                 @csrf
 
                 <x-form.group
                     name="access_folio"
-                    label="Folio alfanumérico de acceso"
-                    helpText="Solicita este código al docente titular de tu materia o clase."
+                    label="Folio de acceso"
+                    help-text="Usa el folio que te compartió tu docente. Al unirte podrás consultar los exámenes del grupo."
+                    :accessible="true"
                     required
                 >
                     <x-form.input
                         name="access_folio"
                         size="lg"
-                        x-model="folio"
-                        x-on:input="folio = folio.toUpperCase()"
+                        :value="is_string($folio) ? strtoupper($folio) : ''"
+                        x-on:input="$event.target.value = $event.target.value.toUpperCase()"
+                        autocapitalize="characters"
+                        autocomplete="off"
+                        spellcheck="false"
                         required
                         maxlength="12"
-                        autofocus
                         placeholder="Ej. 7F3K9QRT"
+                        :accessible="true"
+                        :aria-describedby="$errors->has('access_folio') ? 'access_folio-help access_folio-error' : 'access_folio-help'"
                         class="mt-1 text-center font-mono font-bold uppercase tracking-widest text-acode-primary"
                     />
                 </x-form.group>
 
-                <div class="flex items-start gap-3 rounded-xl border border-acode-tech/20 bg-acode-surface/60 p-4 text-xs text-slate-600">
-                    <x-icon name="key" class="mt-0.5 h-5 w-5 shrink-0 text-acode-tech" />
-                    <p class="leading-relaxed">
-                        Cada grupo cuenta con una clave única de inscripción. Al enviar la solicitud quedarás registrado en la lista oficial y tendrás acceso a sus exámenes programados.
-                    </p>
-                </div>
-
                 <div class="flex flex-col-reverse sm:flex-row items-center gap-3 pt-2">
-                    <x-button :href="route('dashboard')" variant="neutral" size="md" class="w-full sm:flex-1">
-                        Cancelar operación
+                    <x-button :href="route('student.groups.index')" variant="neutral" size="md" class="w-full sm:flex-1">
+                        Cancelar
                     </x-button>
 
-                    <x-button type="submit" variant="primary" size="md" class="w-full sm:flex-1">
-                        <x-icon name="add" class="w-4 h-4" />
-                        Enviar solicitud
+                    <x-button type="submit" variant="primary" size="md" class="w-full sm:flex-1"
+                              loading-when="submitting" x-bind:disabled="submitting">
+                        <x-icon name="add" class="w-4 h-4" x-show="!submitting" />
+                        <x-slot:label>Unirme al grupo</x-slot:label>
                     </x-button>
                 </div>
             </form>

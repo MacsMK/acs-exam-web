@@ -45,6 +45,9 @@ class AttemptAnswerWebRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'revision' => ['sometimes', 'integer', 'min:0'],
+            'next_index' => ['sometimes', 'integer', 'min:0'],
+            'finish_after_save' => ['sometimes', 'boolean'],
             'exam_question_id' => ['required', 'integer', 'exists:acs_exam_question,id'],
             'selected_option_index' => ['nullable', 'integer', 'min:0'],
             'pairs' => ['nullable', 'array', 'max:8'],

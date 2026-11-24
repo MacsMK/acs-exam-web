@@ -49,9 +49,9 @@ class UpdateTeacherProfileRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'first_name' => ['required', 'string', 'max:100'],
-            'last_name' => ['required', 'string', 'max:100'],
-            'phone' => ['required', 'string', 'regex:/^\d{10}$/'],
+            'first_name' => ['required', 'string', 'max:100', 'regex:/\A(?=.*\p{L})[\p{L}\p{M} ]+\z/u'],
+            'last_name' => ['required', 'string', 'max:100', 'regex:/\A(?=.*\p{L})[\p{L}\p{M} ]+\z/u'],
+            'phone' => ['required', 'string', 'regex:/\A[0-9]{10}\z/'],
             'current_password' => ['nullable', 'required_with:new_password', 'current_password'],
             'new_password' => ['nullable', 'confirmed', Password::min(8)],
         ];
@@ -68,14 +68,16 @@ class UpdateTeacherProfileRequest extends FormRequest
             'first_name.required' => 'El campo nombre es obligatorio',
             'first_name.string' => 'El nombre no tiene un formato válido',
             'first_name.max' => 'El nombre no debe exceder los 100 caracteres',
+            'first_name.regex' => 'El nombre no tiene un formato válido',
 
             'last_name.required' => 'El campo apellidos es obligatorio',
             'last_name.string' => 'El campo apellidos no tiene un formato válido',
             'last_name.max' => 'El campo apellidos no debe exceder los 100 caracteres',
+            'last_name.regex' => 'El campo apellidos no tiene un formato válido',
 
             'phone.required' => 'El campo teléfono es obligatorio',
             'phone.string' => 'El teléfono no tiene un formato válido',
-            'phone.regex' => 'El teléfono debe contener 10 dígitos numéricos',
+            'phone.regex' => 'El teléfono debe contener 10 dígitos',
 
             'current_password.required_with' => 'El campo contraseña actual es obligatorio',
             'current_password.current_password' => 'La contraseña actual no es correcta',

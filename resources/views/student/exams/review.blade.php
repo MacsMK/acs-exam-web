@@ -19,6 +19,7 @@
     <x-page-header
         title="Revisión de Soluciones y Respuestas"
         :subtitle="($reviewData['exam_name'] ?? $attempt->exam->title) . ' · Compara tus respuestas registradas con las soluciones de referencia autorizadas.'"
+        :institutional="true"
         :breadcrumbs="[
             ['label' => 'Mis Calificaciones', 'href' => route('student.grades.index')],
             ['label' => 'Resumen del intento', 'href' => route('attempts.result', $attempt)],
@@ -29,7 +30,7 @@
             <span>
                 Calificación definitiva:
                 <strong class="font-mono text-acode-primary">
-                    {{ number_format((float) ($attempt->final_score ?? $attempt->objective_score ?? 0.0), 1) }}
+                    {{ number_format((float) $attempt->final_score, 2) }} / {{ $attempt->exam->grading_scale === '0-100' ? '100' : '10' }}
                 </strong>
             </span>
         </x-slot:meta>
@@ -63,13 +64,13 @@
             @endphp
             <x-card padding="p-5 sm:p-6" class="space-y-4">
                 {{-- Encabezado de la pregunta --}}
-                <div class="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
-                    <div class="flex items-start gap-3">
+                <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-3">
+                    <div class="flex min-w-0 items-start gap-3">
                         <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-acode-surface text-xs font-bold text-acode-tech">
                             {{ $index + 1 }}
                         </span>
-                        <div>
-                            <h2 class="text-base font-bold leading-6 text-acode-primary">{{ $q['title'] }}</h2>
+                        <div class="min-w-0">
+                            <h2 class="break-words text-xl font-semibold leading-7 text-acode-primary">{{ $q['title'] }}</h2>
                             <p class="mt-0.5 text-xs text-slate-500">Tipo: {{ $qTypeLabel }}</p>
                         </div>
                     </div>
@@ -80,7 +81,7 @@
                         @elseif ($isPartial)
                             <x-badge variant="warning">Puntaje parcial</x-badge>
                         @else
-                            <x-badge variant="danger">Sin acierto</x-badge>
+                            <x-badge variant="danger" class="!text-acode-danger-dark">Sin acierto</x-badge>
                         @endif
                         <p class="mt-1 font-mono text-xs font-bold text-slate-700">
                             {{ number_format((float) $q['points_earned'], 2) }} / {{ number_format((float) $q['points_possible'], 2) }} pts
@@ -90,8 +91,8 @@
 
                 {{-- Enunciado / Reactivo --}}
                 <div class="rounded-lg border border-slate-200/70 bg-slate-50 p-4">
-                    <p class="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Enunciado</p>
-                    <div class="font-sans text-sm leading-relaxed text-slate-800">
+                    <p class="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-600">Enunciado</p>
+                    <div class="break-words font-sans text-sm leading-relaxed text-slate-800">
                         {!! nl2br(e($q['stem'])) !!}
                     </div>
                     <x-question.files class="mt-3" :question-id="$q['id']" :has-image="$q['has_image'] ?? false" :has-pdf="$q['has_pdf'] ?? false" />
@@ -101,14 +102,14 @@
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div class="rounded-lg border border-slate-200 bg-white p-4">
                         <p class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-600">Tu respuesta</p>
-                        <div class="min-h-16 whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-100 p-3 font-mono text-xs leading-relaxed text-acode-ink">
+                        <div class="min-h-16 whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-slate-100 p-3 font-mono text-[13px] leading-5 text-acode-ink">
                             {{ is_array($q['student_answer']) ? json_encode($q['student_answer'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : ($q['student_answer'] ?? 'Sin respuesta registrada') }}
                         </div>
                     </div>
 
                     <div class="rounded-lg border border-slate-200 border-l-4 border-l-acode-accent bg-acode-surface/40 p-4">
                         <p class="mb-2 text-xs font-bold uppercase tracking-wider text-acode-primary">Solución de referencia autorizada</p>
-                        <div class="min-h-16 whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 font-mono text-xs leading-relaxed text-acode-ink">
+                        <div class="min-h-16 whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-slate-100 p-3 font-mono text-[13px] leading-5 text-acode-ink">
                             {{ is_array($q['reference_solution']) ? json_encode($q['reference_solution'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : ($q['reference_solution'] ?? 'Consulta al docente') }}
                         </div>
                     </div>

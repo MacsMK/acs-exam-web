@@ -45,7 +45,7 @@ interface ExamRepositoryInterface
      * @param array<string, mixed> $filters   Filtros opcionales (search, status, group_id).
      * @return LengthAwarePaginator<Exam>
      */
-    public function paginateForTeacher(int $teacherId, int $perPage = 15, array $filters = []): LengthAwarePaginator;
+    public function paginateForTeacher(int $teacherId, int $perPage = 15, array $filters = [], bool $pendingFirst = false): LengthAwarePaginator;
 
     /**
      * Obtiene la colección de exámenes creados por un docente con relaciones y conteos en SQL.
@@ -68,7 +68,7 @@ interface ExamRepositoryInterface
      *     pending_recoteje_exams: int
      * }
      */
-    public function getTeacherExamStats(int $teacherId): array;
+    public function getTeacherExamStats(int $teacherId, array $filters = []): array;
 
     /**
      * Obtiene los exámenes publicados asignados a los grupos donde está inscrito el alumno.
@@ -218,6 +218,9 @@ interface ExamRepositoryInterface
      * @return LengthAwarePaginator<StudentAttempt>
      */
     public function paginateAttemptsForReview(Exam $exam, array $filters = [], int $perPage = 20): LengthAwarePaginator;
+
+    /** @return array{registered: int, pending: int, final: int} */
+    public function getAttemptReviewStats(Exam $exam, array $filters = []): array;
 
     /**
      * Busca un intento específico acotado al examen indicado con todas las relaciones

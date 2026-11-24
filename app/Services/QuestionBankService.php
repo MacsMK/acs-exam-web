@@ -530,6 +530,8 @@ class QuestionBankService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            $this->assertParaphrasesMutable($lockedQuestion);
+
             $candidateNormalized = $this->normalizeComparableText($cleanStem);
             if ($candidateNormalized === $this->normalizeComparableText((string) $lockedQuestion->stem)) {
                 throw ValidationException::withMessages([
@@ -568,19 +570,30 @@ class QuestionBankService
         }
 
         $paraphraseId = $paraphrase instanceof QuestionParaphrase ? (int) $paraphrase->id : $paraphrase;
-        $target = $this->questionRepository->findParaphraseForQuestion($question, $paraphraseId);
 
-        if ($target === null) {
-            abort(404, 'La paráfrasis solicitada no pertenece a este reactivo.');
-        }
+        return DB::transaction(function () use ($question, $paraphraseId): bool {
+            $lockedQuestion = Question::whereKey($question->id)->lockForUpdate()->firstOrFail();
+            $target = $this->questionRepository->findParaphraseForQuestion($lockedQuestion, $paraphraseId);
 
+            abort_if($target === null, 404, 'La paráfrasis solicitada no pertenece a este reactivo.');
+            $this->assertParaphrasesMutable($lockedQuestion);
+
+            return $this->questionRepository->deleteParaphrase($target);
+        });
+    }
+
+    /**
+     * Conserva las variantes de una versión usada en una aplicación ya publicada.
+     *
+     * @param Question $question Reactivo bajo bloqueo.
+     * @return void
+     * @throws DomainException Si la versión participa en un examen protegido.
+     */
+    private function assertParaphrasesMutable(Question $question): void
+    {
         if ($this->questionRepository->hasActiveOrPublishedExamLinks($question)) {
-            throw new DomainException(
-                'No es posible eliminar paráfrasis de un reactivo que ya participa en un examen publicado o con intentos registrados.'
-            );
+            throw new DomainException('Las paráfrasis de este reactivo están protegidas. Crea una versión nueva para cambiarlas.');
         }
-
-        return $this->questionRepository->deleteParaphrase($target);
     }
 
     /**

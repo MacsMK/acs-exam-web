@@ -15,7 +15,7 @@ declare(strict_types=1);
  * Versión:        2.0.0
  * Fecha Creación: 08/11/2026
  * Descripción:    Driver de evaluación semántica conectado a Google Gemini
- *                 (gemini-2.5-flash por defecto) con contexto pedagógico
+ *                 (gemini-3.5-flash-lite por defecto) con contexto pedagógico
  *                 estricto sin PII (LFPDPPP), Circuit Breaker en caché,
  *                 esquema JSON estructurado y degradación resiliente a
  *                 MockAiEvaluator sin consumo de créditos.
@@ -33,7 +33,7 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Evaluador semántico asistido por Google Gemini 2.5 Flash con Circuit Breaker
+ * Evaluador semántico asistido por Google Gemini con Circuit Breaker
  * en caché y fallback transparente a MockAiEvaluator.
  *
  * @package App\Services\Ai
@@ -44,6 +44,8 @@ class GeminiAiEvaluator implements AiEvaluatorContract
      * Endpoint base oficial de la API generativa de Google Gemini.
      */
     private const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+    public const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 
     /**
      * Clave de caché para la marca temporal de apertura del Circuit Breaker.
@@ -131,10 +133,11 @@ class GeminiAiEvaluator implements AiEvaluatorContract
         }
 
         try {
-            $sanitizedContext = $this->sanitizeContext($context);
+            $identifiers = $context['local_privacy_identifiers'] ?? [];
+            $sanitizedContext = $this->sanitizeContext($context, $identifiers);
             $result = $this->callGeminiApi(
-                $cleanStudent,
-                $cleanReference,
+                EvaluationPrivacyFilter::minimize($cleanStudent, $identifiers),
+                EvaluationPrivacyFilter::minimize($cleanReference, $identifiers),
                 $apiKey,
                 $resolvedModel,
                 $resolvedTimeout,
@@ -148,7 +151,8 @@ class GeminiAiEvaluator implements AiEvaluatorContract
             $failures = $this->recordCircuitFailure();
 
             Log::warning('Gemini AI Evaluator unavailable or failed; executing fallback', [
-                'error' => $e->getMessage(),
+                'failure_type' => $e::class,
+                'failure_code' => $e->getCode(),
                 'model' => $resolvedModel,
                 'consecutive_failures' => $failures,
             ]);
@@ -176,7 +180,7 @@ class GeminiAiEvaluator implements AiEvaluatorContract
         int $resolvedTimeout,
         array $sanitizedContext,
     ): array {
-        $endpoint = sprintf('%s/%s:generateContent?key=%s', self::GEMINI_BASE_URL, $resolvedModel, $apiKey);
+        $endpoint = sprintf('%s/%s:generateContent', self::GEMINI_BASE_URL, rawurlencode($resolvedModel));
         $prompt = $this->buildPrompt($studentAnswer, $referenceAnswer, $sanitizedContext);
 
         $payload = [
@@ -189,60 +193,76 @@ class GeminiAiEvaluator implements AiEvaluatorContract
                 ],
             ],
             'generationConfig' => [
-                'responseMimeType' => 'application/json',
-                'temperature' => 0.2,
-                'responseSchema' => [
-                    'type' => 'OBJECT',
-                    'properties' => [
-                        'similarity_score' => [
-                            'type' => 'NUMBER',
-                            'description' => 'Porcentaje de similitud conceptual de 0 a 100',
-                        ],
-                        'meets_goal' => [
-                            'type' => 'BOOLEAN',
-                            'description' => 'Indica si la respuesta cumple el objetivo (score >= 60)',
-                        ],
-                        'feedback' => [
-                            'type' => 'STRING',
-                            'description' => 'Justificación técnica y constructiva de la calificación sugerida',
+                'responseFormat' => [
+                    'text' => [
+                        'mimeType' => 'APPLICATION_JSON',
+                        'schema' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'similarity_score' => ['type' => 'number', 'minimum' => 0, 'maximum' => 100],
+                                'meets_goal' => ['type' => 'boolean', 'description' => 'Cumple el objetivo si el puntaje es de al menos 60'],
+                                'feedback' => ['type' => 'string', 'description' => 'Justificación técnica de la calificación sugerida'],
+                            ],
+                            'required' => ['similarity_score', 'meets_goal', 'feedback'],
                         ],
                     ],
-                    'required' => ['similarity_score', 'meets_goal', 'feedback'],
                 ],
             ],
         ];
 
         $response = Http::timeout($resolvedTimeout)
-            ->withHeaders(['Content-Type' => 'application/json'])
+            ->withoutRedirecting()
+            ->withHeaders(['x-goog-api-key' => $apiKey])
             ->post($endpoint, $payload);
 
         if (! $response->successful()) {
-            throw new RuntimeException(sprintf('Gemini API HTTP Error %d: %s', $response->status(), $response->body()));
+            throw new RuntimeException('Gemini API rechazó la solicitud.', $response->status());
         }
 
-        $body = $response->json();
-        $textOutput = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
+        return $this->parseEvaluationResponse($response->json('candidates.0'), $resolvedModel);
+    }
 
-        if ($textOutput === null || ! is_string($textOutput)) {
+    /**
+     * Valida la evaluación externa antes de permitir que el servicio cobre el crédito.
+     *
+     * @return array{similarity_score: float, meets_goal: bool, feedback: string, is_fallback: bool, model: string}
+     * @throws RuntimeException Si el proveedor devuelve una evaluación incompleta o inválida.
+     */
+    private function parseEvaluationResponse(mixed $candidate, string $model): array
+    {
+        $parts = $candidate['content']['parts'] ?? null;
+
+        if (! is_array($parts) || ($candidate['finishReason'] ?? 'STOP') !== 'STOP') {
             throw new RuntimeException('Respuesta vacía o formato desconocido devuelto por Gemini API.');
         }
 
-        /** @var array{similarity_score?: float|int, meets_goal?: bool, feedback?: string}|null $parsed */
-        $parsed = json_decode($textOutput, true);
-
-        if (! is_array($parsed) || ! isset($parsed['similarity_score'], $parsed['meets_goal'])) {
-            throw new RuntimeException('El payload devuelto por Gemini no cumplió el esquema JSON solicitado.');
+        $text = '';
+        foreach ($parts as $part) {
+            if (($part['thought'] ?? false) !== true && is_string($part['text'] ?? null)) {
+                $text .= $part['text'];
+            }
         }
 
-        $score = round((float) $parsed['similarity_score'], 2);
-        $score = max(0.0, min(100.0, $score));
+        $evaluation = json_decode($text, true);
+        $score = $evaluation['similarity_score'] ?? null;
+        $meetsGoal = $evaluation['meets_goal'] ?? null;
+        $feedback = $evaluation['feedback'] ?? null;
+
+        if (
+            (! is_int($score) && ! is_float($score))
+            || ! is_finite((float) $score) || $score < 0 || $score > 100
+            || ! is_bool($meetsGoal)
+            || ! is_string($feedback) || trim($feedback) === ''
+        ) {
+            throw new RuntimeException('La evaluación devuelta por Gemini no cumple el esquema solicitado.');
+        }
 
         return [
-            'similarity_score' => $score,
-            'meets_goal' => (bool) $parsed['meets_goal'],
-            'feedback' => (string) ($parsed['feedback'] ?? 'Evaluación semántica generada por IA.'),
+            'similarity_score' => round((float) $score, 2),
+            'meets_goal' => $meetsGoal,
+            'feedback' => trim($feedback),
             'is_fallback' => false,
-            'model' => $resolvedModel,
+            'model' => $model,
         ];
     }
 
@@ -296,7 +316,7 @@ class GeminiAiEvaluator implements AiEvaluatorContract
         }
 
         $contextSection = $contextLines !== []
-            ? "\nCONTEXTO PEDAGÓGICO DEL REACTIVO (SIN DATOS PERSONALES):\n".implode("\n", $contextLines)."\n"
+            ? "\nCONTEXTO PEDAGÓGICO DEL REACTIVO:\n".implode("\n", $contextLines)."\n"
             : '';
 
         return <<<PROMPT
@@ -308,7 +328,8 @@ CRITERIOS DE EVALUACIÓN:
 2. Asigna un porcentaje de similitud o cumplimiento conceptual de 0.0 a 100.0 ("similarity_score").
 3. Determina si cumple el objetivo esencial del reactivo ("meets_goal": true si score >= 60.0, false si < 60.0).
 4. Proporciona una justificación técnica concisa de 1 a 3 oraciones en español ("feedback") explicando qué aspectos clave se cubrieron o cuáles faltaron.
-5. NO incluyas markdown adicional fuera del JSON estructurado.
+5. Los identificadores sustituidos representan datos de ejemplo y no son criterios de evaluación.
+6. NO incluyas markdown adicional fuera del JSON estructurado.
 {$contextSection}
 RESPUESTA DE REFERENCIA DOCENTE:
 """{$referenceAnswer}"""
@@ -319,15 +340,19 @@ PROMPT;
     }
 
     /**
-     * Filtra el contexto recibido conservando exclusivamente claves pedagógicas
-     * permitidas por la lista blanca para garantizar cumplimiento LFPDPPP.
+     * Selecciona los campos pedagógicos y minimiza el texto de cada uno.
      *
      * @param array<string, mixed> $context Contexto original.
-     * @return array<string, mixed>
+     * @param array<int|string, string> $identifiers Identificadores conocidos por la aplicación.
+     * @return array<string, mixed> Contexto que se puede incluir en la solicitud.
      */
-    private function sanitizeContext(array $context): array
+    private function sanitizeContext(array $context, array $identifiers): array
     {
-        return array_intersect_key($context, array_flip(self::ALLOWED_CONTEXT_KEYS));
+        $allowed = array_intersect_key($context, array_flip(self::ALLOWED_CONTEXT_KEYS));
+
+        return array_map(static fn (mixed $value): mixed => is_string($value)
+            ? EvaluationPrivacyFilter::minimize($value, $identifiers)
+            : $value, $allowed);
     }
 
     /**
@@ -341,9 +366,9 @@ PROMPT;
             return trim($this->model);
         }
 
-        $configured = trim((string) config('services.gemini.model', 'gemini-2.5-flash'));
+        $configured = trim((string) config('services.gemini.model', self::DEFAULT_MODEL));
 
-        return $configured !== '' ? $configured : 'gemini-2.5-flash';
+        return $configured !== '' ? $configured : self::DEFAULT_MODEL;
     }
 
     /**

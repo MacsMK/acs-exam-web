@@ -89,7 +89,7 @@ class FrontendViewRenderingTest extends TestCase
 
         // 4. Verificación 2FA
         $user = $this->createUser('teacher');
-        $user->forceFill(['two_factor_code' => '654321'])->save();
+        app(\App\Services\AuthService::class)->issueTwoFactorCode($user);
 
         // La pantalla 2FA solo se abre en el navegador que acaba de pasar la
         // contraseña (sesión `pending_2fa_user_id`); sin ella responde 403.
@@ -104,7 +104,7 @@ class FrontendViewRenderingTest extends TestCase
         $twoFactorResponse->assertSee('sweetalert2');
         $twoFactorResponse->assertSee('alerts.js');
         $twoFactorResponse->assertSee($user->email);
-        $twoFactorResponse->assertSee('654321');
+        $twoFactorResponse->assertDontSee($user->two_factor_code);
     }
 
     /**
@@ -114,21 +114,21 @@ class FrontendViewRenderingTest extends TestCase
     public function test_two_factor_demo_banner_is_hidden_when_mail_is_real(): void
     {
         $user = $this->createUser('teacher');
-        $user->forceFill(['two_factor_code' => '654321'])->save();
-
-        config(['mail.default' => 'log']);
+        $user->update(['email' => 'profesor.demo@example.test']);
+        config(['mail.default' => 'log', 'auth.two_factor_demo' => true]);
+        app(\App\Services\AuthService::class)->issueTwoFactorCode($user);
         $this->withSession(['pending_2fa_user_id' => $user->id])
             ->get(route('auth.verify-2fa.show', $user))
             ->assertOk()
             ->assertSee('Modo demo')
-            ->assertSee('654321');
+            ->assertSee($user->two_factor_code);
 
         config(['mail.default' => 'smtp']);
         $this->withSession(['pending_2fa_user_id' => $user->id])
             ->get(route('auth.verify-2fa.show', $user))
             ->assertOk()
             ->assertDontSee('Modo demo')
-            ->assertDontSee('654321');
+            ->assertDontSee($user->two_factor_code);
     }
 
     /**
@@ -253,8 +253,109 @@ class FrontendViewRenderingTest extends TestCase
         $response->assertViewHas('failedCount', 1);
         $response->assertViewHas('averageScore', 4.0);
         $response->assertSee('4.0');
-        $response->assertSee('0 aprobados');
-        $response->assertSee('1 reprobados');
+        $response->assertSee('Aprobados (0)');
+        $response->assertSee('Reprobados (1)');
+
+        $group->forceFill(['grading_scale' => '0-10', 'passing_score' => 4.0])->save();
+
+        $this->get(route('dashboard'))
+            ->assertOk()
+            ->assertViewHas('passedCount', 1)
+            ->assertViewHas('failedCount', 0)
+            ->assertViewHas('averageScore', 4.0);
+    }
+
+    public function test_teacher_dashboard_separates_pending_attempts_from_zero_grades_and_counts_current_submissions(): void
+    {
+        $this->freezeSecond();
+
+        $teacher = $this->createUser('teacher');
+        $student = $this->createUser('student');
+        $group = Group::create([
+            'teacher_id' => $teacher->id,
+            'name' => 'Grupo sin escala configurada',
+            'access_folio' => 'PEND0001',
+            'is_closed' => false,
+        ]);
+
+        $exam = $this->createDraftExam($teacher, 'Examen activo');
+        $exam->update(['starts_at' => now()->subHour(), 'is_published' => true]);
+        $draft = $this->createDraftExam($teacher, 'Examen en borrador');
+        $this->createDraftExam($teacher, 'Examen programado')->update(['is_published' => true]);
+        $this->createDraftExam($teacher, 'Examen cerrado')->update([
+            'starts_at' => now()->subDay(),
+            'ends_at' => now(),
+            'is_published' => true,
+        ]);
+
+        $attempt = [
+            'exam_id' => $exam->id,
+            'group_id' => $group->id,
+            'question_sequence_payload' => [],
+            'started_at' => now()->subMinutes(30),
+        ];
+
+        StudentAttempt::create($attempt + [
+            'student_id' => $student->id,
+            'attempt_number' => 1,
+            'status' => 'submitted',
+            'submitted_at' => now()->subMinutes(25),
+            'final_score' => 9.5,
+        ]);
+        $pendingAttempt = StudentAttempt::create($attempt + [
+            'student_id' => $student->id,
+            'attempt_number' => 2,
+            'status' => 'submitted',
+            'submitted_at' => now()->subMinutes(10),
+            'objective_score' => 25,
+            'pending_ai_count' => 1,
+        ]);
+        StudentAttempt::create($attempt + [
+            'student_id' => $this->createUser('student')->id,
+            'status' => 'in_progress',
+        ]);
+
+        $response = $this->actingAs($teacher)->get(route('dashboard'));
+        $response->assertOk()
+            ->assertViewHas('examsCount', 4)
+            ->assertViewHas('activeExamsCount', 1)
+            ->assertViewHas('averageScore', static fn ($averageScore): bool => $averageScore === null)
+            ->assertViewHas('passedCount', 0)
+            ->assertViewHas('failedCount', 0)
+            ->assertViewHas('gradedCount', 0)
+            ->assertViewHas('pendingCount', 1)
+            ->assertViewHas('outOfScaleCount', 0)
+            ->assertSee('Aún no hay calificaciones definitivas')
+            ->assertSee('Pendientes de revisión')
+            ->assertSee(route('exams.assemble', $draft))
+            ->assertSee(route('exams.monitor', $exam))
+            ->assertSee(route('exams.revision.index', $exam))
+            ->assertSee(route('exams.review', $exam))
+            ->assertDontSee(route('exams.assemble', $exam));
+
+        $recentExam = $response->viewData('recentExams')->find($exam->id);
+        $this->assertInstanceOf(Exam::class, $recentExam);
+        $this->assertEquals(1, $recentExam->submitted_attempts_count);
+        $this->assertEquals(3, $recentExam->student_attempts_count);
+        $this->assertFalse($recentExam->supportsStructuralEdit());
+
+        $pendingAttempt->update(['final_score' => 0.0, 'pending_ai_count' => 0]);
+        StudentAttempt::create($attempt + [
+            'student_id' => $this->createUser('student')->id,
+            'status' => 'submitted',
+            'submitted_at' => now()->subMinutes(8),
+            'final_score' => 25,
+        ]);
+
+        $this->get(route('dashboard'))
+            ->assertOk()
+            ->assertViewHas('averageScore', static fn ($averageScore): bool => $averageScore === 0.0)
+            ->assertViewHas('passedCount', 0)
+            ->assertViewHas('failedCount', 1)
+            ->assertViewHas('gradedCount', 1)
+            ->assertViewHas('pendingCount', 0)
+            ->assertViewHas('outOfScaleCount', 1)
+            ->assertSee('Calificaciones fuera de escala');
     }
 
     /**
@@ -276,20 +377,18 @@ class FrontendViewRenderingTest extends TestCase
 
         // Examen publicado asignado al grupo para probar la tabla con examen pendiente
         $exam = $this->createDraftExam($teacher, 'Examen Parcial de Matemáticas');
-        $exam->update(['is_published' => true]);
+        $exam->update(['is_published' => true, 'starts_at' => now()->subMinute()]);
         $exam->groups()->attach($group->id);
 
         $response = $this->actingAs($student)->get(route('dashboard'));
 
         $response->assertOk();
         $response->assertSee('Panel del Estudiante');
-        $response->assertSee('Grupos Inscritos');
-        $response->assertSee('Exámenes Pendientes');
-        $response->assertSee('Evaluaciones Presentadas');
-        $response->assertSee('Exámenes Disponibles');
+        $response->assertSee('Exámenes activos y programados');
         $response->assertSee('Examen Parcial de Matemáticas');
         $response->assertSee('Abrir examen');
-        $response->assertSee('Historial de Intentos Recientes');
+        $response->assertSee('Historial de intentos recientes');
+        $response->assertSee('Matemáticas Discretas 1A');
         $response->assertSee('Unirme a un grupo');
     }
 
@@ -421,9 +520,9 @@ class FrontendViewRenderingTest extends TestCase
         // 1. student.groups.join.form
         $joinForm = $this->actingAs($student)->get(route('student.groups.join.form'));
         $joinForm->assertOk();
-        $joinForm->assertSee('Unirme a un Grupo Escolar');
-        $joinForm->assertSee('Folio alfanumérico de acceso');
-        $joinForm->assertSee('Enviar solicitud');
+        $joinForm->assertSee('Unirme a un grupo');
+        $joinForm->assertSee('Folio de acceso');
+        $joinForm->assertSee('Unirme al grupo');
 
         // 2. student.exams.index
         $examsIndex = $this->actingAs($student)->get(route('student.exams.index'));
@@ -477,11 +576,11 @@ class FrontendViewRenderingTest extends TestCase
         $examsIndexWithExam = $this->actingAs($student)->get(route('student.exams.index'));
         $examsIndexWithExam->assertOk();
         $examsIndexWithExam->assertSee($exam->title);
-        $examsIndexWithExam->assertSee('Iniciar examen');
+        $examsIndexWithExam->assertSee('Abrir examen');
         // RF-EXA-026: tiempo máximo calculado en lugar del valor fijo de 60 minutos
         $examsIndexWithExam->assertSee('Tiempo máximo:');
         $examsIndexWithExam->assertSee($exam->maxDurationMinutes() . ' minutos');
-        // RF-EXA-028: «Iniciar examen» lleva a las instrucciones, no inicia el intento directamente
+        // RF-EXA-028: «Abrir examen» lleva a las instrucciones antes de iniciar el intento
         $examsIndexWithExam->assertSee(route('student.exams.instructions', $exam), false);
         $examsIndexWithExam->assertDontSee(route('attempts.start', $exam), false);
 

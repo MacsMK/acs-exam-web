@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->redirectGuestsTo('/login');
         $middleware->redirectUsersTo('/dashboard');
+        $middleware->trimStrings(except: ['review_draft.*.notes']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->dontFlash([

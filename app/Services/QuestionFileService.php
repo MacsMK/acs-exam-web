@@ -27,6 +27,7 @@ namespace App\Services;
 use App\Models\ExamQuestion;
 use App\Models\Question;
 use App\Models\Scopes\TenantTeacherScope;
+use App\Models\StudentAttempt;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
@@ -35,6 +36,12 @@ use Illuminate\Support\Str;
 
 class QuestionFileService
 {
+    public function __construct(
+        private readonly AttemptService $attempts,
+        private readonly StudentResultService $studentResults,
+    ) {
+    }
+
     public const DISK = 'local';
 
     public const DIRECTORY = 'question-files';
@@ -97,8 +104,12 @@ class QuestionFileService
     }
 
     /**
-     * El docente dueño de la pregunta y los alumnos con un intento en un examen
-     * que la incluye pueden consultar sus archivos (RNF-SEG-008).
+     * Autoriza al docente titular o al alumno que todavía pueda ver el reactivo
+     * en su intento o en su revisión publicada (RNF-SEG-008, RF-GRU-011/012/019).
+     *
+     * @param User $viewer Cuenta que solicita el archivo.
+     * @param Question $question Reactivo propietario del archivo.
+     * @return bool
      */
     public function canView(User $viewer, Question $question): bool
     {
@@ -110,13 +121,31 @@ class QuestionFileService
             return false;
         }
 
-        return ExamQuestion::query()
+        $questionsByExam = ExamQuestion::query()
             ->where('question_id', $question->id)
-            ->whereHas('exam', static function (Builder $exam) use ($viewer): void {
-                $exam->withoutGlobalScope(TenantTeacherScope::class)
-                    ->whereHas('studentAttempts', static fn (Builder $attempt) => $attempt->where('student_id', $viewer->id));
-            })
-            ->exists();
+            ->get(['id', 'exam_id'])
+            ->groupBy('exam_id');
+
+        return StudentAttempt::query()
+            ->where('student_id', $viewer->id)
+            ->inCurrentGroupsOfStudent($viewer->id)
+            ->whereIn('exam_id', $questionsByExam->keys())
+            ->with('exam')
+            ->get()
+            ->contains(function (StudentAttempt $attempt) use ($questionsByExam): bool {
+                $sequence = array_map('intval', $attempt->question_sequence_payload ?? []);
+                $fileQuestions = $questionsByExam[$attempt->exam_id]->modelKeys();
+
+                if ($this->attempts->isInProgress($attempt)) {
+                    return $attempt->free_close_at !== null
+                        ? array_intersect($fileQuestions, $sequence) !== []
+                        : in_array($sequence[$attempt->current_question_index] ?? null, $fileQuestions, true);
+                }
+
+                return $attempt->status === 'submitted'
+                    && array_intersect($fileQuestions, $sequence) !== []
+                    && $this->studentResults->reviewIsAvailable($attempt);
+            });
     }
 
     private function store(int $teacherId, UploadedFile $file, string $kind): string

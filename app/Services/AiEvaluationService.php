@@ -32,8 +32,8 @@ use App\Models\AuditLog;
 use App\Models\Exam;
 use App\Models\StudentAnswer;
 use App\Models\StudentAttempt;
-use App\Models\SubscriptionPackage;
 use App\Models\User;
+use App\Services\Ai\GeminiAiEvaluator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -58,59 +58,54 @@ class AiEvaluationService
     }
 
     /**
-     * Compila el resumen integral de créditos, consumo histórico y configuración
-     * del motor de IA para el tablero docente (/docente/creditos-ia).
+     * Compila la cuota vigente y los indicadores de respuestas del docente.
+     * Cada respuesta se cuenta si su último resultado guardado proviene de IA externa.
      *
      * @param User $teacher Cuenta docente autenticada.
      * @return array{
-     *     teacher: User,
-     *     activePackage: ?SubscriptionPackage,
      *     creditSummary: array<string, mixed>,
-     *     totalAiEvaluations: int,
-     *     recotejadasCount: int,
-     *     promedioSimilitud: float,
+     *     aiEvaluatedAnswersCount: int,
+     *     aiReviewedAnswersCount: int,
      *     activeDriver: string,
-     *     activeModel: string,
-     *     hasGeminiKey: bool,
-     *     queueDriver: string,
-     *     aiRequestsLimit: ?int
+     *     hasGeminiKey: bool
      * }
      */
     public function getTeacherAiCreditsOverview(User $teacher): array
     {
-        $teacher->loadMissing('subscription.subscriptionPackage');
-
-        try {
-            $activePackage = $this->subscriptionLimitService->resolveActivePackage($teacher);
-        } catch (SubscriptionLimitExceededException) {
-            $activePackage = null;
-        }
-
-        $creditSummary = $this->subscriptionLimitService->getAiCreditQuotaSummary($teacher);
-
         $aiAnswersQuery = StudentAnswer::query()
             ->whereHas('examQuestion.exam', static function ($query) use ($teacher): void {
                 $query->where('teacher_id', $teacher->id);
             })
-            ->whereNotNull('ai_evaluated_at');
+            ->whereNotNull('ai_evaluated_at')
+            ->whereNotNull('ai_similarity_score')
+            ->where('ai_is_fallback', false);
 
-        $totalAiEvaluations = (clone $aiAnswersQuery)->count();
-        $recotejadasCount = (clone $aiAnswersQuery)->whereNotNull('teacher_recoteje_score')->count();
-        $rawAverage = (clone $aiAnswersQuery)->avg('ai_similarity_score');
-        $promedioSimilitud = $rawAverage !== null ? round((float) $rawAverage, 1) : 0.0;
+        $counts = (clone $aiAnswersQuery)->toBase()
+            ->whereNotIn('ai_model_used', ['none', 'mock-local'])
+            ->selectRaw('COUNT(*) AS evaluated, COUNT(teacher_recoteje_score) AS reviewed')
+            ->first();
+
+        $evaluated = (int) $counts->evaluated;
+        $reviewed = (int) $counts->reviewed;
+
+        // Los resultados anteriores al registro del modelo pueden tener respuestas en blanco.
+        $legacyAnswers = $aiAnswersQuery->whereNull('ai_model_used')
+            ->select(['id', 'answer_payload', 'teacher_recoteje_score'])
+            ->lazyById();
+
+        foreach ($legacyAnswers as $answer) {
+            if ($answer->canBeReviewedQualitatively()) {
+                $evaluated++;
+                $reviewed += (int) ($answer->teacher_recoteje_score !== null);
+            }
+        }
 
         return [
-            'teacher' => $teacher,
-            'activePackage' => $activePackage,
-            'creditSummary' => $creditSummary,
-            'totalAiEvaluations' => $totalAiEvaluations,
-            'recotejadasCount' => $recotejadasCount,
-            'promedioSimilitud' => $promedioSimilitud,
+            'creditSummary' => $this->subscriptionLimitService->getAiCreditQuotaSummary($teacher),
+            'aiEvaluatedAnswersCount' => $evaluated,
+            'aiReviewedAnswersCount' => $reviewed,
             'activeDriver' => (string) config('services.ai.driver', 'gemini'),
-            'activeModel' => (string) config('services.gemini.model', 'gemini-2.5-flash'),
             'hasGeminiKey' => trim((string) config('services.gemini.api_key', '')) !== '',
-            'queueDriver' => (string) config('queue.default', 'sync'),
-            'aiRequestsLimit' => $creditSummary['limit'],
         ];
     }
 
@@ -156,7 +151,7 @@ class AiEvaluationService
             ]);
         }
 
-        $studentText = $this->extractStudentAnswerText($answer->answer_payload);
+        $studentText = StudentAnswer::qualitativeText($answer->answer_payload);
 
         if ($studentText === '') {
             $this->markEmptyAnswerWithoutAi($answer, $attempt);
@@ -228,7 +223,7 @@ class AiEvaluationService
         $toEvaluate = collect();
 
         foreach ($candidates as $candidate) {
-            $studentText = $this->extractStudentAnswerText($candidate->answer_payload);
+            $studentText = StudentAnswer::qualitativeText($candidate->answer_payload);
 
             if ($studentText === '') {
                 $this->markEmptyAnswerWithoutAi($candidate, $attempt);
@@ -291,7 +286,7 @@ class AiEvaluationService
         $questionable = $question->questionable;
         $attempt = $answer->studentAttempt;
 
-        if ($exam === null || $attempt === null || (int) $exam->teacher_id !== $teacherId) {
+        if ($exam === null || $attempt === null || $attempt->status !== 'submitted' || (int) $exam->teacher_id !== $teacherId) {
             return null;
         }
 
@@ -299,7 +294,7 @@ class AiEvaluationService
             return null;
         }
 
-        $studentText = $this->extractStudentAnswerText($answer->answer_payload);
+        $studentText = StudentAnswer::qualitativeText($answer->answer_payload);
 
         if ($studentText === '') {
             $this->markEmptyAnswerWithoutAi($answer, $attempt);
@@ -338,6 +333,11 @@ class AiEvaluationService
             }
         }
 
+        if ($this->aiEvaluator instanceof GeminiAiEvaluator) {
+            // Estos valores se usan para filtrar localmente y quedan fuera de la lista del prompt.
+            $context['local_privacy_identifiers'] = $this->evaluationAccountIdentifiers($attempt->student, $exam->teacher);
+        }
+
         // Llamada HTTP a IA fuera de DB::transaction() para no retener bloqueos SQL.
         $result = $this->aiEvaluator->evaluate($studentText, $referenceAnswer, $context);
 
@@ -355,7 +355,12 @@ class AiEvaluationService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $lockedAnswer = StudentAnswer::query()
+            $lockedAttempt = StudentAttempt::query()->lockForUpdate()->find($attempt->id);
+            if ($lockedAttempt === null || $lockedAttempt->status !== 'submitted') {
+                return null;
+            }
+
+            $lockedAnswer = $lockedAttempt->answers()
                 ->whereKey($answer->id)
                 ->lockForUpdate()
                 ->first();
@@ -365,7 +370,7 @@ class AiEvaluationService
             }
 
             $isFallback = (bool) ($result['is_fallback'] ?? false);
-            $modelUsed = (string) ($result['model'] ?? config('services.gemini.model', 'gemini-2.5-flash'));
+            $modelUsed = (string) ($result['model'] ?? (config('services.gemini.model') ?: GeminiAiEvaluator::DEFAULT_MODEL));
 
             if (! $isFallback) {
                 try {
@@ -384,7 +389,7 @@ class AiEvaluationService
             $similarityScore = max(0.0, min(100.0, round((float) ($result['similarity_score'] ?? 0.0), 2)));
             $meetsGoal = (bool) ($result['meets_goal'] ?? ($similarityScore >= 60.0));
             $feedback = (string) ($result['feedback'] ?? 'Evaluación semántica generada por IA.');
-            $suggestedPoints = round(($similarityScore / 100.0) * (float) $examQuestion->points_weight, 2);
+        $suggestedPoints = StudentAnswer::pointsForAiSimilarity($similarityScore, (float) $examQuestion->points_weight);
 
             $updateAttributes = [
                 'ai_similarity_score' => $similarityScore,
@@ -401,7 +406,7 @@ class AiEvaluationService
 
             $lockedAnswer->update($updateAttributes);
 
-            $this->recalculateAiEstimatedScore($attempt);
+            $this->recalculateAiEstimatedScore($lockedAttempt);
 
             // Regla RF-IAR-011: Solo se descuenta crédito y se audita consumo cuando la IA real respondió.
             if (! $isFallback) {
@@ -446,6 +451,12 @@ class AiEvaluationService
     private function markEmptyAnswerWithoutAi(StudentAnswer $answer, StudentAttempt $attempt): void
     {
         DB::transaction(function () use ($answer, $attempt): void {
+            $lockedAttempt = StudentAttempt::query()->lockForUpdate()->find($attempt->id);
+            $lockedAnswer = $lockedAttempt?->answers()->lockForUpdate()->find($answer->id);
+            if ($lockedAnswer === null) {
+                return;
+            }
+
             $updateAttributes = [
                 'ai_similarity_score' => 0.0,
                 'ai_meets_goal' => false,
@@ -455,13 +466,13 @@ class AiEvaluationService
                 'ai_model_used' => 'none',
             ];
 
-            if ($answer->teacher_recoteje_score === null) {
+            if ($lockedAnswer->teacher_recoteje_score === null) {
                 $updateAttributes['points_awarded'] = 0.0;
                 $updateAttributes['is_correct'] = false;
             }
 
-            $answer->update($updateAttributes);
-            $this->recalculateAiEstimatedScore($attempt);
+            $lockedAnswer->update($updateAttributes);
+            $this->recalculateAiEstimatedScore($lockedAttempt);
         });
     }
 
@@ -474,40 +485,35 @@ class AiEvaluationService
      */
     private function recalculateAiEstimatedScore(StudentAttempt $attempt): void
     {
-        $aiEstimatedScore = (float) $attempt->answers()
-            ->whereHas('examQuestion.question', static function ($query): void {
-                $query->whereIn('question_type', ['open', 'code']);
-            })
-            ->whereNotNull('ai_similarity_score')
-            ->sum('points_awarded');
-
-        StudentAttempt::query()
-            ->whereKey($attempt->id)
-            ->update([
-                'ai_estimated_score' => round($aiEstimatedScore, 2),
-            ]);
+        $attempt->load(['answers' => static fn ($answers) => $answers->whereNotNull('ai_similarity_score')->with('examQuestion.question')]);
+        $attempt->update(['ai_estimated_score' => $attempt->aiSuggestedScore() ?? 0]);
     }
 
     /**
-     * Extrae de forma segura el contenido textual o código fuente de answer_payload.
+     * Recupera los identificadores conocidos para filtrarlos de la copia externa.
      *
-     * @param mixed $payload Carga almacenada en acs_student_answers.answer_payload.
-     * @return string Texto normalizado sin espacios extremos.
+     * @param User|null $student Cuenta que entregó la respuesta.
+     * @param User|null $teacher Cuenta a cargo de la referencia.
+     * @return array<int|string, string> Identificadores y su sustituto neutro.
      */
-    private function extractStudentAnswerText(mixed $payload): string
+    private function evaluationAccountIdentifiers(?User $student, ?User $teacher): array
     {
-        if (is_string($payload)) {
-            return trim($payload);
-        }
+        $identifiers = [];
+        foreach ([$student, $teacher] as $account) {
+            if ($account === null) {
+                continue;
+            }
 
-        if (is_array($payload)) {
-            foreach (['text', 'code', 'answer', 'given_answer'] as $key) {
-                if (isset($payload[$key]) && is_string($payload[$key])) {
-                    return trim($payload[$key]);
-                }
+            $fullName = trim($account->first_name.' '.$account->last_name);
+            if ($account->first_name !== '' && $account->last_name !== '') {
+                $identifiers[$fullName] = 'Persona';
+            }
+            $identifiers[$account->email] = 'persona@example.invalid';
+            if (filled($account->phone)) {
+                $identifiers[$account->phone] = '0000000000';
             }
         }
 
-        return '';
+        return $identifiers;
     }
 }

@@ -37,6 +37,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
@@ -62,6 +63,39 @@ class TeacherVerificationFlowTest extends TestCase
             'content' => 'Aviso de privacidad vigente con cláusula LFPDPPP de purga documental.',
             'published_at' => now()->subMinute(),
         ]);
+    }
+
+    public function test_local_demo_teacher_can_register_with_an_ordinary_email_and_verify_on_screen(): void
+    {
+        $this->app->instance('env', 'local');
+        config(['mail.default' => 'log', 'auth.two_factor_demo' => true]);
+        Storage::fake('local');
+        Mail::shouldReceive('raw')->never();
+
+        $email = 'docente.demo@example.com';
+        $csrfToken = Str::random(40);
+        $response = $this->withSession(['_token' => $csrfToken])
+            ->post(route('auth.register.teacher.store'), $this->openRegistrationPayload([
+                'email' => $email,
+                '_token' => $csrfToken,
+            ]));
+        $response->assertRedirect()->assertSessionHasNoErrors();
+
+        $user = User::where('email', $email)->firstOrFail();
+        $verificationUrl = route('auth.verify-2fa.show', ['user' => $user->id]);
+        $response->assertRedirect($verificationUrl);
+        $this->assertSame('demo', $user->two_factor_delivery);
+
+        $this->get($verificationUrl)->assertOk()
+            ->assertSee('Modo demo / Entorno de pruebas')
+            ->assertSee($user->two_factor_code);
+
+        $this->post(route('auth.verify-2fa.store'), [
+            'user_id' => $user->id,
+            'code' => $user->two_factor_code,
+            '_token' => $csrfToken,
+        ])->assertRedirect(route('dashboard'));
+        $this->assertAuthenticatedAs($user);
     }
 
     public function test_open_web_registration_with_pdf_creates_pending_verification_stores_private_document_and_runs_sep_verifier(): void

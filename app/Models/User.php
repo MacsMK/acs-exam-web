@@ -90,6 +90,9 @@ class User extends Authenticatable
         'password',
         'remember_token',
         'two_factor_code',
+        'two_factor_challenge_id',
+        'two_factor_delivery',
+        'two_factor_failed_attempts',
     ];
 
     /**
@@ -323,11 +326,15 @@ class User extends Authenticatable
         return [
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'trial_group_used_at' => 'datetime',
+            'trial_exam_used_at' => 'datetime',
+            'trial_history_complete' => 'boolean',
             'skip_ai_reevaluation_warning' => 'boolean',
             'email_verified_at' => 'datetime',
             'phone_verified_at' => 'datetime',
             'two_factor_expires_at' => 'datetime',
             'two_factor_verified_at' => 'datetime',
+            'two_factor_failed_attempts' => 'integer',
         ];
     }
 

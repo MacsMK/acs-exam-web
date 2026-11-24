@@ -46,7 +46,7 @@ class QuestionFileController extends Controller
         abort_if($path === null || ! $disk->exists($path), 404);
 
         return $disk->response($path, $kind === 'pdf' ? 'material-de-apoyo.pdf' : null, [
-            'Cache-Control' => 'private, max-age=3600',
+            'Cache-Control' => 'private, no-store',
         ]);
     }
 }

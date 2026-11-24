@@ -46,6 +46,58 @@ class StudentResultService
     }
 
     /**
+     * Calificación que puede consultar el alumno en las vistas web.
+     * Los listados precargan `exam` y `group`. Pueden pasar el estado efectivo
+     * de reanudación cuando el intento todavía figura abierto en la base.
+     *
+     * @return array{status: string, label: string, variant: string, score: ?float, scaleMax: ?int, isPassed: ?bool}
+     */
+    public function buildWebGrade(StudentAttempt $attempt, ?bool $isInProgress = null): array
+    {
+        $attempt->loadMissing('exam');
+
+        $score = null;
+        $scaleMax = null;
+        $isPassed = null;
+        $status = match (true) {
+            $attempt->status === 'in_progress' && ($isInProgress ?? true) => 'in_progress',
+            $attempt->status !== 'submitted' => 'unsubmitted',
+            $this->resultVisibilityMode($attempt) === 'hidden' => 'reserved',
+            $attempt->final_score === null || (int) $attempt->pending_ai_count > 0 => 'pending',
+            default => 'published',
+        };
+
+        if ($status === 'published') {
+            $attempt->loadMissing('group');
+            $gradingScale = (string) ($attempt->exam?->grading_scale ?? '0-10');
+            $score = (float) $attempt->final_score;
+            $scaleMax = $gradingScale === '0-100' ? 100 : 10;
+            if ($score >= 0 && $score <= $scaleMax) {
+                $isPassed = $score >= $this->minimumForAttempt($attempt, $gradingScale);
+            }
+        }
+
+        [$label, $variant] = match ($status) {
+            'published' => match ($isPassed) {
+                true => ['Aprobado', 'accent'],
+                false => ['Reprobado', 'danger'],
+                null => ['Fuera de escala', 'warning'],
+            },
+            'reserved' => ['Reservado', 'neutral'],
+            'pending' => ['En revisión', 'warning'],
+            'in_progress' => ['En progreso', 'warning'],
+            default => ['Sin envío formal', 'neutral'],
+        };
+
+        return compact('status', 'label', 'variant', 'score', 'scaleMax', 'isPassed');
+    }
+
+    private function resultVisibilityMode(StudentAttempt $attempt): string
+    {
+        return (string) ($attempt->exam?->result_visibility_mode ?? 'hidden');
+    }
+
+    /**
      * Construye el resumen normalizado para la vista web de resultado de intento
      * (MPW-V3 §5.2.2, ADR-050, ADR-056, ADR-059), evitando lógica de escala en Blade.
      *
@@ -65,22 +117,26 @@ class StudentResultService
      *     finalScore: ?float,
      *     displayScore: float,
      *     isPassed: ?bool,
-     *     pendingAiCount: int
+     *     pendingAiCount: int,
+     *     grade: array{status: string, label: string, variant: string, score: ?float, scaleMax: ?int, isPassed: ?bool},
+     *     wasStoppedByTeacher: bool
      * }
      */
     public function buildWebResultSummary(StudentAttempt $attempt): array
     {
         $attempt->loadMissing('exam');
         $exam = $attempt->exam;
+        $isInProgress = $attempt->status === 'in_progress' && $this->attemptService->isInProgress($attempt);
+        $grade = $this->buildWebGrade($attempt, $isInProgress);
 
-        $visibilityMode = (string) ($exam?->result_visibility_mode ?? 'hidden');
+        $visibilityMode = $this->resultVisibilityMode($attempt);
         $isHidden = $visibilityMode === 'hidden';
         $pendingAiCount = (int) ($attempt->pending_ai_count ?? 0);
         $isPendingReview = $pendingAiCount > 0 || $attempt->final_score === null;
 
         $gradingScale = (string) ($exam?->grading_scale ?? '0-10');
         $isHundredScale = $gradingScale === '0-100';
-        $minPassing = $isHundredScale ? 60.0 : 6.0;
+        $minPassing = $this->minimumForAttempt($attempt, $gradingScale);
 
         $totalExamWeight = $exam !== null
             ? (float) $exam->examQuestions()->sum('points_weight')
@@ -98,7 +154,7 @@ class StudentResultService
         $displayScore = $finalScore ?? ($exam !== null
             ? $this->gradeCalculator->normalizeScoreForExam($objectiveScoreRaw, $exam, $totalExamWeight)
             : $objectiveScoreRaw);
-        $isPassed = $finalScore !== null ? $finalScore >= $minPassing : null;
+        $isPassed = $grade['isPassed'];
 
         return [
             'visibilityMode' => $visibilityMode,
@@ -116,6 +172,8 @@ class StudentResultService
             'displayScore' => $displayScore,
             'isPassed' => $isPassed,
             'pendingAiCount' => $pendingAiCount,
+            'grade' => $grade,
+            'wasStoppedByTeacher' => $attempt->wasStoppedByTeacher(),
         ];
     }
 
@@ -238,7 +296,7 @@ class StudentResultService
             'status' => 'published',
             'score' => round((float) $attempt->final_score, 2),
             'grading_scale' => $exam->grading_scale,
-            'is_passing' => (float) $attempt->final_score >= ($exam->grading_scale === '0-100' ? 60.0 : 6.0),
+            'is_passing' => (float) $attempt->final_score >= $this->minimumForAttempt($attempt, $exam->grading_scale),
             'sections' => $sections,
             'teacher_comments' => $this->teacherComments($answers),
             'review_available' => $this->reviewIsAvailable($attempt),
@@ -287,6 +345,20 @@ class StudentResultService
     }
 
     /**
+     * Obtiene el umbral aplicable al puntaje de un intento.
+     *
+     * @param StudentAttempt $attempt Intento del grupo consultado.
+     * @param string $scale Escala del examen.
+     * @return float Umbral en la misma unidad que el puntaje.
+     */
+    private function minimumForAttempt(StudentAttempt $attempt, string $scale): float
+    {
+        $fallback = $scale === '0-100' ? 60.0 : 6.0;
+
+        return $attempt->group?->minimumForExam($scale, $fallback) ?? $fallback;
+    }
+
+    /**
      * La evaluación definitiva está pendiente mientras el examen oculte los
      * resultados o mientras el intento enviado no tenga calificación final
      * (RF-EVA-010, ADR-050, ADR-056).
@@ -299,7 +371,7 @@ class StudentResultService
 
         $attempt->loadMissing('exam');
 
-        if ($attempt->exam?->result_visibility_mode === 'hidden') {
+        if ($this->resultVisibilityMode($attempt) === 'hidden') {
             return true;
         }
 
@@ -314,11 +386,7 @@ class StudentResultService
         $attempt->loadMissing('exam');
         $exam = $attempt->exam;
 
-        if ($exam?->result_visibility_mode === 'hidden') {
-            return false;
-        }
-
-        if ($attempt->final_score === null) {
+        if ($attempt->status !== 'submitted' || $this->isPending($attempt) || (int) $attempt->pending_ai_count > 0) {
             return false;
         }
 

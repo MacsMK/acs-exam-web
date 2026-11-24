@@ -14,7 +14,7 @@ declare(strict_types=1);
  * Autor:          Equipo 4 (A-Code Solutions)
  * Versión:        2.0.0
  * Descripción:    Pruebas automatizadas del evaluador asistido por IA Google
- *                 Gemini (modelo default gemini-2.5-flash): evaluación
+ *                 Gemini (modelo predeterminado gemini-3.5-flash-lite): evaluación
  *                 semántica con contexto pedagógico sin PII (LFPDPPP),
  *                 bandera is_fallback, degradación resiliente y Circuit Breaker.
  * ============================================================================
@@ -29,6 +29,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class GeminiAiEvaluatorTest extends TestCase
@@ -44,26 +45,23 @@ class GeminiAiEvaluatorTest extends TestCase
         Config::set('services.gemini.timeout', 10);
         Config::set('services.gemini.circuit_failure_threshold', 3);
         Config::set('services.gemini.circuit_cooldown_seconds', 60);
+        Http::preventStrayRequests();
     }
 
-    public function test_uses_gemini_2_5_flash_as_default_model(): void
+    public function test_uses_gemini_3_5_flash_lite_with_structured_output_and_secure_authentication(): void
     {
-        // Sin valor explícito en config, el driver debe resolver el default gemini-2.5-flash (ADR-059)
         Config::set('services.gemini.model', '');
 
         Http::fake([
             'https://generativelanguage.googleapis.com/*' => Http::response([
                 'candidates' => [
                     [
+                        'finishReason' => 'STOP',
                         'content' => [
                             'parts' => [
-                                [
-                                    'text' => json_encode([
-                                        'similarity_score' => 92.0,
-                                        'meets_goal' => true,
-                                        'feedback' => 'Respuesta clara y precisa.',
-                                    ]),
-                                ],
+                                ['thought' => true, 'text' => 'Texto interno ajeno a la sugerencia.'],
+                                ['text' => '{"similarity_score":92,"meets_goal":true,'],
+                                ['text' => '"feedback":"Respuesta clara y precisa."}'],
                             ],
                         ],
                     ],
@@ -82,11 +80,31 @@ class GeminiAiEvaluatorTest extends TestCase
 
         $this->assertSame(92.0, $result['similarity_score']);
         $this->assertTrue($result['meets_goal']);
+        $this->assertSame('Respuesta clara y precisa.', $result['feedback']);
         $this->assertFalse($result['is_fallback']);
-        $this->assertSame('gemini-2.5-flash', $result['model']);
+        $this->assertSame('gemini-3.5-flash-lite', $result['model']);
 
         Http::assertSent(function (Request $request): bool {
-            return str_contains($request->url(), '/models/gemini-2.5-flash:generateContent');
+            $this->assertSame('POST', $request->method());
+            $this->assertSame(
+                'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent',
+                $request->url(),
+            );
+            $this->assertTrue($request->hasHeader('x-goog-api-key', 'test-gemini-api-key-12345'));
+
+            $generationConfig = $request['generationConfig'];
+            $this->assertArrayNotHasKey('temperature', $generationConfig);
+            $this->assertArrayNotHasKey('responseSchema', $generationConfig);
+            $text = $generationConfig['responseFormat']['text'];
+            $this->assertSame('APPLICATION_JSON', $text['mimeType']);
+            $this->assertSame('object', $text['schema']['type']);
+            $this->assertEqualsCanonicalizing(['similarity_score', 'meets_goal', 'feedback'], $text['schema']['required']);
+            $score = $text['schema']['properties']['similarity_score'];
+            $this->assertSame('number', $score['type']);
+            $this->assertEquals(0, $score['minimum']);
+            $this->assertEquals(100, $score['maximum']);
+
+            return true;
         });
     }
 
@@ -268,6 +286,41 @@ class GeminiAiEvaluatorTest extends TestCase
         $this->assertTrue($result['is_fallback']);
         $this->assertSame('mock-local', $result['model']);
         $this->assertStringStartsWith('[Degradación por Contingencia]', $result['feedback']);
+    }
+
+    #[DataProvider('invalidEvaluations')]
+    public function test_rejects_incomplete_or_invalid_evaluations(array $evaluation, string $finishReason = 'STOP'): void
+    {
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'finishReason' => $finishReason,
+                    'content' => ['parts' => [['text' => json_encode($evaluation, JSON_THROW_ON_ERROR)]]],
+                ]],
+            ]),
+        ]);
+
+        $evaluator = $this->app->make(GeminiAiEvaluator::class);
+        $result = $evaluator->evaluate('Texto de prueba', 'Referencia de prueba');
+
+        $this->assertTrue($result['is_fallback']);
+        $this->assertSame('mock-local', $result['model']);
+        Http::assertSentCount(1);
+    }
+
+    public static function invalidEvaluations(): array
+    {
+        return [
+            'sin justificación' => [['similarity_score' => 85, 'meets_goal' => true]],
+            'justificación vacía' => [['similarity_score' => 85, 'meets_goal' => true, 'feedback' => '  ']],
+            'puntaje fuera de rango' => [['similarity_score' => 101, 'meets_goal' => true, 'feedback' => 'Explicación']],
+            'puntaje textual' => [['similarity_score' => '85', 'meets_goal' => true, 'feedback' => 'Explicación']],
+            'objetivo textual' => [['similarity_score' => 85, 'meets_goal' => 'true', 'feedback' => 'Explicación']],
+            'respuesta truncada' => [
+                ['similarity_score' => 85, 'meets_goal' => true, 'feedback' => 'Explicación'],
+                'MAX_TOKENS',
+            ],
+        ];
     }
 
     public function test_circuit_breaker_opens_after_three_consecutive_503_errors_and_skips_fourth_http_call(): void

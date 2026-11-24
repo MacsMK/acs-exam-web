@@ -33,6 +33,7 @@ use App\Models\Group;
 use App\Models\MultipleChoiceItem;
 use App\Models\Question;
 use App\Models\StudentAnswer;
+use App\Models\StudentAttempt;
 use App\Models\User;
 use App\Services\AttemptService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -141,7 +142,7 @@ class ExamQuestionTimingTest extends TestCase
     public function test_the_draft_of_the_active_question_is_saved_recovered_and_cleared(): void
     {
         $student = User::query()->where('role', 'student')->firstOrFail();
-        $this->actingAs($student)->post(route('attempts.start', $this->exam))->assertRedirect();
+        $this->startFromWeb($student);
         $attempt = \App\Models\StudentAttempt::query()->where('exam_id', $this->exam->id)->firstOrFail();
         $sequence = $attempt->question_sequence_payload;
 
@@ -161,6 +162,134 @@ class ExamQuestionTimingTest extends TestCase
             ->post(route('attempts.answer', $attempt), ['exam_question_id' => $sequence[0], 'selected_option_index' => 1])
             ->assertRedirect();
         $this->assertNull(app(AttemptService::class)->draftFor($attempt, (int) $sequence[0]));
+    }
+
+    /**
+     * Integra la última respuesta confirmada aunque su pregunta haya vencido al entregar.
+     *
+     * @return void
+     */
+    public function test_voluntary_finish_keeps_the_last_confirmed_answer_and_its_time(): void
+    {
+        $student = User::where('role', 'student')->firstOrFail();
+        $this->startFromWeb($student);
+        $attempt = StudentAttempt::where('exam_id', $this->exam->id)->sole();
+        $questionId = (int) $attempt->question_sequence_payload[0];
+
+        $this->postJson(route('attempts.draft', $attempt), ['exam_question_id' => $questionId, 'selected_option_index' => 0])
+            ->assertOk()->assertJsonPath('saved', true);
+        $this->travel(10)->seconds();
+        $confirmedAt = now()->copy();
+        $this->postJson(route('attempts.draft', $attempt), ['exam_question_id' => $questionId, 'selected_option_index' => 1])
+            ->assertOk()->assertJsonPath('saved', true);
+        $this->travel(60)->seconds();
+
+        $this->post(route('attempts.finish', $attempt))->assertRedirect(route('attempts.result', $attempt));
+        $answer = $attempt->answers()->sole();
+        $this->assertSame(['selected_option_index' => 1], $answer->answer_payload);
+        $this->assertTrue($answer->is_correct);
+        $this->assertSame($confirmedAt->getTimestamp(), $answer->answered_at->getTimestamp());
+        $this->assertSame('submitted', $attempt->refresh()->status);
+        $this->assertDatabaseMissing('acs_attempt_drafts', ['student_attempt_id' => $attempt->id]);
+    }
+
+    /**
+     * Conserva el borrador confirmado al detener la aplicación en su ruta docente.
+     *
+     * @return void
+     */
+    public function test_teacher_stop_preserves_the_confirmed_draft_and_existing_close_state(): void
+    {
+        $student = User::where('role', 'student')->firstOrFail();
+        $this->startFromWeb($student);
+        $attempt = StudentAttempt::where('exam_id', $this->exam->id)->sole();
+        $questionId = (int) $attempt->question_sequence_payload[0];
+        $this->postJson(route('attempts.draft', $attempt), ['exam_question_id' => $questionId, 'selected_option_index' => 1])
+            ->assertOk()->assertJsonPath('saved', true);
+
+        $this->actingAs($this->exam->teacher)->post(route('exams.close', $this->exam))->assertRedirect(route('exams.index'));
+        $answer = $attempt->answers()->sole();
+        $this->assertSame(['selected_option_index' => 1], $answer->answer_payload);
+        $this->assertNull($answer->points_awarded);
+        $this->assertSame('expired', $attempt->refresh()->status);
+        $this->assertNull($attempt->final_score);
+        $this->assertDatabaseMissing('acs_attempt_drafts', ['student_attempt_id' => $attempt->id]);
+        $this->assertDatabaseHas('acs_audit_logs', [
+            'user_id' => $this->exam->teacher_id,
+            'auditable_id' => $attempt->id,
+            'action' => StudentAttempt::ACTION_STOPPED_BY_TEACHER,
+        ]);
+    }
+
+    /**
+     * Dos solicitudes del reactivo consultado previamente dejan un solo avance.
+     *
+     * @return void
+     */
+    public function test_a_retried_answer_does_not_advance_twice_or_change_the_saved_answer(): void
+    {
+        $this->take()->assertOk();
+        $attempt = StudentAttempt::where('exam_id', $this->exam->id)->sole();
+        $service = app(AttemptService::class);
+        $questionId = (int) $attempt->question_sequence_payload[0];
+        $service->submitAnswer($attempt, $questionId, ['selected_option_index' => 1]);
+
+        try {
+            $service->submitAnswer($attempt, $questionId, ['selected_option_index' => 1]);
+            $this->fail('La respuesta anterior ya había avanzado la secuencia.');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('reactivo activo', $e->getMessage());
+        }
+
+        $this->assertSame(1, $attempt->refresh()->current_question_index);
+        $this->assertSame(['selected_option_index' => 1], $attempt->answers()->sole()->answer_payload);
+    }
+
+    /**
+     * La sesión que presenta el examen también protege la entrega voluntaria.
+     *
+     * @return void
+     */
+    public function test_the_session_presenting_an_attempt_owns_the_voluntary_finish(): void
+    {
+        $this->take()->assertOk();
+        $attempt = StudentAttempt::where('exam_id', $this->exam->id)->sole();
+        $this->actingAs(User::findOrFail($attempt->student_id))->post(route('attempts.finish', $attempt))
+            ->assertRedirect(route('student.exams.index'))->assertSessionHasErrors('attempt');
+        $this->assertSame('in_progress', $attempt->refresh()->status);
+
+        $this->travel(AttemptService::SESSION_IDLE_SECONDS)->seconds();
+        $opened = $this->get(route('attempts.show', $attempt))->assertOk();
+        $cookie = config('session.cookie');
+        $this->withCredentials()->withCookie($cookie, $opened->getCookie($cookie)->getValue());
+        $this->post(route('attempts.finish', $attempt))->assertRedirect(route('attempts.result', $attempt));
+        $this->assertSame('submitted', $attempt->refresh()->status);
+    }
+
+    /**
+     * Bloquea edición general y variantes de una aplicación iniciada.
+     *
+     * @return void
+     */
+    public function test_an_exam_in_application_and_its_paraphrases_are_protected_from_edits(): void
+    {
+        $this->take()->assertOk();
+        $this->actingAs($this->exam->teacher)->putJson(route('exams.update', $this->exam), [
+            'title' => 'Otro título durante la aplicación',
+            'grading_scale' => $this->exam->grading_scale,
+            'result_visibility_mode' => $this->exam->result_visibility_mode,
+            'max_allowed_incidents' => 5,
+            'starts_at' => $this->exam->starts_at->toDateTimeString(),
+            'ends_at' => now()->addHours(4)->toDateTimeString(),
+            'group_ids' => $this->exam->groups()->pluck('acs_groups.id')->all(),
+        ])->assertUnprocessable()->assertJsonValidationErrors('exam');
+        $this->assertSame('Examen contrarreloj', $this->exam->refresh()->title);
+        $this->assertSame(3, $this->exam->max_allowed_incidents);
+
+        $question = $this->questions[0];
+        $this->postJson(route('questions.paraphrase.store', $question), ['stem' => 'Variante añadida durante una aplicación'])
+            ->assertUnprocessable()->assertJsonValidationErrors('stem');
+        $this->assertSame(0, $question->paraphrases()->count());
     }
 
     /**
@@ -346,6 +475,19 @@ class ExamQuestionTimingTest extends TestCase
                 'question_id' => (string) $question->id,
                 'selected_option_ids' => [(string) $selectedIndex],
             ]);
+    }
+
+    /**
+     * Inicia el flujo web y conserva la sesión del navegador simulado.
+     *
+     * @param User $student Estudiante inscrito en el examen de prueba.
+     * @return void
+     */
+    private function startFromWeb(User $student): void
+    {
+        $start = $this->actingAs($student)->post(route('attempts.start', $this->exam))->assertRedirect();
+        $cookie = config('session.cookie');
+        $this->withCredentials()->withCookie($cookie, $start->getCookie($cookie)->getValue());
     }
 
     private function createUser(string $role): User

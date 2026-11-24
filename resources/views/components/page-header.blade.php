@@ -3,9 +3,14 @@
     'title',
     'subtitle' => null,
     'breadcrumbs' => [],
+    'institutional' => false,
 ])
 
-<div {{ $attributes->merge(['class' => 'flex flex-col xl:flex-row xl:items-center justify-between gap-5 rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 shadow-sm']) }}>
+<div {{ $attributes->class([
+    'flex flex-col xl:flex-row xl:items-center justify-between gap-5 border border-slate-200 bg-white p-6 sm:p-7 shadow-sm',
+    'rounded-xl' => $institutional,
+    'rounded-2xl' => ! $institutional,
+]) }}>
     <div class="min-w-0 max-w-3xl">
         @if (! empty($breadcrumbs))
             <nav aria-label="Ruta de navegación" class="mb-2 flex flex-wrap items-center gap-1.5 text-xs font-medium text-slate-500">
@@ -20,11 +25,12 @@
                     @endif
 
                     @if ($crumbHref && ! $loop->last)
-                        <a href="{{ $crumbHref }}" class="transition hover:text-acode-tech">
-                            {{ $crumbLabel }}
+                        <a href="{{ $crumbHref }}" class="inline-flex min-h-6 min-w-0 items-center rounded-md px-1 transition hover:text-acode-tech focus-visible:outline focus-visible:outline-2 focus-visible:outline-acode-tech">
+                            <span class="min-w-0 break-words">{{ $crumbLabel }}</span>
                         </a>
                     @else
-                        <span @if ($loop->last) aria-current="page" class="font-semibold text-acode-primary" @endif>
+                        <span @if ($loop->last) aria-current="page" @endif
+                              @class(['min-w-0 break-words', 'font-semibold text-acode-primary' => $loop->last])>
                             {{ $crumbLabel }}
                         </span>
                     @endif
@@ -33,7 +39,11 @@
         @endif
 
         <div class="flex flex-wrap items-center gap-2.5">
-            <h1 class="text-2xl sm:text-3xl font-bold text-acode-primary tracking-tight">
+            <h1 @class([
+                'min-w-0 break-words font-bold text-acode-primary tracking-tight',
+                'text-[28px] leading-9' => $institutional,
+                'text-2xl sm:text-3xl' => ! $institutional,
+            ])>
                 {{ $title }}
             </h1>
 
@@ -45,7 +55,7 @@
         </div>
 
         @if ($subtitle)
-            <p class="mt-2 text-sm text-slate-500 leading-relaxed">
+            <p class="mt-2 break-words text-sm text-slate-500 leading-relaxed">
                 {{ $subtitle }}
             </p>
         @endif

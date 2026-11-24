@@ -15,35 +15,37 @@
 
 @section('content')
 <div class="space-y-6">
+    @php($grade = $summary['grade'])
     {{-- Nivel 1: Encabezado Institucional --}}
     <x-page-header
         :title="$attempt->exam->title"
+        :institutional="true"
         :breadcrumbs="[
             ['label' => 'Mis Calificaciones', 'href' => route('student.grades.index')],
             ['label' => 'Resultado de Evaluación'],
         ]"
     >
         <x-slot:meta>
-            <span>
-                Escala de evaluación: <strong class="text-slate-700">{{ $attempt->exam->grading_scale }}</strong>
-            </span>
-            <span>·</span>
-            <span>
-                Entregado el <strong class="font-mono text-slate-700">{{ $attempt->submitted_at?->format('d/m/Y \a \l\a\s H:i') ?? now()->format('d/m/Y H:i') }}</strong>
-            </span>
-            @if ($attempt->wasStoppedByTeacher())
-                <span>·</span>
-                <span class="font-semibold text-acode-warning-dark">Finalizado porque el docente detuvo el examen</span>
+            @if ($grade['status'] === 'published')
+                <span>Escala de evaluación: <strong class="text-slate-700">{{ $summary['gradingScale'] }}</strong></span>
+            @endif
+            @if ($attempt->status === 'submitted' && $attempt->submitted_at)
+                <span>Entregado el <strong class="font-mono text-slate-700">{{ $attempt->submitted_at->format('d/m/Y \a \l\a\s H:i') }}</strong></span>
+            @endif
+            @if ($summary['wasStoppedByTeacher'])
+                <span class="font-semibold text-acode-primary">Finalizado porque el docente detuvo el examen</span>
             @endif
         </x-slot:meta>
 
         <x-slot:actions>
             <x-button :href="route('student.exams.index')" variant="neutral" size="md">
                 <x-icon name="arrowLeft" class="w-4 h-4" />
-                Volver al listado
+                Volver al listado de exámenes
             </x-button>
 
-            @if (! empty($reviewAvailable) && ! $summary['isHidden'])
+            @if ($grade['status'] === 'in_progress')
+                <x-button :href="route('attempts.show', $attempt)" variant="primary" size="md">Continuar examen</x-button>
+            @elseif ($reviewAvailable && $grade['status'] === 'published')
                 <x-button :href="route('attempts.review', $attempt)" variant="primary" size="md">
                     <x-icon name="eye" class="w-4 h-4" />
                     Ver detalles y soluciones
@@ -54,7 +56,7 @@
 
     {{-- Nivel 2: Tarjeta de Calificación y Dictamen Normativo ($summary desde StudentResultService) --}}
     <x-card padding="p-6 sm:p-7">
-        @if ($summary['isHidden'])
+        @if ($grade['status'] === 'reserved')
             <div class="py-4 text-center">
                 <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-acode-surface text-slate-500">
                     <x-icon name="lock" class="h-6 w-6" />
@@ -64,96 +66,75 @@
                     El docente titular ha configurado la visualización de calificaciones de forma posterior.
                 </p>
             </div>
-        @elseif ($summary['isPendingReview'] && $summary['visibilityMode'] === 'estimated_score')
-            {{-- Modo estimated_score: muestra puntaje preliminar sin exponer ai_feedback (ADR-050) --}}
-            <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                    <p class="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        Calificación preliminar estimada
-                    </p>
-                    <p class="font-mono text-4xl font-extrabold text-acode-tech tabular-nums">
-                        {{ number_format((float) $summary['preliminaryScore'], 2) }}
-                    </p>
-                    <p class="mt-1 text-xs text-slate-500">
-                        Puntaje objetivo: <strong class="font-mono text-slate-700">{{ number_format((float) $attempt->objective_score, 2) }}</strong>
-                    </p>
-                </div>
-
-                <div class="sm:text-right">
-                    <x-badge variant="warning" class="px-3 py-1 text-xs font-semibold">
-                        Pendiente de evaluación docente
-                    </x-badge>
-                    <p class="mt-2 max-w-sm text-xs text-slate-500">
-                        Este puntaje preliminar está sujeto a validación definitiva del docente ({{ (int) $summary['pendingAiCount'] }} reactivo(s) cualitativo(s)).
-                    </p>
-                </div>
-            </div>
-        @elseif ($summary['isPendingReview'])
-            {{-- Modo objective_only_pending o final_score con recoteje pendiente --}}
-            <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                    <p class="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        Puntaje Objetivo Registrado
-                    </p>
-                    <p class="font-mono text-4xl font-extrabold text-acode-primary tabular-nums">
-                        {{ number_format((float) $attempt->objective_score, 2) }}
-                    </p>
-                </div>
-
-                <div class="sm:text-right">
-                    <x-badge variant="warning" class="px-3 py-1 text-xs font-semibold">
-                        Pendiente de evaluación docente
-                    </x-badge>
-                    <p class="mt-2 max-w-sm text-xs text-slate-500">
-                        {{ (int) $summary['pendingAiCount'] }} reactivo(s) cualitativo(s) en proceso de revisión docente.
-                    </p>
-                </div>
-            </div>
-        @else
-            <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                    <p class="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Calificación Definitiva</p>
-                    <p class="font-mono text-4xl font-extrabold tabular-nums {{ $summary['isPassed'] ? 'text-acode-accent-dark' : 'text-acode-danger' }}">
-                        {{ number_format((float) $summary['displayScore'], 2) }}
-                    </p>
-                </div>
-
-                <div class="flex flex-col gap-1.5 sm:items-end">
-                    <span class="text-xs font-medium text-slate-500">Dictamen de acreditación:</span>
-                    @if ($summary['isPassed'])
-                        <x-badge variant="accent" class="px-3.5 py-1 text-sm font-bold">
-                            Aprobado
-                        </x-badge>
-                    @else
-                        <x-badge variant="danger" class="px-3.5 py-1 text-sm font-bold">
-                            Reprobado
-                        </x-badge>
+        @elseif (in_array($grade['status'], ['in_progress', 'unsubmitted'], true))
+            <x-summary-list>
+                <x-summary-item label="Estado de la evaluación" compact>
+                    <x-slot:valueSlot>
+                        <x-student.attempt-grade :grade="$grade" />
+                    </x-slot:valueSlot>
+                    @if ($attempt->status === 'cancelled_by_incident')
+                        Cancelado por incidencias.
+                    @elseif (in_array($attempt->status, ['expired', 'in_progress'], true) && $grade['status'] === 'unsubmitted' && ! $summary['wasStoppedByTeacher'])
+                        El tiempo límite del examen ha expirado.
                     @endif
-                </div>
-            </div>
+                </x-summary-item>
+            </x-summary-list>
+        @elseif ($grade['status'] === 'pending' && $summary['visibilityMode'] === 'estimated_score')
+            {{-- Modo estimated_score: muestra puntaje preliminar sin exponer ai_feedback (ADR-050) --}}
+            <x-summary-list>
+                <x-summary-item label="Calificación preliminar estimada" :value="number_format((float) $summary['preliminaryScore'], 2)" />
+                <x-summary-item label="Puntaje objetivo" :value="number_format($summary['objectiveScoreRaw'], 2) . ' pts'" />
+                <x-summary-item label="Estado de la evaluación" compact>
+                    <x-slot:valueSlot><x-badge variant="warning">Pendiente de evaluación docente</x-badge></x-slot:valueSlot>
+                    Esta calificación es preliminar y está sujeta a validación docente.
+                </x-summary-item>
+            </x-summary-list>
+        @elseif ($grade['status'] === 'pending')
+            {{-- Modo objective_only_pending o final_score con revisión pendiente --}}
+            <x-summary-list>
+                <x-summary-item label="Puntaje Objetivo Registrado" :value="number_format($summary['objectiveScoreRaw'], 2) . ' pts'" />
+                <x-summary-item label="Estado de la evaluación" compact>
+                    <x-slot:valueSlot><x-badge variant="warning">Pendiente de evaluación docente</x-badge></x-slot:valueSlot>
+                    @if ($summary['pendingAiCount'] > 0)
+                        {{ $summary['pendingAiCount'] }} {{ $summary['pendingAiCount'] === 1 ? 'reactivo en revisión' : 'reactivos en revisión' }}.
+                    @endif
+                </x-summary-item>
+            </x-summary-list>
+        @elseif ($grade['status'] === 'published')
+            <x-summary-list>
+                <x-summary-item label="Calificación Definitiva" :value="number_format($grade['score'], 2) . ' / ' . $grade['scaleMax']" />
+                <x-summary-item label="Dictamen de acreditación" compact>
+                    <x-slot:valueSlot>
+                        <x-badge :variant="$grade['variant']" :class="$grade['variant'] === 'danger' ? '!text-acode-danger-dark' : ''">
+                            {{ $grade['label'] }}
+                        </x-badge>
+                    </x-slot:valueSlot>
+                </x-summary-item>
+            </x-summary-list>
         @endif
     </x-card>
 
     {{-- Nivel 3: Desglose Detallado por Reactivo (si no está oculto) --}}
-    @if (! $summary['isHidden'])
+    @if (in_array($grade['status'], ['pending', 'published'], true))
         <div class="space-y-4">
             <x-section-header
                 title="Desglose de Reactivos"
                 subtitle="Estado individual y puntaje asignado a cada respuesta registrada."
+                :institutional="true"
             />
 
             <div class="space-y-3">
                 @forelse ($attempt->answers as $index => $answer)
                     <x-card padding="p-5">
-                        <div class="mb-3 flex items-start justify-between gap-3">
-                            <div class="flex items-start gap-3">
+                        <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
+                            <div class="flex min-w-0 items-start gap-3">
                                 <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-acode-surface text-xs font-bold text-acode-tech">
                                     {{ $index + 1 }}
                                 </span>
-                                <div>
-                                    <p class="text-sm font-semibold leading-snug text-acode-primary">
+                                <div class="min-w-0">
+                                    <h3 class="break-words text-base font-semibold leading-6 text-acode-primary">
                                         {{ $answer->examQuestion?->question?->title ?? 'Reactivo #' . $answer->exam_question_id }}
-                                    </p>
+                                    </h3>
                                     <p class="mt-0.5 text-xs text-slate-500">
                                         Tipo:
                                         <span>
@@ -179,7 +160,7 @@
                                     @if ($answer->is_correct)
                                         <x-badge variant="accent">Correcto</x-badge>
                                     @else
-                                        <x-badge variant="danger">Incorrecto</x-badge>
+                                        <x-badge variant="danger" class="!text-acode-danger-dark">Incorrecto</x-badge>
                                     @endif
                                 @else
                                     <x-badge variant="warning">Pendiente de evaluación docente</x-badge>
@@ -193,13 +174,13 @@
                                 || $answer->teacher_recoteje_score !== null
                                 || (! $summary['isPendingReview'] && ! is_null($answer->is_correct))
                             )
-                                <span>Puntos asignados: <strong class="font-mono text-slate-800">{{ number_format((float) $answer->points_awarded, 2) }}</strong></span>
+                                <span>Puntos asignados: <strong class="font-mono text-slate-800">{{ number_format((float) $answer->points_awarded, 2) }} pts</strong></span>
                             @else
-                                <span class="italic text-slate-400">Puntos: Pendiente de validación</span>
+                                <span class="text-slate-600">Puntos: Pendiente de validación</span>
                             @endif
 
                             @if ($answer->teacher_recoteje_notes)
-                                <span class="max-w-md italic text-slate-700" title="{{ $answer->teacher_recoteje_notes }}">
+                                <span class="max-w-md break-words italic text-slate-700">
                                     Observación docente: "{{ $answer->teacher_recoteje_notes }}"
                                 </span>
                             @endif

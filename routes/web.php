@@ -17,6 +17,8 @@ use App\Http\Controllers\AccountProfileController;
 use App\Http\Controllers\ProfilePhotoController;
 use App\Http\Controllers\AdminInvitationCodeController;
 use App\Http\Controllers\AdminTeacherController;
+use App\Http\Controllers\AdminOperationsController;
+use App\Http\Controllers\AdminTermsController;
 use App\Http\Controllers\AttemptController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
@@ -25,6 +27,7 @@ use App\Http\Controllers\EvaluationPeriodController;
 use App\Http\Controllers\ExamController;
 use App\Http\Controllers\ExamMonitorController;
 use App\Http\Controllers\GroupController;
+use App\Http\Controllers\GradePlanController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\QuestionFileController;
@@ -40,7 +43,10 @@ use App\Http\Controllers\WebPrivacyController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [LandingController::class, 'index'])->name('landing');
+Route::get('terminos', [WebPrivacyController::class, 'terms'])->name('terms.public');
 Route::get('aviso-privacidad', [WebPrivacyController::class, 'show'])->name('privacy.show.public');
+Route::view('ayuda', 'help.index')->name('help.index');
+Route::view('soporte-tecnico', 'help.support')->name('help.support');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('register/docente', [RegisterController::class, 'showTeacherForm'])->name('auth.register.teacher.show');
@@ -123,6 +129,14 @@ Route::middleware('auth')->group(function (): void {
             ->name('groups.students.remove');
         Route::get('groups/{group}/periodos', [EvaluationPeriodController::class, 'index'])->name('groups.periods.index');
         Route::post('groups/{group}/periodos', [EvaluationPeriodController::class, 'store'])->name('groups.periods.store');
+        Route::get('groups/{group}/periodos/{period}/editar', [EvaluationPeriodController::class, 'edit'])
+            ->whereNumber('period')->name('groups.periods.edit');
+        Route::patch('groups/{group}/periodos/{period}', [EvaluationPeriodController::class, 'update'])
+            ->whereNumber('period')->name('groups.periods.update');
+        Route::get('groups/{group}/plan-final', [GradePlanController::class, 'edit'])->name('groups.final-plan');
+        Route::post('groups/{group}/plan-final', [GradePlanController::class, 'update'])->name('groups.final-plan.update');
+        Route::get('groups/{group}/periodos/{period}/ponderaciones', [GradePlanController::class, 'edit'])->name('groups.periods.plan');
+        Route::post('groups/{group}/periodos/{period}/ponderaciones', [GradePlanController::class, 'update'])->name('groups.periods.plan.update');
         Route::get('groups/{group}/periodos/{period}/sabana', [EvaluationPeriodController::class, 'gradebook'])->name('groups.periods.gradebook');
         Route::post('groups/{group}/periodos/{period}/sabana', [EvaluationPeriodController::class, 'saveGradebook'])->name('groups.periods.gradebook.save');
         Route::get('groups/{group}/periodos/{period}/sabana/export', [EvaluationPeriodController::class, 'exportGradebook'])->name('groups.periods.gradebook.export');
@@ -237,6 +251,10 @@ Route::middleware('auth')->group(function (): void {
     });
 
     Route::middleware('role:super_admin')->prefix('admin')->name('admin.')->group(function (): void {
+        Route::get('estudiantes', [AdminOperationsController::class, 'students'])->name('students.index');
+        Route::get('docentes/{teacher}/operaciones', [AdminOperationsController::class, 'teacher'])->whereNumber('teacher')->name('operations.teacher');
+        Route::get('terminos', [AdminTermsController::class, 'index'])->name('terms.index');
+        Route::post('terminos', [AdminTermsController::class, 'store'])->name('terms.store');
         Route::get('docentes', [AdminTeacherController::class, 'index'])->name('teachers.index');
         Route::post('docentes/{teacher}/toggle', [AdminTeacherController::class, 'toggleStatus'])
             ->whereNumber('teacher')

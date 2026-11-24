@@ -22,7 +22,6 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-use App\Models\AuditLog;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
 use App\Models\ExamSection;
@@ -60,6 +59,9 @@ class ExamAssemblyService
                 ->firstOrFail();
 
             $this->subscriptionLimitService->ensureCanCreateExam($lockedTeacher);
+            if ($this->subscriptionLimitService->resolveActivePackage($lockedTeacher) === null) {
+                $lockedTeacher->forceFill(['trial_exam_used_at' => now()])->save();
+            }
 
             $groupIds = array_values(array_unique(array_filter(
                 array_map('intval', $data['group_ids'] ?? []),
@@ -117,6 +119,12 @@ class ExamAssemblyService
                 if ($lockedExam->isWindowClosed()) {
                     throw ValidationException::withMessages([
                         'exam' => ['No es posible modificar un examen cuya ventana de aplicación ya concluyó'],
+                    ]);
+                }
+
+                if ($lockedExam->studentAttempts()->exists()) {
+                    throw ValidationException::withMessages([
+                        'exam' => ['La configuración queda bloqueada cuando el examen tiene intentos registrados'],
                     ]);
                 }
 
@@ -195,6 +203,8 @@ class ExamAssemblyService
      *     total_weight: float,
      *     sections_count: int,
      *     open_groups_count: int,
+     *     empty_sections: list<array{id: int, title: string}>,
+     *     incomplete_questions: list<array{id: int, title: string, missing_time: bool, missing_reference: bool}>,
      *     messages: list<string>
      * }
      */
@@ -203,18 +213,30 @@ class ExamAssemblyService
         $exam->loadMissing(['groups', 'sections.examQuestions.question.questionable']);
 
         $sectionsCount = $exam->sections->count();
-        $emptySections = $exam->sections->filter(static fn (ExamSection $section): bool => $section->examQuestions->isEmpty());
+        $emptySections = $exam->sections
+            ->filter(static fn (ExamSection $section): bool => $section->examQuestions->isEmpty())
+            ->map(static fn (ExamSection $section): array => ['id' => (int) $section->id, 'title' => $section->title])
+            ->values();
         // RF-EXA-019: cada pregunta necesita tiempo y respuesta de referencia válidos
-        $incompleteQuestions = $exam->sections->flatMap->examQuestions
-            ->reject(fn (ExamQuestion $examQuestion): bool => $this->examQuestionIsComplete($examQuestion));
-        $totalWeight = round((float) $exam->sections->flatMap->examQuestions->sum('points_weight'), 2);
+        $examQuestions = $exam->sections->flatMap->examQuestions;
+        $incompleteQuestions = $examQuestions
+            ->map(fn (ExamQuestion $examQuestion): array => [
+                'id' => (int) $examQuestion->id,
+                'title' => $examQuestion->question?->title ?? 'Reactivo no disponible',
+                'missing_time' => (int) $examQuestion->time_limit_seconds <= 0,
+                'missing_reference' => ! $this->examQuestionHasReference($examQuestion),
+            ])
+            ->filter(static fn (array $detail): bool => $detail['missing_time'] || $detail['missing_reference'])
+            ->values();
+        $totalCents = $examQuestions->sum(static fn (ExamQuestion $examQuestion): int => (int) round((float) $examQuestion->points_weight * 100));
+        $totalWeight = $totalCents / 100.0;
         $openGroupsCount = $exam->groups->where('is_closed', false)->count();
         $hasFutureWindow = $exam->ends_at !== null && $exam->ends_at->gt(now());
 
         $checks = [
             'has_sections' => $sectionsCount >= 1,
             'no_empty_sections' => $sectionsCount >= 1 && $emptySections->isEmpty() && $incompleteQuestions->isEmpty(),
-            'exact_weight' => abs($totalWeight - 100.0) <= 0.01,
+            'exact_weight' => abs($totalCents - 10000) <= 1,
             'has_open_group' => $openGroupsCount >= 1,
             'has_future_window' => $hasFutureWindow,
         ];
@@ -222,21 +244,19 @@ class ExamAssemblyService
         $messages = [];
         if (! $checks['has_sections']) {
             $messages[] = 'Agrega al menos un apartado con reactivos en la etapa Armar';
-        } elseif (! $checks['no_empty_sections']) {
+        } elseif ($emptySections->isNotEmpty()) {
             $emptyTitles = $emptySections->pluck('title')->implode(', ');
             $messages[] = "Elimina o asigna reactivos a los apartados vacíos ({$emptyTitles})";
         }
 
         if ($incompleteQuestions->isNotEmpty()) {
-            $incompleteTitles = $incompleteQuestions
-                ->map(static fn (ExamQuestion $examQuestion): string => (string) ($examQuestion->question?->title ?? 'Reactivo no disponible'))
-                ->implode(', ');
+            $incompleteTitles = $incompleteQuestions->pluck('title')->implode(', ');
             $messages[] = "Revisa el tiempo y la respuesta de referencia de: {$incompleteTitles}";
         }
 
         if (! $checks['exact_weight']) {
             $formattedWeight = number_format($totalWeight, 2, '.', '');
-            $messages[] = "La suma de ponderaciones actual es {$formattedWeight} pts y debe ser exactamente 100.00 pts";
+            $messages[] = "La suma actual es de {$formattedWeight} pts. La meta es 100.00 pts, con una tolerancia de 0.01 pts";
         }
 
         if (! $checks['has_open_group']) {
@@ -262,6 +282,8 @@ class ExamAssemblyService
             'total_weight' => $totalWeight,
             'sections_count' => $sectionsCount,
             'open_groups_count' => $openGroupsCount,
+            'empty_sections' => $emptySections->all(),
+            'incomplete_questions' => $incompleteQuestions->all(),
             'messages' => $messages,
         ];
     }
@@ -298,6 +320,11 @@ class ExamAssemblyService
                     'publish' => $readiness['messages'],
                 ]);
             }
+
+            // Publicar y cambiar las variantes de un reactivo comparten su bloqueo.
+            Question::withoutGlobalScope(TenantTeacherScope::class)
+                ->whereIn('id', $lockedExam->examQuestions()->select('question_id'))
+                ->orderBy('id')->sharedLock()->pluck('id');
 
             $published = $this->examRepository->publish($lockedExam);
 
@@ -363,27 +390,7 @@ class ExamAssemblyService
 
             $closed = $this->examRepository->closeEarly($lockedExam);
 
-            // RF-EXA-024: detener la aplicación finaliza los intentos en curso conservando
-            // sus respuestas; sin esto seguirían abiertos por la regla de RF-EXA-050.
-            $stoppedIds = StudentAttempt::query()
-                ->where('exam_id', $closed->id)
-                ->where('status', 'in_progress')
-                ->pluck('id');
-
-            StudentAttempt::query()
-                ->whereIn('id', $stoppedIds)
-                ->update(['status' => 'expired', 'submitted_at' => now()]);
-
-            // RF-EXA-024: la causa de finalización queda en la bitácora de cada intento
-            foreach ($stoppedIds as $attemptId) {
-                AuditLog::query()->create([
-                    'user_id' => auth()->id(),
-                    'action' => StudentAttempt::ACTION_STOPPED_BY_TEACHER,
-                    'auditable_type' => StudentAttempt::class,
-                    'auditable_id' => $attemptId,
-                    'new_values' => ['status' => 'expired', 'cause' => 'Detención del examen por el docente'],
-                ]);
-            }
+            app(AttemptService::class)->stopByTeacher($closed, (int) $lockedExam->teacher_id);
 
             return $closed;
         });
@@ -408,15 +415,14 @@ class ExamAssemblyService
     }
 
     /**
-     * Una pregunta del examen está completa si tiene tiempo positivo y su
-     * respuesta de referencia según el tipo (RF-EXA-019).
+     * Verifica la respuesta de referencia de acuerdo con el tipo de reactivo.
      */
-    private function examQuestionIsComplete(ExamQuestion $examQuestion): bool
+    private function examQuestionHasReference(ExamQuestion $examQuestion): bool
     {
         $question = $examQuestion->question;
         $item = $question?->questionable;
 
-        if ($item === null || (int) $examQuestion->time_limit_seconds <= 0) {
+        if ($item === null) {
             return false;
         }
 
@@ -642,7 +648,7 @@ class ExamAssemblyService
 
             if (count($availableIds) !== count($questionIds)) {
                 throw ValidationException::withMessages([
-                    'question_ids' => ['Uno o más reactivos de la propuesta ya forman parte del examen, comparten linaje Copy-On-Write o fueron eliminados'],
+                    'question_ids' => ['Uno o más reactivos de la propuesta ya están en el examen, son versiones del mismo reactivo o fueron eliminados'],
                 ]);
             }
 
@@ -743,7 +749,7 @@ class ExamAssemblyService
 
             if (count($availableIds) !== count($requestedIds)) {
                 throw ValidationException::withMessages([
-                    'question_ids' => ['Uno o más reactivos seleccionados ya forman parte del examen (o de su linaje Copy-On-Write) o no están disponibles'],
+                    'question_ids' => ['Uno o más reactivos seleccionados ya están en el examen, son versiones de un reactivo incluido o no están disponibles'],
                 ]);
             }
 
@@ -1059,7 +1065,7 @@ class ExamAssemblyService
 
             if (abs($totalCents - 10000) > 1) {
                 throw ValidationException::withMessages([
-                    'questions' => ['La suma de las ponderaciones debe ser exactamente 100.00 puntos'],
+                    'questions' => ['La suma de ponderaciones debe ser de 100.00 puntos, con una tolerancia de 0.01 puntos'],
                 ]);
             }
 
@@ -1089,7 +1095,18 @@ class ExamAssemblyService
                     ->all();
             }
 
-            $updatable = collect($data)->except(['questions', 'group_ids'])->all();
+            $updatable = collect($data)->except(['questions', 'group_ids', 'navigation_mode', 'free_duration_minutes'])->all();
+            if (array_key_exists('navigation_mode', $data)) {
+                $free = $data['navigation_mode'] === 'free';
+                $duration = $free ? (int) ($data['free_duration_minutes'] ?? 0) : null;
+                if ($free && ($duration < 1 || ! $this->subscriptionLimitService->allowsFreeNavigation($lockedExam->teacher))) {
+                    throw ValidationException::withMessages(['navigation_mode' => 'La modalidad libre requiere un plan habilitado y una duración válida']);
+                }
+                if ($duration != $lockedExam->free_duration_minutes && $lockedExam->studentAttempts()->exists()) {
+                    throw ValidationException::withMessages(['navigation_mode' => 'El examen ya tiene intentos con una modalidad registrada']);
+                }
+                $updatable['free_duration_minutes'] = $duration;
+            }
             if (array_key_exists('require_webcam', $updatable)) {
                 $updatable['require_webcam'] = (bool) ($updatable['require_webcam'] ?? false);
             }

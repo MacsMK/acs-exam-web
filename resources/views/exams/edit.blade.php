@@ -11,7 +11,8 @@
         $isWindowClosed = $exam->isWindowClosed();
         $lockScale = $isPublished || $hasAttempts;
         $lockRandomize = $isPublished;
-        $lockStart = $isPublished && $hasStartedWindow;
+        $lockDetails = $isPublished && ($hasAttempts || $isWindowClosed);
+        $lockStart = $lockDetails || ($isPublished && $hasStartedWindow);
 
         $initialStartsAt = old('starts_at', $exam->starts_at?->format('Y-m-d\TH:i') ?? '');
         $initialEndsAt = old('ends_at', $exam->ends_at?->format('Y-m-d\TH:i') ?? '');
@@ -23,7 +24,7 @@
         $visibilityModes = [
             'final_score' => [
                 'title' => 'Calificación final inmediata',
-                'desc' => 'El alumno visualiza su nota al entregar (y tras recoteje si hay reactivos abiertos o de código).',
+                'desc' => 'El alumno visualiza su nota al entregar (y tras la revisión docente si hay reactivos abiertos o de código).',
             ],
             'estimated_score' => [
                 'title' => 'Puntaje preliminar estimado',
@@ -49,7 +50,7 @@
             gradingScale: @js($initialScale),
             visibilityMode: @js($initialVisibility),
             randomizeOrder: @js($initialRandomize),
-            maxIncidents: @js((int) $initialIncidents),
+            maxIncidents: @js($initialIncidents),
             selectedGroups: @js(array_map('intval', $selectedGroupIds)),
 
             applyDurationPreset(hours) {
@@ -103,9 +104,11 @@
                     <p class="font-bold">Examen publicado: protecciones de integridad activas</p>
                     <p class="mt-0.5 text-slate-600">
                         @if ($isWindowClosed)
-                            La ventana de aplicación ya concluyó. Puedes consultar monitoreo o recoteje desde el resumen.
+                            La ventana de aplicación ya concluyó. Puedes consultar el monitoreo o la revisión de entregas desde el resumen.
+                        @elseif ($hasAttempts)
+                            El examen ya tiene intentos. Puedes consultar el monitoreo o la revisión de entregas desde el resumen.
                         @elseif ($hasStartedWindow)
-                            La ventana ya dio inicio; la escala, el orden y la fecha de inicio permanecen bloqueados.
+                            La escala, el orden y la fecha de inicio permanecen bloqueados.
                         @else
                             El examen está programado; la escala de calificación y el orden estructural no pueden alterarse tras publicar.
                         @endif
@@ -151,7 +154,7 @@
                                     x-model="title"
                                     maxlength="150"
                                     required
-                                    :disabled="$isWindowClosed"
+                                    :disabled="$lockDetails"
                                 />
                             </x-form.group>
 
@@ -159,7 +162,7 @@
                                 <x-form.textarea
                                     name="description"
                                     rows="4"
-                                    :disabled="$isWindowClosed"
+                                    :disabled="$lockDetails"
                                 >{{ old('description', $exam->description) }}</x-form.textarea>
                             </x-form.group>
                         </div>
@@ -194,7 +197,7 @@
                                             value="{{ $group->id }}"
                                             :checked="selectedGroups.includes({{ $group->id }})"
                                             @change="toggleGroup({{ $group->id }})"
-                                            @disabled($isWindowClosed)
+                                            @disabled($lockDetails)
                                             class="mt-1 h-4 w-4 rounded border-slate-300 text-acode-tech focus:ring-acode-tech"
                                         >
                                         <div class="min-w-0 flex-1">
@@ -241,7 +244,7 @@
                                         type="datetime-local"
                                         name="starts_at"
                                         x-model="startsAt"
-                                        :disabled="$lockStart || $isWindowClosed"
+                                        :disabled="$lockStart"
                                         required
                                     />
                                 </x-form.group>
@@ -251,13 +254,13 @@
                                         type="datetime-local"
                                         name="ends_at"
                                         x-model="endsAt"
-                                        :disabled="$isWindowClosed"
+                                        :disabled="$lockDetails"
                                         required
                                     />
                                 </x-form.group>
                             </div>
 
-                            @unless ($isWindowClosed)
+                            @unless ($lockDetails)
                                 <div class="flex flex-wrap items-center gap-2 pt-1">
                                     <span class="text-xs font-semibold text-slate-500 mr-1">Duración rápida desde inicio:</span>
                                     @foreach ([1 => '+1 hora', 2 => '+2 horas', 24 => '+24 horas', 168 => '+7 días'] as $hours => $presetLabel)
@@ -321,7 +324,7 @@
                                             class="flex items-start gap-3 rounded-xl border p-3.5 cursor-pointer transition"
                                             :class="visibilityMode === @js($modeKey) ? 'border-acode-tech bg-acode-surface/70' : 'border-slate-200 hover:border-slate-300'"
                                         >
-                                            <input type="radio" name="result_visibility_mode" value="{{ $modeKey }}" x-model="visibilityMode" @disabled($isWindowClosed) class="mt-1 text-acode-tech focus:ring-acode-tech">
+                                            <input type="radio" name="result_visibility_mode" value="{{ $modeKey }}" x-model="visibilityMode" @disabled($lockDetails) class="mt-1 text-acode-tech focus:ring-acode-tech">
                                             <div>
                                                 <span class="block text-sm font-bold text-acode-primary">{{ $modeInfo['title'] }}</span>
                                                 <span class="block text-xs text-slate-500 mt-0.5 leading-relaxed">{{ $modeInfo['desc'] }}</span>
@@ -366,12 +369,12 @@
                                     :required="true"
                                 >
                                     <x-form.input
-                                        type="number"
+                                        numeric="integer"
                                         name="max_allowed_incidents"
                                         min="0"
-                                        step="1"
-                                        x-model.number="maxIncidents"
-                                        :disabled="$isWindowClosed"
+                                        :max="\App\Models\Exam::MAX_ALLOWED_INCIDENTS"
+                                        x-model="maxIncidents"
+                                        :disabled="$lockDetails"
                                         required
                                     />
                                 </x-form.group>
@@ -383,24 +386,18 @@
                 {{-- Columna derecha: Resumen y guardado --}}
                 <aside class="lg:col-span-4 space-y-5 lg:sticky lg:top-24">
                     <x-card title="Estado del examen" subtitle="Resumen de cambios pendientes.">
-                        <dl class="space-y-3 text-xs">
-                            <div class="rounded-xl bg-acode-surface p-3.5 border border-slate-200">
-                                <dt class="text-slate-500 font-semibold uppercase tracking-wider">Examen</dt>
-                                <dd class="mt-1 text-sm font-bold text-acode-primary break-words" x-text="title.trim() || 'Sin título'"></dd>
-                            </div>
-                            <div class="flex items-center justify-between py-2 border-b border-slate-100">
-                                <dt class="text-slate-500">Grupos seleccionados</dt>
-                                <dd class="font-bold text-acode-primary" x-text="selectedGroups.length + ' grupo(s)'"></dd>
-                            </div>
-                            <div class="flex items-center justify-between py-2 border-b border-slate-100">
-                                <dt class="text-slate-500">Intentos registrados</dt>
-                                <dd class="font-mono font-bold text-acode-primary">{{ (int) ($exam->student_attempts_count ?? 0) }}</dd>
-                            </div>
-                            <div class="flex items-center justify-between py-2">
-                                <dt class="text-slate-500">Escala</dt>
-                                <dd class="font-semibold text-acode-primary" x-text="gradingScale"></dd>
-                            </div>
-                        </dl>
+                        <x-summary-list>
+                            <x-summary-item label="Examen" compact>
+                                <x-slot:valueSlot><span x-text="title.trim() || 'Sin título'"></span></x-slot:valueSlot>
+                            </x-summary-item>
+                            <x-summary-item label="Grupos seleccionados" compact>
+                                <x-slot:valueSlot><span x-text="selectedGroups.length"></span></x-slot:valueSlot>
+                            </x-summary-item>
+                            <x-summary-item label="Intentos registrados" :value="(int) ($exam->student_attempts_count ?? 0)" compact />
+                            <x-summary-item label="Escala" compact>
+                                <x-slot:valueSlot><span x-text="gradingScale"></span></x-slot:valueSlot>
+                            </x-summary-item>
+                        </x-summary-list>
                     </x-card>
 
                     <div class="rounded-xl border border-acode-tech/25 bg-acode-surface/80 p-4 space-y-2">
@@ -414,7 +411,7 @@
                     </div>
 
                     <div class="rounded-xl border border-slate-200 bg-white p-4 space-y-3 shadow-sm">
-                        @if ($isWindowClosed)
+                        @if ($lockDetails)
                             <x-button :href="route('exams.review', $exam)" variant="primary" size="lg" class="w-full">
                                 Abrir resumen y monitoreo
                             </x-button>

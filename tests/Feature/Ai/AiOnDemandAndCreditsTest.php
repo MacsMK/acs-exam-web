@@ -46,6 +46,8 @@ use App\Models\User;
 use App\Services\AttemptService;
 use Database\Seeders\SubscriptionPackageSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
@@ -69,6 +71,61 @@ class AiOnDemandAndCreditsTest extends TestCase
         Config::set('services.gemini.timeout', 10);
         Config::set('services.gemini.circuit_failure_threshold', 3);
         Config::set('services.gemini.circuit_cooldown_seconds', 60);
+        Http::preventStrayRequests();
+    }
+
+    public function test_credits_indicators_count_only_answers_with_a_saved_external_ai_result(): void
+    {
+        $teacher = User::factory()->teacher()->create();
+        $student = User::factory()->student()->create();
+        $attempt = $this->createSubmittedQualitativeAttempt($teacher, $student, includeBlankOpen: true);
+        $anotherAttempt = $this->createSubmittedQualitativeAttempt($teacher, $student);
+        $otherTeacher = User::factory()->teacher()->create();
+        $otherTeachersAttempt = $this->createSubmittedQualitativeAttempt($otherTeacher, $student);
+
+        $externalResult = [
+            'ai_evaluated_at' => now()->subMonths(2),
+            'ai_similarity_score' => 75,
+            'ai_model_used' => 'gemini-2.5-flash',
+        ];
+
+        $attempt['open_answer']->update($externalResult);
+        $attempt['code_answer']->update(array_replace($externalResult, [
+            'ai_model_used' => null,
+            'teacher_recoteje_score' => 0,
+        ]));
+        $attempt['blank_open_answer']->update(array_replace($externalResult, [
+            'ai_model_used' => 'none',
+            'ai_similarity_score' => 0,
+        ]));
+        $anotherAttempt['open_answer']->update(array_replace($externalResult, [
+            'ai_is_fallback' => true,
+            'ai_model_used' => 'mock-local',
+            'teacher_recoteje_score' => 8,
+        ]));
+        $anotherAttempt['code_answer']->update(['teacher_recoteje_score' => 10]);
+        $otherTeachersAttempt['open_answer']->update($externalResult);
+
+        $creditsRoute = route('teacher.ai-credits.index');
+        $this->actingAs($teacher)->get($creditsRoute)
+            ->assertOk()
+            ->assertViewHas('aiEvaluatedAnswersCount', 2)
+            ->assertViewHas('aiReviewedAnswersCount', 1)
+            ->assertSeeTextInOrder([
+                'Respuestas con puntaje sugerido por IA',
+                'Respuestas en las que guardaste un puntaje',
+                '1 de 2',
+            ]);
+
+        $attempt['blank_open_answer']->update(['ai_model_used' => null]);
+        $attempt['open_answer']->update(['ai_is_fallback' => true, 'ai_model_used' => 'mock-local']);
+
+        $this->get($creditsRoute)
+            ->assertOk()
+            ->assertViewHas('aiEvaluatedAnswersCount', 1)
+            ->assertViewHas('aiReviewedAnswersCount', 1)
+            ->assertSeeText('1 de 1')
+            ->assertDontSee('Promedio de similitud');
     }
 
     public function test_submitting_attempt_with_non_empty_open_and_code_answers_does_not_invoke_ai_or_consume_credits(): void
@@ -137,6 +194,7 @@ class AiOnDemandAndCreditsTest extends TestCase
 
     public function test_owner_teacher_single_ai_evaluation_persists_gemini_result_deducts_one_credit_audits_and_keeps_final_score_null(): void
     {
+        Config::set('services.gemini.model', 'gemini-3.5-flash-lite');
         Http::fake([
             'https://generativelanguage.googleapis.com/*' => $this->geminiSuccessResponse(
                 85.0,
@@ -171,7 +229,7 @@ class AiOnDemandAndCreditsTest extends TestCase
             $openAnswer->ai_feedback,
         );
         $this->assertFalse((bool) $openAnswer->ai_is_fallback);
-        $this->assertSame('gemini-2.5-flash', $openAnswer->ai_model_used);
+        $this->assertSame('gemini-3.5-flash-lite', $openAnswer->ai_model_used);
         $this->assertNotNull($openAnswer->ai_evaluated_at);
         $this->assertEquals(42.5, (float) $openAnswer->points_awarded); // 85% de 50 pts
 
@@ -187,7 +245,7 @@ class AiOnDemandAndCreditsTest extends TestCase
             'student_answer_id' => $openAnswer->id,
             'credits_consumed' => 1,
             'is_reevaluation' => false,
-            'model_used' => 'gemini-2.5-flash',
+            'model_used' => 'gemini-3.5-flash-lite',
             'status' => AiCreditUsage::STATUS_CONSUMED,
         ]);
 
@@ -200,7 +258,50 @@ class AiOnDemandAndCreditsTest extends TestCase
 
         $this->assertNotNull($audit);
         $this->assertSame(1, $audit->new_values['credits_consumed'] ?? null);
-        $this->assertSame('gemini-2.5-flash', $audit->new_values['model_used'] ?? null);
+        $this->assertSame('gemini-3.5-flash-lite', $audit->new_values['model_used'] ?? null);
+    }
+
+    /**
+     * Comprueba que el transporte externo recibe una copia reducida y se conserva el original.
+     *
+     * @return void
+     */
+    public function test_external_evaluation_minimizes_free_text_without_changing_the_original(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['https://generativelanguage.googleapis.com/*' => $this->geminiSuccessResponse(90.0, true, 'Acierto técnico.')]);
+
+        $teacher = User::factory()->teacher()->create(['first_name' => 'Ada', 'last_name' => 'López Yáñez']);
+        $student = User::factory()->student()->create(['first_name' => 'Lucía', 'last_name' => 'Flores Cortés', 'phone' => '5512349876']);
+        $fixture = $this->createSubmittedQualitativeAttempt($teacher, $student);
+        $answer = $fixture['open_answer'];
+        $question = $answer->examQuestion->question;
+        $original = 'Lucía Flores Cortés usa funciones puras. Correo: lucia.ficticia@example.test. Teléfono: 5512349876';
+        $storedStem = 'Explica la inmutabilidad de los datos. Correo: caso.ejemplo@example.test.';
+        $referenceText = 'La referencia de Ada López Yáñez compara los efectos laterales. Matrícula: ABC-20260001';
+        $answer->update(['answer_payload' => $original, 'served_stem_snapshot' => $storedStem]);
+        $question->questionable->update(['reference_answer' => $referenceText]);
+
+        $this->actingAs($teacher)->post(
+            route('exams.revision.evaluate-ai', [$fixture['exam'], $fixture['attempt'], $answer]),
+        )->assertSessionHasNoErrors();
+
+        Http::assertSent(function (Request $request): bool {
+            $prompt = (string) $request['contents'][0]['parts'][0]['text'];
+            foreach (['Lucía Flores Cortés', 'Ada López Yáñez', 'lucia.ficticia@example.test', '5512349876',
+                'caso.ejemplo@example.test', 'ABC-20260001', 'local_privacy_identifiers'] as $identifier) {
+                $this->assertStringNotContainsString($identifier, $prompt);
+            }
+            foreach (['funciones puras', 'inmutabilidad de los datos', 'compara los efectos laterales'] as $topic) {
+                $this->assertStringContainsString($topic, $prompt);
+            }
+
+            return true;
+        });
+        $this->assertSame($original, $answer->fresh()->answer_payload);
+        $this->assertSame($storedStem, $answer->fresh()->served_stem_snapshot);
+        $this->assertSame($referenceText, $question->questionable->fresh()->reference_answer);
+        $this->assertEquals(90.0, $answer->fresh()->ai_similarity_score);
     }
 
     public function test_gemini_503_saves_contingency_fallback_and_consumes_zero_credits(): void
@@ -239,6 +340,27 @@ class AiOnDemandAndCreditsTest extends TestCase
             'action' => 'ai.answer_evaluated',
             'auditable_id' => $openAnswer->id,
         ]);
+    }
+
+    public function test_gemini_response_without_justification_uses_fallback_and_does_not_consume_credits(): void
+    {
+        $payload = $this->geminiSuccessPayload(85.0, true, 'Retroalimentación de prueba.');
+        $payload['candidates'][0]['content']['parts'][0]['text'] = '{"similarity_score":85,"meets_goal":true}';
+        Http::preventStrayRequests();
+        Http::fake(['https://generativelanguage.googleapis.com/*' => Http::response($payload)]);
+
+        $teacher = User::factory()->teacher()->create();
+        $student = User::factory()->student()->create();
+        $fixture = $this->createSubmittedQualitativeAttempt($teacher, $student);
+        $answer = $fixture['open_answer'];
+
+        $this->actingAs($teacher)->post(
+            route('exams.revision.evaluate-ai', [$fixture['exam'], $fixture['attempt'], $answer]),
+        )->assertSessionHas('warning');
+
+        $this->assertTrue((bool) $answer->fresh()->ai_is_fallback);
+        $this->assertDatabaseCount('acs_ai_credit_usages', 0);
+        Http::assertSentCount(1);
     }
 
     public function test_blank_qualitative_answer_awards_zero_without_calling_gemini_or_consuming_credits(): void
@@ -389,6 +511,114 @@ class AiOnDemandAndCreditsTest extends TestCase
         $this->assertEquals(8.5, (float) $attempt->final_score); // 85/100 en escala 0-10
     }
 
+    public function test_credits_monitor_distinguishes_available_used_near_limit_and_exhausted_paid_quota(): void
+    {
+        $this->travelTo(Carbon::parse('2026-02-27 12:00:00'));
+        $teacher = User::factory()->teacher()->create();
+        $package = SubscriptionPackage::where('tier', 'basic')->firstOrFail();
+        $subscription = TeacherSubscription::create([
+            'teacher_id' => $teacher->id,
+            'subscription_package_id' => $package->id,
+            'payment_status' => 'paid',
+            'starts_at' => '2026-01-31 10:00:00',
+            'expires_at' => '2027-01-31 10:00:00',
+        ]);
+        $usage = AiCreditUsage::create([
+            'teacher_id' => $teacher->id,
+            'credits_consumed' => 4,
+            'status' => AiCreditUsage::STATUS_CONSUMED,
+        ]);
+
+        $this->actingAs($teacher)
+            ->get(route('teacher.ai-credits.index'))
+            ->assertOk()
+            ->assertSeeTextInOrder([
+                '196 créditos disponibles',
+                '4 de 200 créditos usados',
+                '28/02/2026 a las 10:00',
+                'Evaluación bajo demanda',
+                'Respuestas con puntaje sugerido por IA',
+                'Aún no hay sugerencias de IA.',
+                'Privacidad',
+            ])
+            ->assertSeeText('Google Gemini configurado')
+            ->assertSeeText('Se descuenta un crédito por sugerencia de IA utilizable.')
+            ->assertSeeText('el sistema sustituye los datos identificativos')
+            ->assertDontSeeText('Google Gemini activo')
+            ->assertDontSeeText('0 de 0')
+            ->assertDontSeeText('totalmente anónima')
+            ->assertDontSeeText('Promedio de similitud')
+            ->assertDontSeeText('Abrir suscripción');
+
+        $usage->update(['credits_consumed' => 150]);
+        $this->get(route('teacher.ai-credits.index'))
+            ->assertOk()
+            ->assertSeeText('50 créditos disponibles')
+            ->assertSeeText('Cerca del límite.')
+            ->assertDontSeeText('Has alcanzado el límite.');
+
+        $usage->update(['credits_consumed' => 200]);
+        $this->get(route('teacher.ai-credits.index'))
+            ->assertOk()
+            ->assertSeeText('0 créditos disponibles')
+            ->assertSeeText('Has alcanzado el límite.')
+            ->assertSeeText('28/02/2026 a las 10:00')
+            ->assertSeeText('Puedes seguir calificando manualmente.')
+            ->assertDontSeeText('Cerca del límite.')
+            ->assertDontSeeText('Abrir suscripción');
+
+        $subscription->update(['expires_at' => '2026-02-28 10:00:00', 'auto_renew' => false]);
+        $this->actingAs($teacher->fresh())->get(route('teacher.ai-credits.index'))
+            ->assertOk()
+            ->assertSeeText('Abrir suscripción')
+            ->assertSeeText('Sin reposición programada.')
+            ->assertDontSeeText('Próxima reposición');
+    }
+
+    public function test_credits_monitor_distinguishes_trial_and_suspended_subscription_with_local_fallback(): void
+    {
+        Config::set('services.gemini.api_key', '');
+        $teacher = User::factory()->teacher()->create();
+        $usage = AiCreditUsage::create([
+            'teacher_id' => $teacher->id,
+            'credits_consumed' => 24,
+            'status' => AiCreditUsage::STATUS_CONSUMED,
+        ]);
+
+        $this->actingAs($teacher)
+            ->get(route('teacher.ai-credits.index'))
+            ->assertOk()
+            ->assertSeeText('1 crédito disponible')
+            ->assertSeeText('24 de 25 créditos usados')
+            ->assertSeeText('en la prueba gratuita')
+            ->assertSeeText('Respaldo local configurado')
+            ->assertDontSeeText('Próxima reposición');
+
+        $usage->update(['credits_consumed' => 25]);
+        $this->get(route('teacher.ai-credits.index'))
+            ->assertOk()
+            ->assertSeeText('0 créditos disponibles')
+            ->assertSeeText('Has alcanzado el límite.')
+            ->assertSeeText('Abrir suscripción')
+            ->assertDontSeeText('Próxima reposición');
+
+        TeacherSubscription::create([
+            'teacher_id' => $teacher->id,
+            'subscription_package_id' => SubscriptionPackage::where('tier', 'basic')->firstOrFail()->id,
+            'payment_status' => 'suspended',
+            'starts_at' => now()->subMonth(),
+            'suspended_at' => now(),
+        ]);
+
+        $this->actingAs($teacher->fresh())->get(route('teacher.ai-credits.index'))
+            ->assertOk()
+            ->assertSeeTextInOrder(['0 créditos disponibles', 'Suscripción suspendida', 'Abrir suscripción'])
+            ->assertSeeText('Abrir revisión')
+            ->assertDontSee('<progress', false)
+            ->assertDontSeeText('Has alcanzado el límite.')
+            ->assertDontSeeText('Próxima reposición');
+    }
+
     public function test_pro_plan_allows_unlimited_ai_evaluations_and_displays_ilimitado_on_credits_and_subscription_pages(): void
     {
         Http::fake([
@@ -438,22 +668,23 @@ class AiOnDemandAndCreditsTest extends TestCase
 
         $this->assertDatabaseCount('acs_ai_credit_usages', 61);
 
-        // /docente/creditos-ia muestra Ilimitado y nunca "/ 1" ni "/ 100"
+        // El consumo histórico de Pro se muestra sin denominador ni barra de cuota.
         $creditsView = $this->actingAs($teacher)->get(route('teacher.ai-credits.index'));
         $creditsView->assertOk()
-            ->assertSee('Ilimitado')
-            ->assertSee('61 / Ilimitado')
-            ->assertDontSee('/ 1 créditos')
-            ->assertDontSee('/ 100 créditos')
-            ->assertDontSee('61 / 1')
-            ->assertDontSee('61 / 100');
+            ->assertSeeText('Ilimitado')
+            ->assertSeeText('61 créditos usados')
+            ->assertSeeText('Consumo registrado desde')
+            ->assertDontSeeText('61 /')
+            ->assertDontSeeText('Próxima reposición')
+            ->assertDontSee('<progress', false);
 
-        // /docente/suscripcion muestra Ilimitado / Ilimitados y nunca "/ 1" ni "/ 100"
         $subscriptionView = $this->actingAs($teacher)->get(route('teacher.subscription.index'));
         $subscriptionView->assertOk()
             ->assertSee('Ilimitado')
             ->assertSee('Ilimitados')
-            ->assertSee('61 / Ilimitado')
+            ->assertSeeText('61 créditos usados')
+            ->assertSeeText('Consumo registrado desde')
+            ->assertDontSeeText('61 /')
             ->assertDontSee('/ 1 grupos')
             ->assertDontSee('/ 100 evaluaciones')
             ->assertDontSee('/ 1 evaluaciones');

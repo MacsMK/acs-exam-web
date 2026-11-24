@@ -9,20 +9,19 @@ declare(strict_types=1);
  * Archivo:     GroupEnrollmentService.php
  * Ubicación:   app/Services/GroupEnrollmentService.php
  * Descripción: Servicio de dominio para gestión de grupos, inscripción por
- *              folio/QR, verificación de pertenencia, listado de exámenes
- *              disponibles y cierre semestral seguro (RF-GRU-018, MPW-V3 §5.2.1).
+ *              folio/QR, verificación de pertenencia y cierre semestral
+ *              seguro (RF-GRU-018, MPW-V3 §5.2.1).
  * ============================================================================
  */
 
 namespace App\Services;
 
 use App\Models\AuditLog;
-use App\Models\Exam;
 use App\Models\Group;
+use App\Models\Scopes\TenantTeacherScope;
 use App\Models\StudentAttempt;
 use App\Models\User;
 use DomainException;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -44,9 +43,13 @@ class GroupEnrollmentService
      */
     public function createGroup(User $teacher, array $data): Group
     {
-        $this->subscriptionLimitService?->ensureCanCreateGroup($teacher);
-
         return DB::transaction(function () use ($teacher, $data): Group {
+            $teacher = User::whereKey($teacher->id)->lockForUpdate()->firstOrFail();
+            $this->subscriptionLimitService->ensureCanCreateGroup($teacher);
+            if ($this->subscriptionLimitService->resolveActivePackage($teacher) === null) {
+                $teacher->forceFill(['trial_group_used_at' => now()])->save();
+            }
+
             return Group::create([
                 'teacher_id' => $teacher->id,
                 'name' => (string) $data['name'],
@@ -73,37 +76,37 @@ class GroupEnrollmentService
             ]);
         }
 
-        $group = Group::withoutGlobalScopes()
-            ->where('access_folio', $normalizedFolio)
-            ->first();
+        return DB::transaction(function () use ($student, $normalizedFolio, $errorField): Group {
+            $group = Group::withoutGlobalScope(TenantTeacherScope::class)
+                ->where('access_folio', $normalizedFolio)
+                ->lockForUpdate()
+                ->first();
 
-        if (! $group) {
-            throw ValidationException::withMessages([
-                $errorField => ['Folio no encontrado.'],
-            ]);
-        }
+            if (! $group) {
+                throw ValidationException::withMessages([
+                    $errorField => ['No encontramos ese folio. Verifica el código con tu docente'],
+                ]);
+            }
 
-        if ($group->is_closed) {
-            throw ValidationException::withMessages([
-                $errorField => ['Este grupo ya cerró el ciclo (RW-35).'],
-            ]);
-        }
+            if ($group->is_closed) {
+                throw ValidationException::withMessages([
+                    $errorField => ['Este grupo está cerrado y no admite nuevas inscripciones'],
+                ]);
+            }
 
-        if ($group->students()->where('acs_users.id', $student->id)->exists()) {
-            throw ValidationException::withMessages([
-                $errorField => ['Ya te encuentras inscrito en este grupo escolar.'],
-            ]);
-        }
+            if ($group->students()->whereKey($student->id)->exists()) {
+                throw ValidationException::withMessages([
+                    $errorField => ['Ya te encuentras inscrito en este grupo escolar.'],
+                ]);
+            }
 
-        $this->subscriptionLimitService?->ensureCanEnrollStudent($group);
-
-        DB::transaction(static function () use ($group, $student): void {
+            $this->subscriptionLimitService->ensureCanEnrollStudent($group);
             $group->students()->syncWithoutDetaching([
                 $student->id => ['joined_at' => now()],
             ]);
-        });
 
-        return $group->fresh()->loadCount('students');
+            return $group->loadCount('students');
+        });
     }
 
     /**
@@ -115,7 +118,7 @@ class GroupEnrollmentService
     {
         $normalizedFolio = strtoupper(trim($folio));
 
-        $group = Group::withoutGlobalScopes()
+        $group = Group::withoutGlobalScope(TenantTeacherScope::class)
             ->where('access_folio', $normalizedFolio)
             ->first();
 
@@ -149,29 +152,21 @@ class GroupEnrollmentService
      */
     public function leaveGroup(User $student, Group $group): void
     {
-        $belongs = $group->students()->where('acs_users.id', $student->id)->exists();
+        DB::transaction(function () use ($group, $student): void {
+            $group = Group::query()->whereKey($group->id)->lockForUpdate()->firstOrFail();
+            if (! $group->students()->whereKey($student->id)->exists()) {
+                throw ValidationException::withMessages([
+                    'group' => ['No perteneces a este grupo.'],
+                ]);
+            }
 
-        if (! $belongs) {
-            throw ValidationException::withMessages([
-                'group' => ['No perteneces a este grupo.'],
-            ]);
-        }
+            if ($this->hasAttemptInProgress($group, $student)) {
+                throw new DomainException(
+                    'No puedes abandonar el grupo mientras tengas un examen en curso. '
+                    .'Podrás hacerlo cuando ese intento haya finalizado.'
+                );
+            }
 
-        $hasAttemptInProgress = $group->studentAttempts()
-            ->where('student_id', $student->id)
-            ->where('status', 'in_progress')
-            ->with('exam')
-            ->get()
-            ->contains(fn (StudentAttempt $attempt): bool => $this->attemptService->isInProgress($attempt));
-
-        if ($hasAttemptInProgress) {
-            throw new DomainException(
-                'No puedes abandonar el grupo mientras tengas un examen en curso. '
-                .'Podrás hacerlo cuando ese intento haya finalizado.'
-            );
-        }
-
-        DB::transaction(static function () use ($group, $student): void {
             $group->students()->detach($student->id);
 
             AuditLog::create([
@@ -184,25 +179,6 @@ class GroupEnrollmentService
                 'user_agent' => mb_substr((string) request()->userAgent(), 0, 255),
             ]);
         });
-    }
-
-    /**
-     * Lista los exámenes publicados asignados a los grupos activos (no cerrados) del alumno,
-     * con carga ansiosa y conteo de reactivos para optimizar rendimiento.
-     *
-     * @return Collection<int, Exam>
-     */
-    public function listAvailableExamsForStudent(User $student): Collection
-    {
-        return Exam::withoutGlobalScopes()
-            ->where('is_published', true)
-            ->whereHas('groups', static function ($query) use ($student): void {
-                $query->where('is_closed', false)
-                    ->whereHas('students', static fn ($q) => $q->where('acs_users.id', $student->id));
-            })
-            ->with(['teacher', 'groups'])
-            ->withCount('examQuestions')
-            ->get();
     }
 
     /**
@@ -227,29 +203,21 @@ class GroupEnrollmentService
      */
     public function removeStudent(Group $group, User $student, User $teacher): void
     {
-        $belongs = $group->students()->where('acs_users.id', $student->id)->exists();
+        DB::transaction(function () use ($group, $student, $teacher): void {
+            $group = Group::query()->whereKey($group->id)->lockForUpdate()->firstOrFail();
+            if (! $group->students()->whereKey($student->id)->exists()) {
+                throw ValidationException::withMessages([
+                    'student' => ['El estudiante no pertenece a este grupo.'],
+                ]);
+            }
 
-        if (! $belongs) {
-            throw ValidationException::withMessages([
-                'student' => ['El estudiante no pertenece a este grupo.'],
-            ]);
-        }
+            if ($this->hasAttemptInProgress($group, $student)) {
+                throw new DomainException(
+                    'No es posible retirar al estudiante mientras tenga un examen en curso en este grupo. '
+                    .'Podrás hacerlo cuando ese intento haya finalizado.'
+                );
+            }
 
-        $hasAttemptInProgress = $group->studentAttempts()
-            ->where('student_id', $student->id)
-            ->where('status', 'in_progress')
-            ->with('exam')
-            ->get()
-            ->contains(fn (StudentAttempt $attempt): bool => $this->attemptService->isInProgress($attempt));
-
-        if ($hasAttemptInProgress) {
-            throw new DomainException(
-                'No es posible retirar al estudiante mientras tenga un examen en curso en este grupo. '
-                .'Podrás hacerlo cuando ese intento haya finalizado.'
-            );
-        }
-
-        DB::transaction(static function () use ($group, $student, $teacher): void {
             $group->students()->detach($student->id);
 
             AuditLog::create([
@@ -262,6 +230,24 @@ class GroupEnrollmentService
                 'user_agent' => mb_substr((string) request()->userAgent(), 0, 255),
             ]);
         });
+    }
+
+    /**
+     * Comprueba la vigencia de los intentos del grupo ya bloqueado.
+     *
+     * @param Group $group Grupo que se está modificando.
+     * @param User|null $student Limita la comprobación al alumno que saldría del grupo.
+     * @return bool
+     */
+    private function hasAttemptInProgress(Group $group, ?User $student = null): bool
+    {
+        return $group->studentAttempts()
+            ->current()
+            ->when($student, fn ($query) => $query->where('student_id', $student->id))
+            ->where('status', 'in_progress')
+            ->with('exam')
+            ->get()
+            ->contains(fn (StudentAttempt $attempt): bool => $this->attemptService->isInProgress($attempt));
     }
 
     /**
@@ -288,21 +274,41 @@ class GroupEnrollmentService
 
     public function closeGroup(Group $group): void
     {
-        $hasActiveAttempts = $group->studentAttempts()
-            ->where('status', 'in_progress')
-            ->exists()
-            || StudentAttempt::where('status', 'in_progress')
-                ->whereHas('exam.groups', fn ($q) => $q->where('acs_groups.id', $group->id))
-                ->exists();
+        DB::transaction(function () use ($group): void {
+            $group = Group::query()->whereKey($group->id)->lockForUpdate()->firstOrFail();
+            if ($group->is_closed) {
+                return;
+            }
 
-        if ($hasActiveAttempts) {
-            throw new DomainException('No es posible cerrar el grupo mientras existan exámenes en progreso.');
-        }
+            if ($this->hasAttemptInProgress($group)) {
+                throw new DomainException('Hay estudiantes de este grupo con un examen en curso. Intenta cerrar el grupo cuando terminen.');
+            }
 
-        DB::transaction(static function () use ($group): void {
             $group->update([
                 'is_closed' => true,
                 'closed_at' => now(),
+            ]);
+        });
+    }
+
+    /**
+     * Reabre un grupo bajo el mismo bloqueo usado para la purga.
+     *
+     * @param Group $group Grupo cerrado del docente.
+     * @return void
+     */
+    public function reopenGroup(Group $group): void
+    {
+        DB::transaction(function () use ($group): void {
+            $teacher = User::query()->whereKey($group->teacher_id)->lockForUpdate()->firstOrFail();
+            $group = Group::query()->whereKey($group->id)->lockForUpdate()->firstOrFail();
+
+            abort_unless($group->is_closed, 409, 'El grupo ya está activo.');
+            $this->subscriptionLimitService->ensureCanReopenGroup($teacher);
+
+            $group->update([
+                'is_closed' => false,
+                'closed_at' => null,
             ]);
         });
     }

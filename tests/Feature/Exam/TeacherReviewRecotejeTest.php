@@ -137,7 +137,7 @@ class TeacherReviewRecotejeTest extends TestCase
             ->get(route('exams.revision.index', $exam))
             ->assertOk()
             ->assertSee($student->name)
-            ->assertSee('Requiere Recoteje');
+            ->assertSee('Pendiente de revisión');
 
         // 3. Docente autor consulta la vista de detalle
         $this->actingAs($teacher)
@@ -168,5 +168,31 @@ class TeacherReviewRecotejeTest extends TestCase
 
         $attempt->refresh();
         $this->assertEquals(9.5, (float) $attempt->final_score);
+        // Una corrección posterior a la publicación se avisa únicamente al titular y con el nuevo valor.
+        $exam->update(['result_visibility_mode' => 'final_score']);
+        $this->actingAs($teacher)->post(route('exams.revision.update', [$exam, $attempt]), [
+            'reviews' => [['answer_id' => $studentAnswer->id, 'score' => 8.5, 'notes' => 'Revisión sintética']],
+        ])->assertSessionHasNoErrors();
+        $this->actingAs($student)->get(route('student.grades.index'))->assertOk()
+            ->assertSee('Nueva calificación · 8.50')->assertDontSee('Revisión sintética');
+        $exam->update(['result_visibility_mode' => 'hidden']);
+        $this->actingAs($teacher)->post(route('exams.revision.update', [$exam, $attempt]), [
+            'reviews' => [['answer_id' => $studentAnswer->id, 'score' => 7.5, 'notes' => 'Cambio oculto']],
+        ])->assertSessionHasNoErrors();
+        $this->actingAs($student)->get(route('student.grades.index'))->assertDontSee('Nueva calificación · 7.50');
+
+        // Los registros históricos en blanco conservan cero, aunque carezcan del marcador de IA.
+        foreach (['none', null] as $model) {
+            $studentAnswer->update(['answer_payload' => ['text' => " \n \u{00A0}"], 'ai_model_used' => $model,
+                'points_awarded' => 0, 'teacher_recoteje_score' => null]);
+            $attempt->update(['final_score' => 0]);
+            $this->actingAs($teacher)->get(route('exams.revision.show', [$exam, $attempt]))->assertOk()
+                ->assertDontSee('reviews[0][score]', false);
+            $this->post(route('exams.revision.update', [$exam, $attempt]), [
+                'reviews' => [['answer_id' => $studentAnswer->id, 'score' => 5]],
+            ])->assertSessionHasErrors(['reviews' => 'La respuesta en blanco conserva cero puntos']);
+            $this->assertEquals(0, $studentAnswer->fresh()->points_awarded);
+            $this->assertEquals(0, $attempt->fresh()->final_score);
+        }
     }
 }

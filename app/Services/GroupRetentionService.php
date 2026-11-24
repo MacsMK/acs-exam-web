@@ -30,6 +30,7 @@ use App\Models\AuditLog;
 use App\Models\Group;
 use App\Models\StudentAnswer;
 use App\Models\StudentAttempt;
+use App\Models\StudentPeriodGrade;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -124,34 +125,60 @@ class GroupRetentionService
 
         $this->closedGroupsQuery()
             ->where('closed_at', '<=', $now->copy()->subMonths(self::RETENTION_MONTHS))
-            ->each(function (Group $group) use (&$deleted): void {
-                $this->purge($group);
-                $deleted++;
+            ->each(function (Group $group) use (&$deleted, $now): void {
+                if ($this->purge($group, $now)) {
+                    $deleted++;
+                }
             });
 
         return $deleted;
     }
 
     /**
-     * Borra la información académica del grupo y aplica el borrado lógico al registro.
+     * Borra la información académica de un cierre vencido que sigue vigente.
+     *
+     * @param Group $group Cierre observado cuando se eligió al candidato.
+     * @param CarbonInterface|null $now Fecha de corte de la ejecución.
+     * @return bool Si se eliminó el cierre observado.
      */
-    public function purge(Group $group): void
+    public function purge(Group $group, ?CarbonInterface $now = null): bool
     {
-        DB::transaction(function () use ($group): void {
-            $attemptIds = StudentAttempt::where('group_id', $group->id)->pluck('id');
-            $answerIds = StudentAnswer::whereIn('student_attempt_id', $attemptIds)->pluck('id');
+        $cutoff = ($now ?? now())->copy()->subMonths(self::RETENTION_MONTHS);
 
+        return DB::transaction(function () use ($group, $cutoff): bool {
+            $group = $this->closedGroupsQuery()
+                ->whereKey($group->id)
+                ->where('closed_at', $group->getRawOriginal('closed_at'))
+                ->where('closed_at', '<=', $cutoff)
+                ->lockForUpdate()
+                ->first();
+            if ($group === null) {
+                return false;
+            }
+
+            $attemptIds = $group->studentAttempts()->orderBy('id')->lockForUpdate()->pluck('id');
+            $answers = StudentAnswer::whereIn('student_attempt_id', $attemptIds);
+            $answerIds = (clone $answers)->orderBy('id')->lockForUpdate()->pluck('id');
+            $periodIds = $group->evaluationPeriods()->pluck('id');
+            $gradeIds = StudentPeriodGrade::whereIn('evaluation_period_id', $periodIds)->select('id');
             $studentsCount = $group->students()->count();
 
-            // Historiales individuales de calificación de esas respuestas (RF-EVA-013, RNF-PRI-002)
+            // Se retiran historiales individuales, incluida la autorización de reaplicación.
             AuditLog::where('auditable_type', StudentAnswer::class)
                 ->whereIn('auditable_id', $answerIds)
                 ->delete();
+            AuditLog::where('auditable_type', StudentAttempt::class)
+                ->whereIn('auditable_id', $attemptIds)
+                ->delete();
+            AuditLog::where('auditable_type', StudentPeriodGrade::class)
+                ->whereIn('auditable_id', $gradeIds)
+                ->delete();
 
-            // La llave foránea de intentos es restrictiva; sus respuestas se eliminan en cascada
+            // Las llaves foráneas restrictivas reservan el borrado a esta operación.
+            $answers->delete();
             StudentAttempt::whereIn('id', $attemptIds)->delete();
 
-            // Periodos (con sus calificaciones en cascada), incorporaciones y asignación de exámenes
+            DB::table('acs_period_dependencies')->whereIn('period_id', $periodIds)->delete();
             $group->evaluationPeriods()->delete();
             $group->students()->detach();
             $group->exams()->detach();
@@ -169,7 +196,9 @@ class GroupRetentionService
                     'attempts_deleted' => $attemptIds->count(),
                 ],
             ]);
-        });
+
+            return true;
+        }, 3);
     }
 
     /**

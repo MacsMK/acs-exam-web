@@ -65,6 +65,7 @@ class RegisterController extends Controller
 
         return view('auth.register-teacher', [
             'privacyNotice' => $privacyNotice,
+            'termsVersion' => \App\Models\TermsVersion::current(),
             'prefilledInvitationCode' => $prefilledInvitationCode,
             'educationalLevels' => TeacherVerification::EDUCATIONAL_LEVELS,
             'credentialTypes' => TeacherVerification::CREDENTIAL_TYPES,
@@ -80,7 +81,10 @@ class RegisterController extends Controller
     {
         $privacyNotice = $this->authService->currentPrivacyNotice();
 
-        return view('auth.register-student', compact('privacyNotice'));
+        return view('auth.register-student', [
+            'privacyNotice' => $privacyNotice,
+            'termsVersion' => \App\Models\TermsVersion::current(),
+        ]);
     }
 
     /**

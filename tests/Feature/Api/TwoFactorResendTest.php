@@ -37,7 +37,7 @@ class TwoFactorResendTest extends TestCase
 
     public function test_resend_after_sixty_seconds_issues_a_new_code_and_invalidates_the_previous_one(): void
     {
-        config(['mail.default' => 'log']);
+        config(['mail.default' => 'log', 'auth.two_factor_demo' => true]);
         Carbon::setTestNow('2026-11-09 10:00:00');
         $user = $this->createUserWithPendingCode();
         $previousCode = $user->two_factor_code;
@@ -75,7 +75,7 @@ class TwoFactorResendTest extends TestCase
 
     public function test_resend_is_allowed_exactly_at_the_sixty_second_mark(): void
     {
-        config(['mail.default' => 'log']);
+        config(['mail.default' => 'log', 'auth.two_factor_demo' => true]);
         Carbon::setTestNow('2026-11-09 10:00:00');
         $user = $this->createUserWithPendingCode();
         $previousCode = $user->two_factor_code;
@@ -90,7 +90,7 @@ class TwoFactorResendTest extends TestCase
 
     public function test_the_new_code_restarts_the_wait_interval(): void
     {
-        config(['mail.default' => 'log']);
+        config(['mail.default' => 'log', 'auth.two_factor_demo' => true]);
         Carbon::setTestNow('2026-11-09 10:00:00');
         $user = $this->createUserWithPendingCode();
 

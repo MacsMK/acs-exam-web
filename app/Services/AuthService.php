@@ -27,11 +27,10 @@ use App\Models\PrivacyNotice;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
@@ -64,9 +63,11 @@ class AuthService
      * Inicializa el servicio de autenticación con el servicio de acreditación docente.
      *
      * @param TeacherVerificationService $teacherVerificationService Servicio transaccional de verificación docente.
+     * @param TwoFactorDelivery $twoFactorDelivery Entrega del código de verificación.
      */
     public function __construct(
         private readonly TeacherVerificationService $teacherVerificationService,
+        private readonly TwoFactorDelivery $twoFactorDelivery,
     ) {
     }
 
@@ -275,31 +276,94 @@ class AuthService
     }
 
     /**
-     * Genera un código de seis dígitos y lo envía por correo.
+     * Emite un desafío nuevo para el paso de verificación.
      *
-     * @param User $user Usuario destinatario del código 2FA.
+     * @param User $user Cuenta que aprobó el primer paso.
      * @return void
-     *
-     * @throws RuntimeException Si no es posible generar un código 2FA único.
      */
     public function issueTwoFactorCode(User $user): void
     {
-        $code = $this->generateUniqueCode($user);
+        $this->issueTwoFactorChallenge($user, false);
+    }
 
-        $user->forceFill([
-            'two_factor_code' => $code,
-            'two_factor_expires_at' => now()->addMinutes(self::TWO_FACTOR_TTL_MINUTES),
-        ])->save();
+    /**
+     * Reserva la emisión y acredita la entrega solo para ese mismo desafío.
+     *
+     * @param User $user Destinatario del código.
+     * @param bool $resending Indica que debe existir un desafío pendiente.
+     * @return bool Indica si se emitió un desafío.
+     * @throws ValidationException Si el canal o la cuenta no son válidos.
+     * @throws TooManyRequestsHttpException Si todavía no procede un reenvío.
+     */
+    private function issueTwoFactorChallenge(User $user, bool $resending): bool
+    {
+        $challenge = DB::transaction(function () use ($user, $resending): ?array {
+            // La API móvil admite código sin correo. Solo un emisor puede reservar cada código vigente.
+            DB::selectOne('SELECT pg_advisory_xact_lock(462007)');
+            $current = User::query()->lockForUpdate()->findOrFail($user->getKey());
 
-        Mail::raw(
-            "Tu código de verificación es: {$code}\n\n"
-            .'Es válido durante '.self::TWO_FACTOR_TTL_MINUTES." minutos.\n"
-            ."Si no solicitaste este código, ignora este mensaje.",
-            function ($message) use ($user): void {
-                $message->to($user->email)
-                    ->subject('Código de verificación - A-Code Solutions');
-            },
-        );
+            if ($resending && ($current->two_factor_code === null || ! $current->is_active)) {
+                return null;
+            }
+
+            if (! $current->is_active) {
+                throw ValidationException::withMessages(['email' => ['Esta cuenta está suspendida. Contacta al administrador.']]);
+            }
+
+            if ($resending) {
+                $wait = $this->secondsUntilResendAvailable($current);
+                if ($wait > 0) {
+                    throw new TooManyRequestsHttpException($wait, "Espera {$wait} segundos para solicitar un nuevo código.");
+                }
+            }
+
+            $channel = $this->twoFactorDelivery->channelFor($current);
+            $code = $this->generateUniqueCode($current);
+            $challengeId = (string) Str::uuid();
+            $current->forceFill([
+                'two_factor_challenge_id' => $challengeId,
+                'two_factor_code' => $code,
+                'two_factor_expires_at' => now()->addMinutes(self::TWO_FACTOR_TTL_MINUTES),
+                'two_factor_failed_attempts' => 0,
+                'two_factor_delivery' => null,
+            ])->save();
+
+            return [$current, $challengeId, $code, $channel];
+        });
+
+        if ($challenge === null) {
+            return false;
+        }
+
+        [$current, $challengeId, $code, $channel] = $challenge;
+        $this->twoFactorDelivery->send($current, $code, $channel);
+
+        User::query()->whereKey($current->getKey())
+            ->where('two_factor_challenge_id', $challengeId)
+            ->where('email', $current->email)
+            ->where('is_active', true)
+            ->update(['two_factor_delivery' => $channel]);
+
+        $user->refresh();
+
+        return true;
+    }
+
+    /**
+     * Devuelve el código solamente para un desafío de demostración autorizado.
+     *
+     * @param User $user Cuenta de la sesión pendiente.
+     * @return string|null Código de demostración vigente.
+     */
+    public function demoTwoFactorCode(User $user): ?string
+    {
+        if ($user->two_factor_delivery !== 'demo' || ! $this->twoFactorDelivery->permits($user)
+            || ! $user->two_factor_expires_at?->isFuture()
+            || $user->two_factor_failed_attempts >= self::TWO_FACTOR_MAX_ATTEMPTS) {
+            return null;
+        }
+
+        return $user->two_factor_code;
     }
 
     /**
@@ -319,37 +383,19 @@ class AuthService
             ->where('is_active', true)
             ->first();
 
-        if ($user === null || $user->two_factor_code === null || $user->two_factor_expires_at === null) {
-            return null;
-        }
-
-        return $this->resendTwoFactorCodeForUser($user);
+        return $user === null ? null : $this->resendTwoFactorCodeForUser($user);
     }
 
     /**
-     * Reenvía el código del segundo paso a una cuenta con verificación pendiente
-     * (RF-AUT-006). Lo usan la API (por correo) y la web (por la sesión pendiente),
-     * por lo que aplica a todos los roles que inician sesión en la web.
+     * Reenvía el código del segundo paso a una cuenta con verificación pendiente.
      *
      * @param User $user Cuenta con verificación pendiente.
-     * @return User Cuenta con el nuevo código emitido; el anterior queda invalidado.
-     *
+     * @return User|null Cuenta con el nuevo código o nulo si ya no hay un desafío pendiente.
      * @throws TooManyRequestsHttpException Si aún no transcurren los 60 segundos.
      */
-    public function resendTwoFactorCodeForUser(User $user): User
+    public function resendTwoFactorCodeForUser(User $user): ?User
     {
-        $wait = $this->secondsUntilResendAvailable($user);
-
-        if ($wait > 0) {
-            throw new TooManyRequestsHttpException(
-                $wait,
-                "Espera {$wait} segundos para solicitar un nuevo código.",
-            );
-        }
-
-        $this->issueTwoFactorCode($user);
-
-        return $user->fresh();
+        return $this->issueTwoFactorChallenge($user, true) ? $user : null;
     }
 
     /**
@@ -382,33 +428,43 @@ class AuthService
      */
     public function verifyTwoFactorCode(User $user, string $code): void
     {
-        if ($this->twoFactorAttemptsExhausted($user)) {
-            throw ValidationException::withMessages([
-                'code' => [self::TWO_FACTOR_LOCKED_MESSAGE],
-            ]);
-        }
+        $error = DB::transaction(function () use ($user, $code): ?string {
+            $current = User::query()->lockForUpdate()->find($user->getKey());
+            if ($current === null || ! $current->is_active || ! $this->twoFactorDelivery->permits($current)
+                || $current->two_factor_code === null || ! $current->two_factor_expires_at?->isFuture()) {
+                return 'El código es inválido o expiró. Solicita uno nuevo.';
+            }
 
-        $isValid = $user->two_factor_code === $code
-            && $user->two_factor_expires_at !== null
-            && $user->two_factor_expires_at->isFuture();
+            if ($current->two_factor_failed_attempts >= self::TWO_FACTOR_MAX_ATTEMPTS) {
+                return self::TWO_FACTOR_LOCKED_MESSAGE;
+            }
 
-        if (! $isValid) {
-            $this->registerFailedTwoFactorAttempt($user);
+            if (! hash_equals($current->two_factor_code, $code)) {
+                $current->increment('two_factor_failed_attempts');
 
-            throw ValidationException::withMessages([
-                'code' => [$this->twoFactorAttemptsExhausted($user)
+                return $current->two_factor_failed_attempts >= self::TWO_FACTOR_MAX_ATTEMPTS
                     ? self::TWO_FACTOR_LOCKED_MESSAGE
-                    : 'El código es inválido o expiró. Solicita uno nuevo.'],
-            ]);
+                    : 'El código es inválido o expiró. Solicita uno nuevo.';
+            }
+
+            $current->forceFill([
+                'two_factor_challenge_id' => null,
+                'two_factor_code' => null,
+                'two_factor_expires_at' => null,
+                'two_factor_failed_attempts' => 0,
+                'two_factor_delivery' => null,
+                'two_factor_verified_at' => now(),
+            ])->save();
+
+            return null;
+        });
+
+        // La validación se comunica después de confirmar la transacción del contador.
+        if ($error !== null) {
+            throw ValidationException::withMessages(['code' => [$error]]);
         }
 
-        Cache::forget($this->twoFactorAttemptsKey($user));
-
-        $user->forceFill([
-            'two_factor_code' => null,
-            'two_factor_expires_at' => null,
-            'two_factor_verified_at' => now(),
-        ])->save();
+        $user->refresh();
     }
 
     /**
@@ -417,46 +473,6 @@ class AuthService
      * @param User|null $user Usuario opcional que cierra sesión.
      * @return void
      */
-    /**
-     * Registra un intento fallido contra el código vigente (RF-AUT-007). El
-     * contador se guarda por código (clave con su vencimiento), por lo que un
-     * código nuevo empieza en cero y no se requiere modificar la base de datos.
-     *
-     * @param User $user Cuenta con verificación pendiente.
-     * @return void
-     */
-    public function registerFailedTwoFactorAttempt(User $user): void
-    {
-        if ($user->two_factor_code === null || $user->two_factor_expires_at === null || ! $user->two_factor_expires_at->isFuture()) {
-            return;
-        }
-
-        $key = $this->twoFactorAttemptsKey($user);
-        Cache::add($key, 0, $user->two_factor_expires_at);
-        Cache::increment($key);
-    }
-
-    /**
-     * Indica si el código vigente ya agotó sus cinco intentos (RF-AUT-007).
-     * Un código agotado queda invalidado: solo se acepta uno nuevo.
-     *
-     * @param User $user Cuenta con verificación pendiente.
-     * @return bool
-     */
-    public function twoFactorAttemptsExhausted(User $user): bool
-    {
-        if ($user->two_factor_expires_at === null) {
-            return false;
-        }
-
-        return (int) Cache::get($this->twoFactorAttemptsKey($user), 0) >= self::TWO_FACTOR_MAX_ATTEMPTS;
-    }
-
-    private function twoFactorAttemptsKey(User $user): string
-    {
-        return 'two_factor_attempts:'.$user->id.':'.($user->two_factor_expires_at?->getTimestamp() ?? 0);
-    }
-
     public function logout(?User $user = null): void
     {
         Auth::guard('web')->logout();
@@ -484,9 +500,8 @@ class AuthService
 
             $code = (string) random_int(100000, 999999);
 
-            $inUse = User::where('two_factor_code', $code)
+            $inUse = $code === $user->two_factor_code || User::where('two_factor_code', $code)
                 ->where('two_factor_expires_at', '>', now())
-                ->where('id', '!=', $user->id)
                 ->exists();
         } while ($inUse);
 

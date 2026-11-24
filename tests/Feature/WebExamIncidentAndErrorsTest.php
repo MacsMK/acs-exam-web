@@ -123,6 +123,8 @@ class WebExamIncidentAndErrorsTest extends TestCase
                 && $event->isCancelled === false,
         );
 
+        $cookie = config('session.cookie');
+        $this->withCredentials()->withCookie($cookie, $firstResponse->getCookie($cookie)->getValue());
         $secondResponse = $this->actingAs($this->studentOwner)
             ->postJson(route('attempts.incident', $this->attempt), [
                 'incident_type' => 'tab_switch',

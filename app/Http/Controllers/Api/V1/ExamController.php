@@ -36,9 +36,7 @@ use Illuminate\Http\Request;
 class ExamController extends Controller
 {
     /**
-     * Intentos que puede usar un alumno por examen: uno, garantizado por el
-     * índice único (exam_id, student_id) de acs_student_attempts (ADR-036,
-     * ADR-037: sin reaplicaciones).
+     * Número inicial de intentos por alumno y examen, antes de cualquier reaplicación.
      */
     private const ATTEMPTS_PER_STUDENT = 1;
 
@@ -67,9 +65,9 @@ class ExamController extends Controller
         }
 
         $openGroupsOfStudent = fn ($query) => $query
-            ->where('acs_groups.is_closed', false)
+            ->active()
             ->when($groupId !== null, fn ($groups) => $groups->where('acs_groups.id', $groupId))
-            ->whereHas('students', fn ($students) => $students->where('acs_users.id', $user->id));
+            ->whereHas('students', fn ($students) => $students->whereKey($user->id));
 
         $exams = Exam::where('is_published', true)
             ->whereHas('groups', $openGroupsOfStudent)

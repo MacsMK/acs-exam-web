@@ -738,19 +738,32 @@ class QuestionBankManagementTest extends TestCase
         $this->actingAs($otherTeacher)->get(route('questions.file', [$question->id, 'pdf']))->assertForbidden();
         $this->actingAs($student)->get(route('questions.file', [$question->id, 'imagen']))->assertForbidden();
 
-        // Con un intento en un examen que incluye la pregunta, el alumno sí puede verla
+        // El reactivo está disponible para el alumno durante su intento vigente.
         $examQuestion = $this->linkQuestionToExam($teacher, $question, true);
         $group = Group::create(['teacher_id' => $teacher->id, 'name' => 'Grupo Archivos', 'access_folio' => 'FILE001', 'is_closed' => false]);
-        StudentAttempt::create([
+        $group->students()->attach($student->id, ['joined_at' => now()]);
+        $examQuestion->exam->groups()->attach($group->id);
+        $attempt = StudentAttempt::create([
             'exam_id' => $examQuestion->exam_id,
             'student_id' => $student->id,
             'group_id' => $group->id,
             'question_sequence_payload' => [$examQuestion->id],
             'current_question_index' => 0,
             'started_at' => now(),
-            'status' => 'submitted',
+            'status' => 'in_progress',
         ]);
-        $this->actingAs($student)->get(route('questions.file', [$question->id, 'pdf']))->assertOk();
+        $download = $this->actingAs($student)->get(route('questions.file', [$question->id, 'pdf']))->assertOk();
+        $this->assertStringContainsString('no-store', $download->headers->get('Cache-Control'));
+        $attempt->update(['status' => 'submitted', 'final_score' => 9.0]);
+        $this->get(route('questions.file', [$question->id, 'pdf']))->assertForbidden();
+        $examQuestion->exam->update(['ends_at' => now()->subMinutes(2)]);
+        $this->get(route('questions.file', [$question->id, 'pdf']))->assertOk();
+
+        $group->update(['is_closed' => true, 'closed_at' => now()]);
+        $this->get(route('questions.file', [$question->id, 'pdf']))->assertForbidden();
+        $group->update(['is_closed' => false, 'closed_at' => null]);
+        $group->students()->detach($student->id);
+        $this->get(route('questions.file', [$question->id, 'pdf']))->assertForbidden();
 
         // Nueva versión (pregunta en examen) quitando la imagen: la versión anterior la conserva
         $oldImage = $question->image_path;
