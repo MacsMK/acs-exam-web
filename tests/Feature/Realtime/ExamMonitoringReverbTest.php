@@ -14,7 +14,7 @@ declare(strict_types=1);
  *                 RNF-CON-002 (Integridad de operaciones relacionadas) y
  *                 RNF-SEG-004 (Separación de información entre docentes)
  * Autor:          Equipo 4 (A-Code Solutions)
- * Versión:        1.1.0
+ * Versión:        1.2.0
  * Descripción:    Pruebas automatizadas de la capa de tiempo real con Laravel Reverb
  *                 y WebSockets: canales privados autorizados, IDOR multi-docente,
  *                 y despacho de eventos de inicio, incidentes y entrega.
@@ -24,6 +24,9 @@ declare(strict_types=1);
  *                 Alpine.js no arrancaba (MPW-V3 §7.6.1). Requerimiento cita
  *                 RF-EXA-055, el código de MPW-V3 §7.6, en lugar de los códigos
  *                 informales RW-12 y RW-16.
+ *                 v1.2.0: el tablero pasa la configuración en un bloque
+ *                 script application/json (public/js/exam-monitor.js), fuera
+ *                 de los atributos HTML; la prueba lo verifica ahí.
  * ============================================================================
  */
 
@@ -245,20 +248,30 @@ class ExamMonitoringReverbTest extends TestCase
         $this->assertSame('in_progress', $expiredAttempt->refresh()->status);
     }
 
-    public function test_monitoring_dashboard_writes_reverb_settings_as_javascript_strings(): void
+    public function test_monitoring_dashboard_writes_reverb_settings_as_json_outside_attributes(): void
     {
         config([
-            'broadcasting.connections.reverb.options.host' => 'localhost',
+            'broadcasting.default' => 'reverb',
             'broadcasting.connections.reverb.key' => 'acsexamwebkey',
+            'broadcasting.connections.reverb.public.host' => 'localhost',
+            'broadcasting.connections.reverb.public.port' => 8080,
+            'broadcasting.connections.reverb.public.scheme' => 'http',
         ]);
 
         $response = $this->actingAs($this->teacher)
             ->get(route('exams.monitor', $this->exam));
 
         $response->assertOk();
-        $response->assertSee("const wsHost = 'localhost'", false);
-        $response->assertSee("const wsKey = 'acsexamwebkey'", false);
-        $response->assertDontSee('const wsHost = "', false);
+        $this->assertSame(
+            1,
+            preg_match('#<script type="application/json" id="exam-monitor-data">(.*?)</script>#s', $response->getContent(), $match),
+        );
+        $data = json_decode($match[1], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('localhost', $data['realtime']['host']);
+        $this->assertSame('acsexamwebkey', $data['realtime']['key']);
+        $this->assertSame(8080, $data['realtime']['port']);
+        $this->assertFalse($data['realtime']['useTls']);
+        $response->assertDontSee('x-data="{"', false);
     }
 
     public function test_foreign_teacher_cannot_access_exam_monitoring_dashboard(): void
